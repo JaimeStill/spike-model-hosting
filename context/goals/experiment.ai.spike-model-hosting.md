@@ -1,8 +1,8 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** idle
-- **Task:** none
-- **Branch:** none
+- **State:** building
+- **Task:** align
+- **Branch:** align
 
 ## Tasks
 
