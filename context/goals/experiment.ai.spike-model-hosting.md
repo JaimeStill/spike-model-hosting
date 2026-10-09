@@ -6,7 +6,7 @@
 
 ## Tasks
 
-1. [ ] align
+1. [x] align
 2. [ ] profile
 3. [ ] consumers
 4. [ ] rocm
@@ -93,6 +93,14 @@ Door          two-way for the repositories (each reverts by PR). On the Framewor
               history.
 ```
 
+Amendment (round 6): behavior 9 — the spike note context/tool-reliability.md holds the
+convention with sources; personal-agents' presets use each model's official embedded template
+and its card's sampling, with no patched template and no non-default reasoning effort; clutch
+sets tool_choice "required" on Pi requests that offer `respond`, and the skill fixture no longer
+contradicts it; `clutch conform --provider llama.cpp`, run 5 times, has its per-cell rates
+recorded in spike-harness-driver's findings. Behavior 8's bar is a clean capture of each of the
+ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice 5.
+
 ## Decisions
 
 - setup: the evidence is the ten items in `context/README.md`, "The evidence".
@@ -161,9 +169,55 @@ Door          two-way for the repositories (each reverts by PR). On the Framewor
 - plan: profile's approved brief is revised as standards-lab #73 and this repository's #1 state:
   no restore point, set A, b-number pin, semver tags filtered from currency.
 
+- plan (align, round 6): tool-call reliability follows the field's layered convention, not
+  per-model patches. Mandatory shapes are constrained at the server; presets use official
+  templates and each card's sampling; clients send reasoning back on tool turns; the harness
+  returns validation errors to the model; the gateway does a bounded resample and then falls
+  back on a parse 5xx; reliability is measured as pass^k. Rejected the patched gpt-oss template
+  and reasoning-effort high (personal-agents 75107bd, 628056a; reverted), and rejected an
+  upstream comment on llama.cpp #25321 (architect).
+- plan (align, round 6): clutch sets tool_choice "required" on Pi requests that offer `respond`,
+  and the skill fixture stops contradicting `respond`; OpenCode stays on `auto`, measured.
+- plan (align, round 6): align's bar is clean captures of the artifact's ten scenarios, plus
+  5-run conformance rates recorded as evidence; pass^k against OpenAI's bar (0 invalid, >=90%)
+  belongs to consumers; parse-5xx resample and fallback belong to gateway.
+- align: llama.cpp lives in /opt/llama.cpp/<tag>, with a `current` symlink the unit runs, so a
+  build move never edits the unit; Arch's ggml was removed along with llama-cpp and
+  ggml-vulkan.
+- align: the retired models moved out of the router's HF cache into a retired directory beside
+  it on the same drive, not deleted, because the router lists every cached model.
+- align: EmbeddingGemma 2 runs with no-mmproj, mean pooling, c 8192, and b/ub 8192.
+- align: card sampling is set explicitly, with top-k 0 and min-p 0 where the card names none,
+  because b11529 applies a GGUF's general.sampling.* keys and gpt-oss's GGUF carries none.
+- align: tool_choice "required" is forced only on OpenAI-shaped requests; Anthropic's forced
+  form is refused with extended thinking on.
+- align: personal-agents' research follow-ups note records the hook's retirement, and
+  install.sh drops dangling outpost links; both are accepted as part of the build move (spec
+  review gaps 1 and 2).
+- align: behavior 5's "footprint doesn't grow with slots" is shown by 0, 1, and 4 requests in
+  flight at parallel 4, with --kv-unified in each model's args; accepted as meeting the brief
+  (spec review question 3).
+- align: the architect ran the root steps on the Framework from exact commands (slice 1's
+  escalation).
+- align (accepted): the artifact page widens to 1680px with a 560px left column, and its
+  setup uses outpost (version 5).
+- align (accepted): personal-agents' Pi setup stays unpinned, so Pi tracks its releases; the
+  spike-harness-driver pins stay for conformance.
+- align (accepted): the coordinator edits land at align's closeout through a plan pull request,
+  so `profile` starts next session.
+
 ## Pending edits
 
+- coordinator: `context/roadmap.toml`: gateway evaluates bounded resample and fallback on a
+  parse 5xx; consumers measures pass^k per model, engine, and consumer against 0 invalid and
+  >=90%, and tests each consumer's reasoning round-trip; profile's schema carries per-model
+  sampling and reasoning settings; validate answers the tool-call reliability convention per
+  platform.
 - coordinator: `context/roadmap.toml`: drop personal-agents and spike-harness-driver from the
   goal's `repos` and its comment, once align merges (a `plan` run, before `profile`).
 - coordinator: `context/ai-hosting.md`: personal-agents' served models (line ~23, Qwen3-Coder-Next
   at 131k and gpt-oss-120b at 32k) become set A as align measured it.
+- coordinator: `context/ai-hosting.md`, "Where personal-agents' parts go": drop "the pacman
+  restart hook" from what goes into `ai-hosting` (align retired it; the build runs from
+  /opt/llama.cpp/current), and add the tool-call reliability convention (this spike's
+  `context/tool-reliability.md`) to the serving conventions promoted to the architecture layer.
