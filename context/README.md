@@ -26,8 +26,7 @@ of the admin tooling.
 ## The evidence
 
 1. One host-class profile schema renders the Framework's llama.cpp router (presets, slots, KV,
-   bind, systemd unit) serving the shared model set, holding no host state; the live setup is
-   captured verbatim as the restore point.
+   bind, systemd unit) serving the shared model set, holding no host state.
 2. The same schema renders a running setup for every serving platform in scope, on Strix Halo
    (Vulkan and ROCm) and on the Dell NVIDIA workstation (CUDA).
 3. For each platform and host class, a record of how it is set up and managed: install, update,
@@ -56,21 +55,27 @@ of the admin tooling.
   install path for vLLM on Strix Halo. Ollama, LM Studio, and TGI are recorded on paper.
 - **Gateways, live:** no gateway, agentgateway, and LiteLLM. Envoy AI Gateway (Agent Router) and
   vLLM's production-stack are Kubernetes-first and recorded on paper.
-- **Shared model set:** gpt-oss-120b (chat and tools), EmbeddingGemma 2 (embeddings, its 270M
-  text model first), and gemma-4-E4B (the small model), each in its platform's native format:
-  GGUF for llama.cpp, safetensors for vLLM and SGLang. The workstation's set is sized to its VRAM
-  in the `cuda` task.
+- **Main-model pool:** gpt-oss-120b leads. Mistral Small 4 replaces it only if it matches
+  gpt-oss-120b on `/v1/messages` and Pi tool calls and its vision works on Vulkan; the
+  `consumers` task runs that probe. Gemma 4 26B-A4B completes the pool.
+- **Shared model set (set A):** gpt-oss-120b (ggml-org MXFP4, the main model), Gemma 4 26B-A4B
+  (vision), gemma-4-E4B (audio and the small model), and EmbeddingGemma 2 (embeddings), each in
+  its platform's native format: GGUF for llama.cpp, safetensors for vLLM and SGLang. On the
+  Framework all four stay loaded together; Mistral Small 4 swaps in for gpt-oss-120b and Gemma 4
+  26B-A4B. The workstation's set is sized to its VRAM in the `cuda` task, whose candidate list
+  adds the dense models Mistral Medium 3.5, Gemma 4 31B, and Muse Glimmer 30B.
 - **Model origin:** models of Chinese origin are avoided where an alternative serves
   (`standards-lab/context/ai-strategy.md`, "Constraint: model origin").
 - **Versions:** every engine, gateway, and model runs its latest upstream release. Profiles pin
   the exact versions, `mise run currency` reports the pins that trail, and every document names
-  the exact versions in use when it is written.
+  the exact versions in use when it is written. llama.cpp is pinned as a b-number build, because
+  its semver releases ship no binaries and lag its model support.
 
 ## Hosts and boundaries
 
 - **Framework desktop** (Strix Halo, 96 GB GTT pool): the first host class, available now. The
-  spike may change anything on it; its router as it stood before the spike is captured on the
-  host as the restore point.
+  spike may change anything on it, including the runtime, its configuration, and the models.
+  Only the OS install and the Tailscale registration stay fixed, and there is no restore point.
 - **Dell NVIDIA workstation** (CUDA): available from 2026-10-14. The tasks that need it say so.
 - **Remote access:** sessions reach both hosts by Tailscale SSH in accept mode, set by the
   architect before the first task and reverted to check mode when the spike completes.
@@ -96,23 +101,25 @@ of the admin tooling.
 
 The tasks, in the order they run; each cites the evidence it proves.
 
-1. `profile`: the restore point, the profile schema, and the Strix Halo llama.cpp profile
-   (evidence 1).
-2. `consumers`: the three consumers at once on the Vulkan router, the baseline every platform is
-   measured against (evidence 4, 5).
-3. `rocm`: llama.cpp's ROCm backend against Vulkan (evidence 2–7).
-4. `engines-strix`: vLLM, and SGLang time-boxed, on Strix Halo (evidence 2–7).
-5. `gateway`: the gateway approaches in front of the Framework (evidence 8, 10).
-6. `admin`: needs go-cli-sdk v0.1.0. The admin tool over the profile (evidence 9).
-7. `cuda`: needs the Dell NVIDIA workstation (from 2026-10-14). The CUDA profile and llama.cpp's
+1. `align`: the Framework's router, personal-agents, spike-harness-driver, and the "clutch
+   driving Pi" artifact brought in line with set A on an upstream b-number build (evidence 1).
+2. `profile`: the profile schema and the Strix Halo llama.cpp profile (evidence 1).
+3. `consumers`: the three consumers at once on the Vulkan router, the baseline every platform is
+   measured against, and Mistral Small 4's promotion probe (evidence 4, 5).
+4. `rocm`: llama.cpp's ROCm backend against Vulkan (evidence 2–7).
+5. `engines-strix`: vLLM, and SGLang time-boxed, on Strix Halo (evidence 2–7).
+6. `gateway`: the gateway approaches in front of the Framework (evidence 8, 10).
+7. `admin`: needs go-cli-sdk v0.1.0. The admin tool over the profile (evidence 9).
+8. `cuda`: needs the Dell NVIDIA workstation (from 2026-10-14). The CUDA profile and llama.cpp's
    CUDA router (evidence 2, 5, 7).
-8. `engines-cuda`: needs the Dell NVIDIA workstation. vLLM and SGLang on CUDA; the gateway
+9. `engines-cuda`: needs the Dell NVIDIA workstation. vLLM and SGLang on CUDA; the gateway
    configurations and the admin tool rerun unchanged (evidence 2–9).
-9. `validate`: evidence 1–10 on both hosts, the platform comparison, and the answer.
+10. `validate`: evidence 1–10 on both hosts, the platform comparison, and the answer.
 
 ## References
 
-The spike reads these repositories and never writes to them. Each is a key in the coordinator's
+The spike reads these repositories. It writes only to personal-agents and spike-harness-driver,
+and only in its `align` task. Each is a key in the coordinator's
 `references.toml`, with its local checkout in `references.local.toml`: `personal-agents` (the
 running llama.cpp setup, the tier, context-sizing, and memory-footprint methods, and `outpost`),
 `spike-harness-driver` (its `model` client and router findings), `tau-examples` (local-model

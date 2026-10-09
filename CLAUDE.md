@@ -13,7 +13,8 @@ repository is managed with the marathon workflow; start from `context/README.md`
   record is `context/goals/experiment.ai.spike-model-hosting.md`.
 - **Dependencies:** published versions only, never a `replace` directive.
 - **References:** the repositories this spike reads are keys in the coordinator's
-  `references.toml` and `references.local.toml`. The spike reads them and never writes to them.
+  `references.toml` and `references.local.toml`. The spike reads them and writes to none of them,
+  except personal-agents and spike-harness-driver in its `align` task.
 - **Hosts:** the spike may change anything on the Framework desktop and the Dell NVIDIA
   workstation. On the architect's laptop it runs only this repository, its check, read-only
   probes, and HTTP: nothing is installed or served there.
