@@ -93,6 +93,14 @@ Door          two-way for the repositories (each reverts by PR). On the Framewor
               history.
 ```
 
+## Progress
+
+- slice 1 (build): done. The Framework runs llama.cpp b11529 (upstream Vulkan x64) from
+  /opt/llama.cpp/b11529 through /opt/llama.cpp/current; Arch's llama-cpp, ggml-vulkan, and ggml
+  and the pacman hook are removed; /props reports b11529-8ae386707, and the prior presets serve
+  unchanged. personal-agents d47a6d7. Root steps on the Framework run by the architect, handed
+  over as exact commands (architect's choice at slice 1's escalation).
+
 ## Decisions
 
 - setup: the evidence is the ten items in `context/README.md`, "The evidence".
