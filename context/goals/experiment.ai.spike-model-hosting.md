@@ -109,6 +109,14 @@ Door          two-way for the repositories (each reverts by PR). On the Framewor
   131072, 26B-A4B 32768, E4B 32768, EmbeddingGemma 2 8192. The old caches are moved to a retired
   directory on the Framework; the architect had the stash dropped.
 
+- slice 3 (budget docs): done. personal-agents a689549, spike 866da30 (context/memory-budget.md).
+- slice 4 (spike-harness-driver): committed 8e17339. The defaults are set A, with EmbeddingGemma
+  2's prompt forms, and the check passes. The embed, vision, and audio scenarios pass live, and
+  every opencode/llama.cpp conform cell passes. In pi/llama.cpp conform, tool and audio-tool fail
+  3 of 3 runs and skill fails 1 of 3, each with "model produced output that does not match the
+  expected peg-native format" on gpt-oss-120b MXFP4 at b11529. Under investigation before
+  slice 5.
+
 ## Decisions
 
 - setup: the evidence is the ten items in `context/README.md`, "The evidence".
