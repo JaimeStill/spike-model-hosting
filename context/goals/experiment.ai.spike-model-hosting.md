@@ -93,6 +93,15 @@ Door          two-way for the repositories (each reverts by PR). On the Framewor
               history.
 ```
 
+
+Amendment (round 6): behavior 9 — the spike note context/tool-reliability.md holds the
+convention with sources; personal-agents' presets use each model's official embedded template
+and its card's sampling, with no patched template and no non-default reasoning effort; clutch
+sets tool_choice "required" on Pi requests that offer `respond`, and the skill fixture no longer
+contradicts it; `clutch conform --provider llama.cpp`, run 5 times, has its per-cell rates
+recorded in spike-harness-driver's findings. Behavior 8's bar is a clean capture of each of the
+ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice 5.
+
 ## Progress
 
 - slice 1 (build): done. The Framework runs llama.cpp b11529 (upstream Vulkan x64) from
@@ -185,8 +194,25 @@ Door          two-way for the repositories (each reverts by PR). On the Framewor
 - plan: profile's approved brief is revised as standards-lab #73 and this repository's #1 state:
   no restore point, set A, b-number pin, semver tags filtered from currency.
 
+- plan (align, round 6): tool-call reliability follows the field's layered convention, not
+  per-model patches. Mandatory shapes are constrained at the server; presets use official
+  templates and each card's sampling; clients send reasoning back on tool turns; the harness
+  returns validation errors to the model; the gateway does a bounded resample and then falls
+  back on a parse 5xx; reliability is measured as pass^k. Rejected the patched gpt-oss template
+  and reasoning-effort high (personal-agents 75107bd, 628056a; reverted), and rejected an
+  upstream comment on llama.cpp #25321 (architect).
+- plan (align, round 6): clutch sets tool_choice "required" on Pi requests that offer `respond`,
+  and the skill fixture stops contradicting `respond`; OpenCode stays on `auto`, measured.
+- plan (align, round 6): align's bar is clean captures of the artifact's ten scenarios, plus
+  5-run conformance rates recorded as evidence; pass^k against OpenAI's bar (0 invalid, >=90%)
+  belongs to consumers; parse-5xx resample and fallback belong to gateway.
 ## Pending edits
 
+- coordinator: `context/roadmap.toml`: gateway evaluates bounded resample and fallback on a
+  parse 5xx; consumers measures pass^k per model, engine, and consumer against 0 invalid and
+  >=90%, and tests each consumer's reasoning round-trip; profile's schema carries per-model
+  sampling and reasoning settings; validate answers the tool-call reliability convention per
+  platform.
 - coordinator: `context/roadmap.toml`: drop personal-agents and spike-harness-driver from the
   goal's `repos` and its comment, once align merges (a `plan` run, before `profile`).
 - coordinator: `context/ai-hosting.md`: personal-agents' served models (line ~23, Qwen3-Coder-Next
