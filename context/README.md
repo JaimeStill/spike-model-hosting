@@ -94,6 +94,8 @@ of the admin tooling.
 - **Consumers:** Pi, Claude Code, and spike-harness-driver's `model` package as go-ai's
   stand-in, run on the hosts.
 - **Measurement:** footprint, speed, prefix cache, cold load, and the capability matrix.
+- **Tool-call reliability:** the layered convention every platform, profile, consumer, and
+  gateway is held to, with pass^k as its measure, in [`tool-reliability.md`](tool-reliability.md).
 - **Gateways:** none, agentgateway, and LiteLLM.
 - **Admin tool:** a CLI on go-cli-sdk over the profile, with personal-agents' `outpost` as its
   baseline.
