@@ -16,6 +16,58 @@
 8. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
 9. [ ] validate
 
+## Task brief · profile
+
+```
+Problem       Every later task renders its serving setup from a host-class profile, and none
+              exists. The Framework's router runs b10809 with presets drifted from
+              personal-agents' tracked profile and Qwen models; EmbeddingGemma 2 needs llama.cpp
+              b11452 or newer. The spike needs a profile schema, a Strix Halo profile serving the
+              shared model set, and a restore point for what runs today. The Framework moves
+              to llama.cpp's newest upstream release; the profile pins that exact build, and the
+              README and record name it. Evidence 1.
+Behaviors     1. Before the Framework's router changes, its presets, systemd unit, model list,
+                 and build are saved on the Framework, outside any repository, with a command
+                 that puts them back; its dry run lists exactly what it restores.
+              2. A profile missing a required field (host class, memory budget, backend, engine
+                 and pinned build, bind, slots, KV mode, models) fails validation naming the field.
+              3. A profile holding host state (a tailnet name or address, a hostname) fails
+                 validation; the host's name and address are given at render time.
+              4. Each model entry names its publisher and origin; a model of Chinese origin fails
+                 validation unless the entry records why no alternative serves.
+              5. Rendering the Strix Halo profile yields llama.cpp router presets with shared
+                 defaults and one section each for gpt-oss-120b (ggml-org MXFP4 GGUF),
+                 EmbeddingGemma 2 (Q8_0 GGUF, embeddings, no mmproj: the 270M text model), and
+                 gemma-4-E4B (Q8_0 GGUF with its mmproj), and nothing else.
+              6. Each model's context comes from personal-agents' context-sizing method, and its
+                 recorded reason renders as a comment above its preset section.
+              7. Rendering yields the router's systemd unit: the pinned engine build, router mode,
+                 the rendered presets, 4 slots with a unified KV cache, and a bind to the tailnet
+                 address given at render time.
+              8. The profile tool lists every pin with its upstream repository, and
+                 `mise run currency` reports a pin behind its upstream's newest release tag as
+                 `<profile>: llama.cpp <pin> -> <latest>`.
+              9. Installed on the Framework, the rendered unit and presets serve exactly the three
+                 models: from the laptop over HTTP, /health is ok, /models lists the three,
+                 gpt-oss-120b and gemma-4-E4B answer a chat, and EmbeddingGemma 2 returns
+                 768-dimension embeddings.
+Test seams    The profile package's load, validate, and render API, with golden renders of the
+              Strix Halo profile; one integration-tagged HTTP probe against a router URL from the
+              environment.
+Slices        1. Walking skeleton (2, 5 for one model): load, validate, render presets, golden test.
+              2. The full Strix Halo profile (3, 4, 5, 6): the shared model set, reasons, origin
+                 and host-state rules.
+              3. Unit and pins (7, 8): the rendered unit, the pin listing, currency's pin lines.
+              4. On the Framework (1, 9): capture the restore point, install the newest upstream
+                 Vulkan x64 release (pinned in the profile) and the rendered unit and presets,
+                 run the probe.
+Out of scope  The consumer suite and measurements; ROCm, vLLM, SGLang, llama-swap; gateways; the
+              admin tool; a CUDA profile (the schema allows one, nothing renders it); changes to
+              personal-agents or outpost; Qwen presets.
+Door          two-way — nothing published or tagged; the Framework's prior router comes back from
+              the restore point
+```
+
 ## Decisions
 
 - setup: the evidence is the ten items in `context/README.md`, "The evidence".
