@@ -1,12 +1,12 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** brief ready
-- **Task:** align
-- **Branch:** align
+- **State:** idle
+- **Task:** none
+- **Branch:** none
 
 ## Tasks
 
-1. [ ] align
+1. [x] align
 2. [ ] profile
 3. [ ] consumers
 4. [ ] rocm
@@ -100,29 +100,6 @@ sets tool_choice "required" on Pi requests that offer `respond`, and the skill f
 contradicts it; `clutch conform --provider llama.cpp`, run 5 times, has its per-cell rates
 recorded in spike-harness-driver's findings. Behavior 8's bar is a clean capture of each of the
 ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice 5.
-
-## Progress
-
-slices 6/6 done (1, 2, 3, 4, 4b, 5) · standards done · spec done · editor done
-
-- 1 (build): the Framework serves llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64)
-  through /opt/llama.cpp/current; Arch's packages and the pacman hook are gone.
-  personal-agents d47a6d7.
-- 2 (set A served): the four probes pass. 26B-A4B's c dropped to 32768 after c 65536 left
-  2.61 GiB free; at 32768 the pool has 3.30 GiB free with four requests in flight per model,
-  and the KV cache grows at most 17 MiB from 0 to 4 in flight. personal-agents be01e09,
-  c1f08b3, d2553bf, ff99083.
-- 3 (budget docs): personal-agents a689549; spike 866da30 (`context/memory-budget.md`).
-- 4 (spike-harness-driver): set A defaults and EmbeddingGemma 2's prompt forms, 8e17339.
-- 4b (convention): personal-agents d1314c9 and 86703e6 revert the patched template and high
-  reasoning effort, and 0add0e5 adds card sampling. spike-harness-driver 37fa153 forces
-  `respond` on Pi's OpenAI-shaped requests, and 5afeac3 records 5-run conformance: Pi 9/9 cells
-  at 5/5; OpenCode on `auto` at tool 4/5, skill 3/5, audio-tool 2/5. Spike 54ba30f adds
-  `context/tool-reliability.md`. Slices 4 and 4b ran Pi and OpenCode on the laptop through
-  clutch conform, outside the laptop boundary.
-- 5 (artifact): the ten router scenarios ran with clutch and Pi 0.99.2 on the Framework, each
-  clean on its first attempt, and the artifact is republished as version 4 with set A and
-  b11529; the Azure runs are byte-identical. spike-harness-driver 04340b2.
 
 ## Decisions
 
@@ -222,6 +199,12 @@ slices 6/6 done (1, 2, 3, 4, 4b, 5) · standards done · spec done · editor don
   (spec review question 3).
 - align: the architect ran the root steps on the Framework from exact commands (slice 1's
   escalation).
+- align (accepted): the artifact page widens to 1680px with a 560px left column, and its
+  setup uses outpost (version 5).
+- align (accepted): personal-agents' Pi setup stays unpinned, so Pi tracks its releases; the
+  spike-harness-driver pins stay for conformance.
+- align (accepted): the coordinator edits land at align's closeout through a plan pull request,
+  so `profile` starts next session.
 
 ## Pending edits
 
