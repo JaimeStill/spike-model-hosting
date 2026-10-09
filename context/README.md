@@ -76,8 +76,6 @@ of the admin tooling.
 - **Framework desktop** (Strix Halo, 96 GB GTT pool): the first host class, available now. The
   spike may change anything on it, including the runtime, its configuration, and the models.
   Only the OS install and the Tailscale registration stay fixed, and there is no restore point.
-  Set A's memory budget in its pool, estimated against measured, is in
-  [`memory-budget.md`](memory-budget.md).
 - **Dell NVIDIA workstation** (CUDA): available from 2026-10-14. The tasks that need it say so.
 - **Remote access:** sessions reach both hosts by Tailscale SSH in accept mode, set by the
   architect before the first task and reverted to check mode when the spike completes.
@@ -93,7 +91,9 @@ of the admin tooling.
   its setup and management record.
 - **Consumers:** Pi, Claude Code, and spike-harness-driver's `model` package as go-ai's
   stand-in, run on the hosts.
-- **Measurement:** footprint, speed, prefix cache, cold load, and the capability matrix.
+- **Measurement:** footprint, speed, prefix cache, cold load, and the capability matrix. Set
+  A's memory budget on the Framework, estimated against measured, is in
+  [`memory-budget.md`](memory-budget.md).
 - **Tool-call reliability:** the layered convention every platform, profile, consumer, and
   gateway is held to, with pass^k as its measure, in [`tool-reliability.md`](tool-reliability.md).
 - **Gateways:** none, agentgateway, and LiteLLM.

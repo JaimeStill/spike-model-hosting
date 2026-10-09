@@ -103,42 +103,26 @@ ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice
 
 ## Progress
 
-- slice 1 (build): done. The Framework runs llama.cpp b11529 (upstream Vulkan x64) from
-  /opt/llama.cpp/b11529 through /opt/llama.cpp/current; Arch's llama-cpp, ggml-vulkan, and ggml
-  and the pacman hook are removed; /props reports b11529-8ae386707, and the prior presets serve
-  unchanged. personal-agents d47a6d7. Root steps on the Framework run by the architect, handed
-  over as exact commands (architect's choice at slice 1's escalation).
+slices 6/6 done (1, 2, 3, 4, 4b, 5) · standards done · spec done · editor done
 
-- slice 2 (set A served): done. personal-agents be01e09, c1f08b3, d2553bf, ff99083. Probes pass
-  (chat, /v1/messages tool_use, image, audio, 768-dim embeddings). At 26B-A4B c 65536 the pool
-  had 2.61 GiB free at four requests in flight per model, which failed the bar; at c 32768 it has
-  3.30 GiB free (94714 MiB across the four), which passes. The KV cache is shared across slots
-  for all four (at most +17 MiB from 0 to 4 in flight). The final contexts are gpt-oss-120b
-  131072, 26B-A4B 32768, E4B 32768, EmbeddingGemma 2 8192. The old caches are moved to a retired
-  directory on the Framework; the architect had the stash dropped.
-
-- slice 3 (budget docs): done. personal-agents a689549, spike 866da30 (context/memory-budget.md).
-- slice 4 (spike-harness-driver): committed 8e17339. The defaults are set A, with EmbeddingGemma
-  2's prompt forms, and the check passes. The embed, vision, and audio scenarios pass live, and
-  every opencode/llama.cpp conform cell passes. In pi/llama.cpp conform, tool and audio-tool fail
-  3 of 3 runs and skill fails 1 of 3, each with "model produced output that does not match the
-  expected peg-native format" on gpt-oss-120b MXFP4 at b11529. Under investigation before
-  slice 5.
-
-- slice 4b (convention): done. personal-agents d1314c9 and 86703e6 revert the patch and high
-  effort, and 0add0e5 adds card sampling (b11529 applies GGUF general.sampling.*; gpt-oss's
-  GGUF carries none). spike-harness-driver 37fa153 forces respond on Pi's OpenAI-shaped
-  requests and fixes the clutch-motto fixture; 5afeac3 adds the findings. Spike 54ba30f adds
-  context/tool-reliability.md. In 5 conformance runs Pi passes 9/9 cells 5/5; OpenCode (auto)
-  scores tool 4/5, skill 3/5, audio-tool 2/5, each failure a text answer instead of `respond`.
-  Note: slices 4 and 4b ran Pi and OpenCode on the laptop through clutch conform, outside the
-  laptop boundary; slice 5 runs clutch on the Framework.
-
-- slice 5 (artifact): done. The ten router scenarios ran on the Framework (clutch and Pi
-  0.99.2 as jaime; first attempt each, all exit 0), and the artifact was republished as
-  version 4 with set A and b11529 on the router side; the Azure runs are byte-identical.
-  spike-harness-driver 04340b2 adds the findings. The review workflow now runs on gpt-oss,
-  since its Qwen override is gone.
+- 1 (build): the Framework serves llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64)
+  through /opt/llama.cpp/current; Arch's packages and the pacman hook are gone.
+  personal-agents d47a6d7.
+- 2 (set A served): the four probes pass. 26B-A4B's c dropped to 32768 after c 65536 left
+  2.61 GiB free; at 32768 the pool has 3.30 GiB free with four requests in flight per model,
+  and the KV cache grows at most 17 MiB from 0 to 4 in flight. personal-agents be01e09,
+  c1f08b3, d2553bf, ff99083.
+- 3 (budget docs): personal-agents a689549; spike 866da30 (`context/memory-budget.md`).
+- 4 (spike-harness-driver): set A defaults and EmbeddingGemma 2's prompt forms, 8e17339.
+- 4b (convention): personal-agents d1314c9 and 86703e6 revert the patched template and high
+  reasoning effort, and 0add0e5 adds card sampling. spike-harness-driver 37fa153 forces
+  `respond` on Pi's OpenAI-shaped requests, and 5afeac3 records 5-run conformance: Pi 9/9 cells
+  at 5/5; OpenCode on `auto` at tool 4/5, skill 3/5, audio-tool 2/5. Spike 54ba30f adds
+  `context/tool-reliability.md`. Slices 4 and 4b ran Pi and OpenCode on the laptop through
+  clutch conform, outside the laptop boundary.
+- 5 (artifact): the ten router scenarios ran with clutch and Pi 0.99.2 on the Framework, each
+  clean on its first attempt, and the artifact is republished as version 4 with set A and
+  b11529; the Azure runs are byte-identical. spike-harness-driver 04340b2.
 
 ## Decisions
 
@@ -220,6 +204,25 @@ ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice
 - plan (align, round 6): align's bar is clean captures of the artifact's ten scenarios, plus
   5-run conformance rates recorded as evidence; pass^k against OpenAI's bar (0 invalid, >=90%)
   belongs to consumers; parse-5xx resample and fallback belong to gateway.
+- align: llama.cpp lives in /opt/llama.cpp/<tag>, with a `current` symlink the unit runs, so a
+  build move never edits the unit; Arch's ggml was removed along with llama-cpp and
+  ggml-vulkan.
+- align: the retired models moved out of the router's HF cache into a retired directory beside
+  it on the same drive, not deleted, because the router lists every cached model.
+- align: EmbeddingGemma 2 runs with no-mmproj, mean pooling, c 8192, and b/ub 8192.
+- align: card sampling is set explicitly, with top-k 0 and min-p 0 where the card names none,
+  because b11529 applies a GGUF's general.sampling.* keys and gpt-oss's GGUF carries none.
+- align: tool_choice "required" is forced only on OpenAI-shaped requests; Anthropic's forced
+  form is refused with extended thinking on.
+- align: personal-agents' research follow-ups note records the hook's retirement, and
+  install.sh drops dangling outpost links; both are accepted as part of the build move (spec
+  review gaps 1 and 2).
+- align: behavior 5's "footprint doesn't grow with slots" is shown by 0, 1, and 4 requests in
+  flight at parallel 4, with --kv-unified in each model's args; accepted as meeting the brief
+  (spec review question 3).
+- align: the architect ran the root steps on the Framework from exact commands (slice 1's
+  escalation).
+
 ## Pending edits
 
 - coordinator: `context/roadmap.toml`: gateway evaluates bounded resample and fallback on a
@@ -231,3 +234,7 @@ ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice
   goal's `repos` and its comment, once align merges (a `plan` run, before `profile`).
 - coordinator: `context/ai-hosting.md`: personal-agents' served models (line ~23, Qwen3-Coder-Next
   at 131k and gpt-oss-120b at 32k) become set A as align measured it.
+- coordinator: `context/ai-hosting.md`, "Where personal-agents' parts go": drop "the pacman
+  restart hook" from what goes into `ai-hosting` (align retired it; the build runs from
+  /opt/llama.cpp/current), and add the tool-call reliability convention (this spike's
+  `context/tool-reliability.md`) to the serving conventions promoted to the architecture layer.

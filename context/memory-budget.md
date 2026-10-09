@@ -1,8 +1,8 @@
 # Set A's memory budget on the Framework
 
-Set A, all four loaded on llama.cpp b11529 (the upstream Vulkan x64 build) in the Framework's
-96GiB GTT pool (98304MiB), with 4 requests in flight on each model. Footprints are `VRAM + GTT`
-per process from `amdgpu_top -p`. The canonical table, with the 0- and 1-in-flight samples, is
+The table measures set A with all four models loaded on llama.cpp b11529 (the upstream Vulkan
+x64 build) in the Framework's 96GiB GTT pool (98304MiB), with 4 requests in flight on each.
+Footprints are `VRAM + GTT` per process from `amdgpu_top -p`. The canonical table, with the 0- and 1-in-flight samples, is
 personal-agents' `reference/memory-footprint.md`, "Set A, measured". Figures in MiB:
 
 | Model | `c` | Weights | KV at `c`, estimated | Compute buffers / other | Estimated | Measured |
