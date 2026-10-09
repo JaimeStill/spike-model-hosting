@@ -134,6 +134,12 @@ ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice
   Note: slices 4 and 4b ran Pi and OpenCode on the laptop through clutch conform, outside the
   laptop boundary; slice 5 runs clutch on the Framework.
 
+- slice 5 (artifact): done. The ten router scenarios ran on the Framework (clutch and Pi
+  0.99.2 as jaime; first attempt each, all exit 0), and the artifact was republished as
+  version 4 with set A and b11529 on the router side; the Azure runs are byte-identical.
+  spike-harness-driver 04340b2 adds the findings. The review workflow now runs on gpt-oss,
+  since its Qwen override is gone.
+
 ## Decisions
 
 - setup: the evidence is the ten items in `context/README.md`, "The evidence".
