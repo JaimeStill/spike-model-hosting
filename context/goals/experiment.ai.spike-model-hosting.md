@@ -101,6 +101,14 @@ Door          two-way for the repositories (each reverts by PR). On the Framewor
   unchanged. personal-agents d47a6d7. Root steps on the Framework run by the architect, handed
   over as exact commands (architect's choice at slice 1's escalation).
 
+- slice 2 (set A served): done. personal-agents be01e09, c1f08b3, d2553bf, ff99083. Probes pass
+  (chat, /v1/messages tool_use, image, audio, 768-dim embeddings). At 26B-A4B c 65536 the pool
+  had 2.61 GiB free at four requests in flight per model, which failed the bar; at c 32768 it has
+  3.30 GiB free (94714 MiB across the four), which passes. The KV cache is shared across slots
+  for all four (at most +17 MiB from 0 to 4 in flight). The final contexts are gpt-oss-120b
+  131072, 26B-A4B 32768, E4B 32768, EmbeddingGemma 2 8192. The old caches are moved to a retired
+  directory on the Framework; the architect had the stash dropped.
+
 ## Decisions
 
 - setup: the evidence is the ten items in `context/README.md`, "The evidence".
