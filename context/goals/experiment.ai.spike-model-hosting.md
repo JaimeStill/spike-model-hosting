@@ -93,7 +93,6 @@ Door          two-way for the repositories (each reverts by PR). On the Framewor
               history.
 ```
 
-
 Amendment (round 6): behavior 9 — the spike note context/tool-reliability.md holds the
 convention with sources; personal-agents' presets use each model's official embedded template
 and its card's sampling, with no patched template and no non-default reasoning effort; clutch
@@ -125,6 +124,15 @@ ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice
   3 of 3 runs and skill fails 1 of 3, each with "model produced output that does not match the
   expected peg-native format" on gpt-oss-120b MXFP4 at b11529. Under investigation before
   slice 5.
+
+- slice 4b (convention): done. personal-agents d1314c9 and 86703e6 revert the patch and high
+  effort, and 0add0e5 adds card sampling (b11529 applies GGUF general.sampling.*; gpt-oss's
+  GGUF carries none). spike-harness-driver 37fa153 forces respond on Pi's OpenAI-shaped
+  requests and fixes the clutch-motto fixture; 5afeac3 adds the findings. Spike 54ba30f adds
+  context/tool-reliability.md. In 5 conformance runs Pi passes 9/9 cells 5/5; OpenCode (auto)
+  scores tool 4/5, skill 3/5, audio-tool 2/5, each failure a text answer instead of `respond`.
+  Note: slices 4 and 4b ran Pi and OpenCode on the laptop through clutch conform, outside the
+  laptop boundary; slice 5 runs clutch on the Framework.
 
 ## Decisions
 
