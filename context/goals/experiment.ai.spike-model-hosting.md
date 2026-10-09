@@ -1,6 +1,6 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** building
+- **State:** brief ready
 - **Task:** align
 - **Branch:** align
 
