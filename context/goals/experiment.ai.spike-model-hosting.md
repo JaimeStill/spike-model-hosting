@@ -208,16 +208,4 @@ ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice
 
 ## Pending edits
 
-- coordinator: `context/roadmap.toml`: gateway evaluates bounded resample and fallback on a
-  parse 5xx; consumers measures pass^k per model, engine, and consumer against 0 invalid and
-  >=90%, and tests each consumer's reasoning round-trip; profile's schema carries per-model
-  sampling and reasoning settings; validate answers the tool-call reliability convention per
-  platform.
-- coordinator: `context/roadmap.toml`: drop personal-agents and spike-harness-driver from the
-  goal's `repos` and its comment, once align merges (a `plan` run, before `profile`).
-- coordinator: `context/ai-hosting.md`: personal-agents' served models (line ~23, Qwen3-Coder-Next
-  at 131k and gpt-oss-120b at 32k) become set A as align measured it.
-- coordinator: `context/ai-hosting.md`, "Where personal-agents' parts go": drop "the pacman
-  restart hook" from what goes into `ai-hosting` (align retired it; the build runs from
-  /opt/llama.cpp/current), and add the tool-call reliability convention (this spike's
-  `context/tool-reliability.md`) to the serving conventions promoted to the architecture layer.
+(none)
