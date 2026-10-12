@@ -317,6 +317,11 @@ slices 4/7 committed, 5 part A (conform pass^5) committed · standards — · sp
 - consumers: OpenCode's `interleaved` setting goes in a file named by OPENCODE_CONFIG, merged
   beneath the driver's config; on 1.19.0 it changes nothing on the wire, since OpenCode sends
   reasoning_content back either way.
+- consumers (architect): experiment.ai gains a fourth spike, a native Go harness behind
+  spike-harness-driver's driver interface, measured beside Pi, Claude Code, and OpenCode with
+  this spike's conform, concurrent, and wire packages; it answers whether go-ai carries its own
+  agent loop and what replacing the process-backed drivers costs. The intake waits for it. It is
+  set up by `marathon plan experiment.ai` in its own session, not by this task.
 
 ## Pending edits
 
