@@ -42,18 +42,17 @@ func comment(text string) string {
 		if i > 0 {
 			b.WriteString(";\n")
 		}
-		b.WriteString(";")
-		n := 1
+		var line []string
+		width := len(";")
 		for word := range strings.FieldsSeq(para) {
-			if n > 1 && n+1+len(word) > commentWidth {
-				b.WriteString("\n;")
-				n = 1
+			if len(line) > 0 && width+1+len(word) > commentWidth {
+				fmt.Fprintf(&b, "; %s\n", strings.Join(line, " "))
+				line, width = nil, len(";")
 			}
-			b.WriteString(" ")
-			b.WriteString(word)
-			n += 1 + len(word)
+			line = append(line, word)
+			width += 1 + len(word)
 		}
-		b.WriteString("\n")
+		fmt.Fprintf(&b, "; %s\n", strings.Join(line, " "))
 	}
 	return b.String()
 }
