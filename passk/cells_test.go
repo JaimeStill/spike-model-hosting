@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BurntSushi/toml"
 	"github.com/JaimeStill/spike-harness-driver/claude"
 	"github.com/JaimeStill/spike-harness-driver/clutch/conform"
 
@@ -209,4 +210,25 @@ func consumer(t *testing.T, body string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+// TestPinsMatchConsumersEnvironment shows each consumer's pin, which its cell's Pinned names and
+// a run's report checks the running version against, is the version the consumers mise
+// environment installs, so bumping one without the other fails here.
+func TestPinsMatchConsumersEnvironment(t *testing.T) {
+	var env struct {
+		Tools map[string]string `toml:"tools"`
+	}
+	if _, err := toml.DecodeFile("../mise.consumers.toml", &env); err != nil {
+		t.Fatal(err)
+	}
+	for tool, pin := range map[string]string{
+		"aqua:earendil-works/pi":      passk.PiVersion,
+		"aqua:anthropics/claude-code": passk.ClaudeVersion,
+		"aqua:anomalyco/opencode":     passk.OpenCodeVersion,
+	} {
+		if got := env.Tools[tool]; got != pin {
+			t.Errorf("mise.consumers.toml pins %s at %q, the cell at %q", tool, got, pin)
+		}
+	}
 }
