@@ -111,7 +111,7 @@ Door          two-way. The repository reverts by PR. On the Framework, b11529 st
 
 ## Progress
 
-slices 0/6 committed · standards — · spec — · editor —
+slices 3/6 committed; slice 4 probe committed (081b36c), install pending with the architect · standards — · spec — · editor —
 
 ## Decisions
 
