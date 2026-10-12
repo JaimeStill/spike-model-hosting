@@ -231,7 +231,7 @@ slices 6/6 committed · standards — · spec — · editor —
 - profile (r1): rendered presets equal personal-agents' unified-96gb.ini by sections, keys and
   values against a pinned test-data copy; rejected byte-identical text.
 - profile (r1/r2): bind resolves `$(tailscale ip -4)` at unit start; rejected a render-time
-  tailnet name (`framework` may resolve to LAN addresses on its own host, and no host name is
+  tailnet name (a host's own MagicDNS name may resolve to LAN addresses on that host, and no host name is
   committed). Clients still use the MagicDNS name.
 - profile (r1): service user, HF_HOME, models dir are render-time inputs, not profile fields.
 - profile (r1): presets render load-on-startup for set A.
