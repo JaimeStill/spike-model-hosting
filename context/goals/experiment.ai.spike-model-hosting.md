@@ -111,7 +111,7 @@ Door          two-way. The repository reverts by PR. On the Framework, b11529 st
 
 ## Progress
 
-slices 6/6 committed · standards — · spec — · editor —
+slices 6/6 committed · standards ✓ (72fc00c, b275b21) · spec ✓ (gaps closed 466c2e8) · editor ✓
 
 ## Decisions
 
@@ -231,8 +231,8 @@ slices 6/6 committed · standards — · spec — · editor —
 - profile (r1): rendered presets equal personal-agents' unified-96gb.ini by sections, keys and
   values against a pinned test-data copy; rejected byte-identical text.
 - profile (r1/r2): bind resolves `$(tailscale ip -4)` at unit start; rejected a render-time
-  tailnet name (a host's own MagicDNS name may resolve to LAN addresses on that host, and no host name is
-  committed). Clients still use the MagicDNS name.
+  tailnet name (a host's own MagicDNS name may resolve to LAN addresses on that host, and no
+  host name is committed). Clients still use the MagicDNS name.
 - profile (r1): service user, HF_HOME, models dir are render-time inputs, not profile fields.
 - profile (r1): presets render load-on-startup for set A.
 - profile (r1): install by exact commands the architect runs; install verbs belong to admin.
@@ -246,6 +246,32 @@ slices 6/6 committed · standards — · spec — · editor —
   configuration is ai-hosting (v1.ai.hosting) plus architecture-layer methods.
 - profile (r2): the model-card note is written in the spike in profile; a pending edit carries
   it to intake.
+- profile: the `[defaults]` table is required, with `c`, `gpu_layers`, and
+  `checkpoint_min_step`.
+- profile: the presets always render `jinja` and `metrics` on; the profile has no field for them.
+- profile: `host_class`, `bind`, `kv`, and `engine.name` are closed sets, and validation refuses
+  any other value.
+- profile: each model declares its kind, generative or embedding; sampling is required on a
+  generative model and refused on an embedding model.
+- profile: `sampling.source` names the page the values come from, beside `card_url`, since
+  gpt-oss's sampling comes from its GitHub README, not its card.
+- profile: a non-empty `reasoning` renders as `chat-template-kwargs` `reasoning_effort`; set A
+  sets none.
+- profile: raw `args` refuse the keys the profile renders and a fixed list of keys the unit or
+  host owns (`host`, `port`, `models-*`, path-valued flags): a list of keys, not a scan of
+  values.
+- profile: Host.Validate refuses shell and systemd metacharacters in host values, and a relative
+  HF_HOME or models directory.
+- profile: the unit keeps `Requires=tailscaled.service`, and keeps `--no-models-autoload`
+  whether or not the presets set `load-on-startup`.
+- profile: `cmd/profile` takes host values from `-user`, `-hf-home`, and `-models-dir`, or else
+  from SPIKE_SERVICE_USER, SPIKE_HF_HOME, and SPIKE_MODELS_DIR.
+- profile: the probe never loads a model (`?autoload=false`) and checks the content of the chat,
+  image, and audio answers.
+- profile: clutch conform on b11565 ran the Framework's existing clutch build from 5afeac3, whose
+  code is 37fa153's, with OpenCode 1.18.34 installed with mise as the Framework's unprivileged account.
+- profile: EmbeddingGemma 2's `card_url` is Google's card; its ID stays the ggml-org GGUF
+  repository.
 
 ## Pending edits
 
@@ -253,6 +279,9 @@ slices 6/6 committed · standards — · spec — · editor —
   model card (spike-model-hosting's model-card note)" to the methods proposed for the
   architecture layer, and say that ai-hosting's per-model presets cite the card values that
   method reads.
-- coordinator · roadmap, the spike's profile summary: "pinned exactly in the
-  profile" and "Currency compares the profile's pins against the newest `b<N>` tag" become a
-  minimum build, with each measurement naming the build it ran on.
+- coordinator · roadmap, the spike's profile summary: replace "pinned exactly in the profile"
+  and "Currency compares the profile's pins against the newest `b<N>` tag" with a minimum
+  build (b11452), with each measurement naming the build it ran on.
+- coordinator · ai-hosting.md, "The existing setup: personal-agents", the Serving line: it
+  names release build b11529; the Framework's router now runs b11565 from the spike's rendered
+  presets and unit, which hold llama.cpp to a minimum build (b11452).

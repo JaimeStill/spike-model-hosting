@@ -63,21 +63,23 @@ On llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64) with gpt-oss-120b 
   to 3/5; its `skill` held at 3/5 and its `audio-tool` rose from 2/5 to 4/5. At five runs a
   cell moves by one or two on chance alone, so the sets show OpenCode on `auto` failing about a
   third of its `tool`, `skill`, and `audio-tool` exchanges on both builds (6 of 15 on b11529,
-  5 of 15 on b11565), not a regression. The failures differ in kind:
-  every b11529 failure was a text answer instead of `respond`, while on b11565 the two `tool`
-  failures and the `audio-tool` failure were text answers and both `skill` failures were the
-  HTTP 500 "does not match the expected peg-native format". b11565 leaves the gpt-oss parser
+  5 of 15 on b11565), not a regression. The failures differ in kind: every b11529 failure was a
+  text answer instead of `respond`, while on b11565 the two `tool` failures and the `audio-tool`
+  failure were text answers and both `skill` failures were the HTTP 500 "does not match the
+  expected peg-native format". b11565 leaves the gpt-oss parser
   rules unchanged ([`llama-cpp-builds.md`](llama-cpp-builds.md)), so the parse 5xx that
   `required` keeps from Pi still reaches a client on `auto`.
 - **Sampling.** b11529 applies a GGUF's `general.sampling.*` keys as the server default
   (`/props` `default_generation_settings`). The Gemma 4 GGUFs carry their card's values;
   gpt-oss-120b's carries none, so it ran at llama.cpp's 0.8 / 40 / 0.95 / 0.05 until the preset
-  set the card's. personal-agents' `profiles/unified-96gb.ini` states each card's values.
+  set the card's. personal-agents' `profiles/unified-96gb.ini` and the spike's
+  `profiles/strix-halo.toml` state each card's values.
 
 ## Which task answers which layer
 
-- `profile`: the schema carries per-model sampling and reasoning settings, rendered into each
-  platform's presets.
+- `profile`: `profiles/strix-halo.toml` sets each model's card sampling and leaves reasoning to
+  the template, and the `profile` package renders both into llama.cpp's presets
+  ([`model-cards.md`](model-cards.md)).
 - `consumers`: pass^k per model, engine, and consumer against 0 invalid and 90%, and each
   consumer's reasoning round-trip on tool turns (Pi sends `reasoning_content`; OpenCode
   doesn't).

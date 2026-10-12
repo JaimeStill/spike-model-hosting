@@ -6,8 +6,10 @@ across the Strix Halo and Dell NVIDIA host classes, behind one host-class profil
 repository is managed with the marathon workflow; start from `context/README.md`.
 
 - **Standards:** `STANDARDS.md`, with pointers into the architecture repository.
-- **Check:** `mise run check` (hermetic). The HTTP probes against a running router run as
-  `mise run integration`.
+- **Check:** `mise run check` (hermetic). The HTTP probes (the `probe` package) run against
+  the router `SPIKE_ROUTER_URL` names, as `mise run integration`.
+- **Profiles:** `profiles/` holds the host-class profiles; `go run ./cmd/profile` lists,
+  validates, and renders them, and the `profile` package's doc lists its API.
 - **Goals:** this spike's tasks live in the coordinator's roadmap,
   `standards-lab/context/roadmap.toml`, under `experiment.ai.spike-model-hosting`. Its goal
   record is `context/goals/experiment.ai.spike-model-hosting.md`.

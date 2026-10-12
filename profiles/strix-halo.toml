@@ -1,7 +1,7 @@
 # The Strix Halo profile: set A, four models loaded side by side and sized together against the
 # 96GiB GTT pool of a ~90-96GB unified-memory host. Its settings are personal-agents' 96GiB
 # preset (profiles/unified-96gb.ini) and the recipes it copies (reference/model-tiers.md,
-# "~90-96GB (unified memory)"); each model's reasons carry their substance.
+# "~90-96GB (unified memory)"); each model's reasons say why it takes its values.
 #
 # Each model runs its official embedded chat template at its card's sampling, with no reasoning
 # effort set (the template's default). A shape a client must get, such as a mandatory tool call,

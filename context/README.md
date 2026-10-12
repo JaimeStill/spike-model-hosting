@@ -66,11 +66,12 @@ of the admin tooling.
   adds the dense models Mistral Medium 3.5, Gemma 4 31B, and Muse Glimmer 30B.
 - **Model origin:** models of Chinese origin are avoided where an alternative serves
   (`standards-lab/context/ai-strategy.md`, "Constraint: model origin").
-- **Versions:** every engine, gateway, and model runs its latest upstream release. Profiles hold
-  llama.cpp to a minimum build, a b-number, because its semver releases ship no binaries and lag
-  its model support; every document and measurement names the exact build it ran on, read from
-  the router's /props build_info. Other versions are pinned exactly, `mise run currency` reports
-  the pins that trail, and every document names the exact versions in use when it is written.
+- **Versions:** every engine, gateway, and model runs its latest upstream release. Every document
+  names the exact versions in use when it is written, and every measurement the versions it ran
+  on. A profile holds llama.cpp to a minimum build, a b-number, and a host runs any build at or
+  above it; the build in use is the one the router's `/props` reports in `build_info`. llama.cpp
+  is tracked by b-number because its semver releases ship no binaries and lag its model support.
+  Other versions are pinned exactly, and `mise run currency` reports the pins that trail.
 
 ## Hosts and boundaries
 
@@ -89,8 +90,12 @@ of the admin tooling.
 
 ## Capabilities
 
-- **Host-class profile:** the TOML schema, its validator, and its renderer to each platform's
-  presets, configuration, and systemd units.
+- **Host-class profile:** the `profile` package loads, validates, and renders a TOML profile to
+  llama.cpp's router presets and systemd unit, and the `profile` command (`cmd/profile`) lists,
+  validates, and renders the profiles in `profiles/`. `profiles/strix-halo.toml` serves set A on
+  the Framework. Renderers for the other platforms' configuration are planned.
+- **Model cards:** how to read a model card, what each value means, and the values set A takes
+  from each card, in [`model-cards.md`](model-cards.md).
 - **Serving platforms:** llama.cpp (Vulkan, ROCm, CUDA), vLLM, SGLang, and llama-swap, each with
   its setup and management record.
 - **Consumers:** Pi, Claude Code, and spike-harness-driver's `model` package as go-ai's
@@ -99,7 +104,8 @@ of the admin tooling.
   A's memory budget on the Framework, estimated against measured, is in
   [`memory-budget.md`](memory-budget.md).
 - **llama.cpp builds:** each build move on the Framework, with its release-note review and
-  what was re-verified on the new build, in [`llama-cpp-builds.md`](llama-cpp-builds.md).
+  what was re-verified on the new build, in [`llama-cpp-builds.md`](llama-cpp-builds.md). The
+  Framework runs b11565; `align` measured b11529.
 - **Tool-call reliability:** the layered convention every platform, profile, consumer, and
   gateway is held to, with pass^k as its measure, in [`tool-reliability.md`](tool-reliability.md).
 - **Gateways:** none, agentgateway, and LiteLLM.
@@ -113,7 +119,8 @@ The tasks, in the order they run; each cites the evidence it proves.
 
 1. `align`: the Framework's router, personal-agents, spike-harness-driver, and the "clutch
    driving Pi" artifact brought in line with set A on an upstream b-number build (evidence 1).
-2. `profile`: the profile schema and the Strix Halo llama.cpp profile (evidence 1).
+2. `profile`: the profile schema and the Strix Halo llama.cpp profile, which holds llama.cpp to
+   a minimum build (evidence 1).
 3. `consumers`: the three consumers at once on the Vulkan router, the baseline every platform is
    measured against, and Mistral Small 4's promotion probe (evidence 4, 5).
 4. `rocm`: llama.cpp's ROCm backend against Vulkan (evidence 2–7).

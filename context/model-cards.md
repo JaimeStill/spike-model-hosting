@@ -30,7 +30,8 @@ Related items a reader meets on the same card:
   the native format handles these; a hand-rolled prompt has to.
 - **Multi-turn rules.** Gemma 4's card drops earlier thinking from the history, except on tool
   call turns, where it is kept; gpt-oss's Harmony guide passes the reasoning back after tool
-  calls. Both are the client's job (see `context/tool-reliability.md`, the Client layer).
+  calls. Both are the client's job ([`tool-reliability.md`](tool-reliability.md), the Client
+  layer).
 - **Quantization.** A GGUF repository's suffix (`MXFP4`, `Q4_0`, `Q8_0`) is the weights'
   precision. gpt-oss was post-trained in MXFP4 and its card's evals ran in it, so MXFP4 is the
   card's own setting. Another quantization is a deviation whose cost the card doesn't measure;
@@ -54,14 +55,14 @@ The card's values are the ones the publisher trained and evaluated at; its bench
 and its tool-call behavior, hold only there. An agent built against a model is built against
 that configuration, and a deviation is a new configuration nobody has measured.
 
-The spike's round 6 is the case in point (`context/tool-reliability.md`; the goal record's
-Decisions, round 6). gpt-oss-120b sometimes opened a JSON `final` after a tool result, which
-llama.cpp's parser rejected. A patched chat template cut that failure on one prompt but broke
-other consumers' cells, and held only with `reasoning-effort = high`. Both were rejected and
-reverted: the embedded template wasn't wrong, and the patch and the effort were per-model
-workarounds to carry across every build and conversion. The shape the client needs is
-constrained per request (`tool_choice`, `response_format`) instead, and the model stays at its
-card.
+The spike's round 6 is the case in point ([`tool-reliability.md`](tool-reliability.md); the
+goal record's Decisions, round 6). gpt-oss-120b sometimes opened a JSON `final` after a tool
+result, which llama.cpp's parser rejected. A patched chat template cut that failure on one
+prompt but broke other consumers' cells, and held only with `reasoning-effort = high`. Both
+were rejected and reverted: the embedded template wasn't wrong, and the patch and the effort
+were per-model workarounds to carry across every build and conversion. The shape the client
+needs is constrained per request (`tool_choice`, `response_format`) instead, and the model stays
+at its card.
 
 The engine's defaults are also a deviation. llama.cpp's own sampling is temperature 0.8, top-k
 40, top-p 0.95, min-p 0.05 (on b11529); a model whose card says otherwise and whose GGUF
@@ -82,28 +83,21 @@ values and the rule behind them, and `reference/context-sizing.md` gives the met
 
 ## How the profile applies this
 
-`profiles/strix-halo.toml` carries each value with its provenance, and the renderer writes each
-reason into the presets as a comment above the model's section:
+`profiles/strix-halo.toml` sets the values above, each with its source and reason, and the
+`profile` package renders each reason into the presets as a comment above the model's section.
+The package's doc comments define the fields and what validation refuses. Three rules from this
+note shape the profile:
 
-- **Typed sampling, traced to the card.** Each generative model sets `temperature`, `top_p`,
-  `top_k`, and `min_p`, all required, with `source` naming the page they come from (the card,
-  or the README gpt-oss's card defers to) and `reason` saying how. A truncation the card
-  doesn't name is turned off (`top_k = 0`, `min_p = 0`) rather than left to the engine. The
-  optional `reasoning` (low, medium, high) renders as the template's `reasoning_effort`; set A
-  sets none. The embedding model's sampling is refused by validation.
-- **Set explicitly, though the engine reads the GGUF.** llama.cpp b11529 and later (the
-  Framework runs b11565) apply a GGUF's `general.sampling.*` keys as the server's defaults. The
-  Gemma 4 GGUFs carry their cards' three values; gpt-oss-120b's carries none, so it ran at the
-  engine's defaults until the preset set the card's. The profile states every value so the
-  card, not the conversion, is the source (the goal record's Decisions, align).
-- **Raw args for engine-only keys.** Keys only llama.cpp has (`embeddings`, `pooling`,
-  `no-mmproj`, `b`, `ub`) go in a per-model `args` map with an `args_reason`. The keys the
-  profile types (`temp`, `top-p`, `top-k`, `min-p`, `c`, `chat-template-kwargs`, and others)
-  can't be set there.
-- **`c` with its reason.** Each model's `c` carries a `c_reason`: the trained length, or the
-  memory budget when that binds first, with the KV cost per token behind it.
-- **The template is the embedded one.** The profile has no template field; each model runs
-  the chat template its GGUF embeds.
+- **Every sampling value is stated, though the engine reads the GGUF.** llama.cpp b11529 and
+  later apply a GGUF's `general.sampling.*` keys as the server's defaults. The Gemma 4 GGUFs
+  carry their cards' three values; gpt-oss-120b's carries none, so it ran at the engine's
+  defaults until the preset set the card's. The profile states every value so the card, not the
+  conversion, is the source, and turns off a truncation the card doesn't name (`top_k = 0`,
+  `min_p = 0`) rather than leave it to the engine (the goal record's Decisions, align).
+- **Reasoning is left to the template.** A model's optional `reasoning` renders as the
+  template's `reasoning_effort`; set A sets none.
+- **The template is the embedded one.** The profile has no template field; each model runs the
+  chat template its GGUF embeds.
 
 ## Assumptions
 

@@ -55,6 +55,5 @@ is read from the router's `/props` `build_info`.
 - **The footprint.** Set A at 4 in flight leaves 3.30GiB of the pool free, as on b11529,
   with no model more than 17MiB from its b11529 figure ([`memory-budget.md`](memory-budget.md)).
 - **Tool-call reliability.** Five `clutch conform` runs on the Framework: Pi passed every cell
-  5/5, as on b11529; OpenCode's `tool` fell from 4/5 to 3/5, its `skill` held at 3/5, and its
-  `audio-tool` rose from 2/5 to 4/5. Recorded beside b11529's in
-  [`tool-reliability.md`](tool-reliability.md).
+  5/5, as on b11529, and one OpenCode cell, `tool`, fell from 4/5 to 3/5. The rates sit beside
+  b11529's in [`tool-reliability.md`](tool-reliability.md), which reads the fall as chance.
