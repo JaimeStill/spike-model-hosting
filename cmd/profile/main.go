@@ -62,6 +62,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	}
 }
 
+// usage is the tool's usage, printed on -h and after a usage error.
 const usage = `usage:
   profile engines [-dir profiles] [profile ...]
   profile validate <profile>
@@ -69,6 +70,7 @@ const usage = `usage:
   profile render unit [-user name] [-hf-home dir] [-models-dir dir] <profile>
 `
 
+// dispatch runs the command args name, writing its output to stdout.
 func dispatch(args []string, getenv func(string) string, stdout io.Writer) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%w: no command", errUsage)
@@ -137,6 +139,7 @@ func validate(args []string, stdout io.Writer) error {
 	return err
 }
 
+// renderPresets writes the presets of the one profile args name.
 func renderPresets(args []string, stdout io.Writer) error {
 	p, _, err := loadOne("render presets", args)
 	if err != nil {
@@ -145,6 +148,8 @@ func renderPresets(args []string, stdout io.Writer) error {
 	return p.RenderPresets(stdout)
 }
 
+// renderUnit writes the unit of the profile args name, with the host values from its flags or
+// else the environment.
 func renderUnit(args []string, getenv func(string) string, stdout io.Writer) error {
 	fs := newFlagSet("render unit")
 	var h profile.Host

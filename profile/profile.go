@@ -1,9 +1,3 @@
-// Package profile loads a host-class profile from TOML, validates it, and renders the serving
-// configuration it describes: the llama.cpp router's model presets and its systemd unit.
-//
-// A profile describes a class of host (its memory pool and backend), never one host: it carries
-// no host name or address, and neither does a render: the unit resolves the host's tailnet
-// address when it starts. Values that belong to one machine (Host) are given at render time.
 package profile
 
 import (
