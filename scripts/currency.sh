@@ -31,11 +31,14 @@ for mod in $GO_MODULES; do
 	[ "$directive" = "$go_minor" ] || report "$mod/go.mod: go $directive -> go $go_minor"
 done
 
-# mise tools pinned below their latest version.
-outdated=$(mise outdated --bump --local --json |
-	jq -r 'to_entries[] | "\(.key) \(.value.requested) -> \(.value.bump)"')
+# mise tools pinned below their latest version. The consumers environment
+# loads mise.toml and mise.consumers.toml both, so one scan covers each, and
+# each line names the file that pins the tool.
+outdated=$(MISE_ENV=consumers mise outdated --bump --local --json |
+	jq -r 'to_entries[] |
+		"\(.value.source.path | split("/") | last): \(.key) \(.value.requested) -> \(.value.bump)"')
 while read -r line; do
-	[ -n "$line" ] && report "mise.toml: $line"
+	[ -n "$line" ] && report "$line"
 done <<<"$outdated"
 
 # The profiles pin no engine: they hold llama.cpp to a minimum build, a floor a
