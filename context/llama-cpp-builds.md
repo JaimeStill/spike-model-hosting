@@ -57,3 +57,48 @@ is read from the router's `/props` `build_info`.
 - **Tool-call reliability.** Five `clutch conform` runs on the Framework: Pi passed every cell
   5/5, as on b11529, and one OpenCode cell, `tool`, fell from 4/5 to 3/5. The rates sit beside
   b11529's in [`tool-reliability.md`](tool-reliability.md), which reads the fall as chance.
+
+## b11565 to b11572, 2026-10-12
+
+- **From:** b11565 (`b11565-f9a95aeb2`), installed by `profile`.
+- **To:** b11572 (`b11572-efe3626b1`), the newest b-tag when the move ran.
+- **Reviewed:** the 7 commits in `b11565...b11572` (`gh api
+  repos/ggml-org/llama.cpp/compare/b11565...b11572`), read for the chat parser, `/v1/messages`
+  and thinking, Vulkan MoE, Gemma 4 input and embeddings, flags and preset keys, and sampling
+  defaults.
+
+### What the notes change for set A
+
+- **Chat parser, `/v1/messages`, and thinking.** No commit touches the chat code, the
+  Anthropic `/v1/messages` endpoint, or how reasoning is split into thinking content. Both
+  endpoints still take b11531's rewritten path, the gpt-oss and Gemma 4 parser rules are
+  unchanged, and the `<|constrain|>` final that `tool-reliability.md` describes still fails
+  the same way. Claude Code meets `/v1/messages` and its thinking blocks as b11565 served them.
+- **Vulkan MoE.** Nothing changes for Vulkan.
+  [#30373](https://github.com/ggml-org/llama.cpp/pull/30373) (b11569) brings Metal's MoE
+  matrix multiply to the duplicate-expert behavior Vulkan gained in b11554.
+- **Gemma 4 input and embeddings.** Nothing changes. The two new decision-model architectures,
+  [#30378](https://github.com/ggml-org/llama.cpp/pull/30378) (b11571) and
+  [#30383](https://github.com/ggml-org/llama.cpp/pull/30383) (b11572), touch the server only
+  for decision requests, and split Qwen3's graph to share its backbone; none of set A runs on
+  either path.
+- **Graph reallocations.** [#30329](https://github.com/ggml-org/llama.cpp/pull/30329) (b11567)
+  counts the times a compute graph's buffers are reserved again during inference, logs each
+  unexpected one, and adds a `graph reallocs` line to each slot's timings in the router log.
+  It reports and changes nothing; the line is a new reading for the footprint and baseline
+  runs.
+- **Sampling defaults.** Unchanged. [#30095](https://github.com/ggml-org/llama.cpp/pull/30095)
+  fixes draft sampling in the speculative example only. The GGUF `general.sampling.*` defaults
+  and the presets' values apply as before.
+- **Other.** [#29898](https://github.com/ggml-org/llama.cpp/pull/29898) fixes the web UI's
+  text-attachment preview; [#30299](https://github.com/ggml-org/llama.cpp/pull/30299) changes
+  how the tests link.
+- **Flags and preset keys.** Only `--kv-unified` changes, gaining the speculative example
+  (#30095); the server's flag is as before. No flag is renamed or removed; router mode, the
+  preset keys, `--models-max`, and `load-on-startup` are unchanged. No preset key changes
+  meaning, so the presets did not change.
+
+### What was re-verified on b11572
+
+- The integration probe runs against the router once the architect installs b11572; this
+  section records it then.
