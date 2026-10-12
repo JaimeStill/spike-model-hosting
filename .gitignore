@@ -6,3 +6,6 @@
 bin/
 *.test
 coverage.out
+
+# Untracked spike state: the concurrent run's Pi agent directory, sessions and cache.
+.state/

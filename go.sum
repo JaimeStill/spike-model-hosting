@@ -1,2 +1,6 @@
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
+github.com/JaimeStill/spike-harness-driver v0.0.0-20261009211659-9981a3e37466 h1:p3bRxO1onoaW26jO6J7peUTtwq/3G5whOJA6rK0/rk0=
+github.com/JaimeStill/spike-harness-driver v0.0.0-20261009211659-9981a3e37466/go.mod h1:R8z1/u/XRZHnHiMh0vvPHs9vtSRkxW2MiYfm15oKLrE=
+github.com/JaimeStill/spike-harness-driver/pi v0.0.0-20261009211659-9981a3e37466 h1:aD+csKY4yRo6PoAg76Ebg2py1OIzgTvTXezx5fPUrq0=
+github.com/JaimeStill/spike-harness-driver/pi v0.0.0-20261009211659-9981a3e37466/go.mod h1:Br+MifFuGp1DuKMhp469z0uUNwyOJ5KS3TQeofoexlA=
