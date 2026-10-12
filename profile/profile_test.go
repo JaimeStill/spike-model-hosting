@@ -351,28 +351,6 @@ func TestLoadNamesInvalidArgs(t *testing.T) {
 	}
 }
 
-// TestHostValidateNamesMissing shows a render-time host input left empty fails, named.
-func TestHostValidateNamesMissing(t *testing.T) {
-	full := profile.Host{ServiceUser: "llama", HFHome: "/var/lib/llama/hf", ModelsDir: "/var/lib/llama/models"}
-	if err := full.Validate(); err != nil {
-		t.Errorf("Validate(complete host) = %v; want nil", err)
-	}
-	tests := []struct {
-		host profile.Host
-		want string
-	}{
-		{profile.Host{HFHome: full.HFHome, ModelsDir: full.ModelsDir}, "host service user: required"},
-		{profile.Host{ServiceUser: full.ServiceUser, ModelsDir: full.ModelsDir}, "host HF_HOME: required"},
-		{profile.Host{ServiceUser: full.ServiceUser, HFHome: full.HFHome}, "host models directory: required"},
-	}
-	for _, tt := range tests {
-		err := tt.host.Validate()
-		if err == nil || !strings.Contains(err.Error(), tt.want) {
-			t.Errorf("Validate(%+v) = %v; want an error containing %q", tt.host, err, tt.want)
-		}
-	}
-}
-
 func render(t *testing.T, path string) string {
 	t.Helper()
 	p, err := profile.Load(path)

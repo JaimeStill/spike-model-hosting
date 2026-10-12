@@ -143,7 +143,8 @@ func TestHostValidateRefusesUnsafe(t *testing.T) {
 	}
 }
 
-// TestEngineRepository shows the engine a profile names has its upstream repository.
+// TestEngineRepository shows the engine a profile names has its upstream repository, and an
+// engine the schema doesn't name has none.
 func TestEngineRepository(t *testing.T) {
 	p, err := profile.Load(strixHalo)
 	if err != nil {
@@ -151,6 +152,9 @@ func TestEngineRepository(t *testing.T) {
 	}
 	if got := p.Engine.Repository(); got != "ggml-org/llama.cpp" {
 		t.Errorf("Engine.Repository() = %q; want ggml-org/llama.cpp", got)
+	}
+	if got := (profile.Engine{Name: "vllm"}).Repository(); got != "" {
+		t.Errorf("Engine{Name: vllm}.Repository() = %q; want empty", got)
 	}
 }
 
