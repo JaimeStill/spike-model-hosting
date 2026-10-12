@@ -204,6 +204,44 @@ Each set took about 16 minutes (15m33s and 17m17s).
   of Pi's rates crosses Pi's major version, 0.99 to 1.x, as well as a build (b11529 and b11565
   to b11572). Pi held every cell on all three.
 
+### The engine row
+
+The engine row is OpenAI's compatibility test for gpt-oss implementations, the one
+[verifying gpt-oss implementations](https://developers.openai.com/cookbook/articles/gpt-oss/verifying-implementations)
+sets its bar with: openai/gpt-oss at `7b58334` (`7b583341fe16729127f6d5b94a7b09ccae97e1a1`),
+`compatibility-test/`, 30 cases over six tools, each run five times through the OpenAI Agents
+SDK. It ran from the laptop against the Framework's router on 2026-10-12, on the same build
+(`b11572-efe3626b1`) and model (`ggml-org/gpt-oss-120b-GGUF:MXFP4`), in Chat Completions mode
+with `-k 5`, on Node 26.11.1 (tsx 4.23.15, which the suite's `npm start` needs but doesn't
+pin). `mise run gpt-oss-compat` in the consumers environment, with `SPIKE_ROUTER_URL` set,
+fetches the suite into `.state/`, installs it from its lockfile, runs it, and prints this. It
+measures the engine and model at the Chat Completions layer, with no consumer between, not the
+`/v1/messages` Claude Code uses. A run counts only when its response is valid and it called the
+case's tool with arguments the tool's schema accepts:
+
+| Set | Invalid | pass@5 | pass^5 | Tool call alone: pass@5 | pass^5 | Wrong-input calls | Runtime | Bar |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 150 of 150 | 0/30 (0%) | 0/30 (0%) | 29/30 | 27/30 | 35 | 7m27s | fails |
+| 2 | 150 of 150 | 0/30 (0%) | 0/30 (0%) | 29/30 | 28/30 | 33 | 7m23s | fails |
+
+- **Every response is invalid for one field name.** The suite counts a Chat Completions response
+  valid only when some assistant message carries its reasoning as a non-empty string in
+  `reasoning`, the field the cookbook names. llama.cpp sends it as `reasoning_content`, which
+  the suite records and doesn't accept, so all 300 runs fail on shape, whatever the tool call
+  did. No request errored: the router answered every one. The 0% is the field's, not the
+  model's tool calling; the bar fails on it all the same.
+- **The tool calls alone come close.** Reading the suite's own per-run record of the tool
+  call, gpt-oss called the right tool with schema-valid arguments in 143 and 144 of 150 runs.
+  Every miss was `detect_language`, answered in text instead of a call ("The phrase “Bonjour
+  tout le monde” is French."): case 14 ("What language is 'Bonjour tout le monde'?") on all
+  ten trials, case 10 once in set 1 and case 11 once in each set. That is the same text-for-a-
+  call failure OpenCode and Claude Code show on `auto`; the suite sends no `tool_choice`.
+  27 of 30 is 90.0%, not over the bar's 90%, and 28 of 30 is 93.3%: at the line, not clear of it.
+- **Wrong-input calls don't fail a run.** The 35 and 33 are schema-valid calls whose arguments
+  differ from the case's expected ones, all `generate_chart` and `query_database`: a title or
+  axis label the prompt didn't ask for, a `limit` of 100 added or a `limit` of 10 left out.
+  The suite counts them and, outside `--strict`, passes them.
+
 ## Which task answers which layer
 
 - `profile`: `profiles/strix-halo.toml` sets each model's card sampling and leaves reasoning to

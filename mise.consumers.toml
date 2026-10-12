@@ -13,3 +13,9 @@ python = "3.14.8"
 # mise's pipx backend installs GuideLLM through uv.
 uv = "0.13.0"
 "pipx:guidellm" = "0.8.1"
+
+# The engine row: OpenAI's gpt-oss compatibility test against SPIKE_ROUTER_URL, run from the
+# laptop. It fetches the suite into .state/ and reads the network, so `check` never runs it.
+[tasks.gpt-oss-compat]
+description = "Run OpenAI's gpt-oss compatibility test (Chat Completions, -k 5) against SPIKE_ROUTER_URL"
+run = "scripts/gpt-oss-compat.sh"
