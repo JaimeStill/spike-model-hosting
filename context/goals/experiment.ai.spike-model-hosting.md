@@ -108,7 +108,7 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
 
 ## Progress
 
-slices 2/7 committed · standards — · spec — · editor —
+slices 3/7 committed · standards — · spec — · editor —
 
 ## Decisions
 
@@ -293,6 +293,13 @@ slices 2/7 committed · standards — · spec — · editor —
   so the architect's own `claude`, `pi`, and system Python still resolve in the repo root.
 - consumers: Python is held at 3.14.8, because GuideLLM needs torch, which ships no Python 3.15
   wheels; currency keeps reporting the hold. OpenCode is pinned at 1.19.0, the latest.
+- consumers: the concurrent run opens one harness session per request, so no nonce reaches a
+  later answer through history; it refuses to start unless gpt-oss-120b and the embedding model
+  are loaded, since Pi's provider can't send `autoload=false`; Pi uses its built-in llama.cpp
+  provider with its agent directory under the untracked `.state/`.
+- consumers: the run's prompt frames the nonce as a request ID to repeat, after gpt-oss-120b
+  refused "reply with exactly this token"; the embedding tolerance is cosine 1e-3 (batching moved
+  EmbeddingGemma 2 by at most 1.4e-4; distinct inputs sit below 0.67).
 
 ## Pending edits
 
