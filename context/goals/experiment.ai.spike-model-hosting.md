@@ -108,7 +108,7 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
 
 ## Progress
 
-slices 6/7 committed · standards — · spec — · editor —
+slices 7/7 committed · standards — · spec — · editor —
 
 ## Decisions
 
