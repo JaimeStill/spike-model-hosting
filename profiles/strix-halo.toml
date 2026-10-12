@@ -11,6 +11,10 @@ bind = "tailnet"
 slots = 4
 kv = "unified"
 
+# min_build is a floor, not a pin: a host runs any build at or above it, and each measurement
+# names the build it ran on (memory_budget.build, and /props build_info). b11452 is the first
+# build that runs EmbeddingGemma 2, the newest of set A's models, so it is the oldest build set A
+# can serve on.
 [engine]
 name = "llama.cpp"
 backend = "vulkan"

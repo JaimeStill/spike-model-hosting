@@ -1,0 +1,18 @@
+# The llama.cpp router for the strix-halo host class, rendered from its profile.
+# Engine: llama.cpp (vulkan), build b11452 or later, run through the current link.
+[Unit]
+Description=llama.cpp router (model server)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+Requires=tailscaled.service
+
+[Service]
+Type=simple
+User=svc
+Environment=HF_HOME=/srv/hf
+ExecStart=/usr/bin/bash -c 'exec /opt/llama.cpp/current/llama-server --models-dir /srv/models --no-models-autoload --host $(tailscale ip -4) --port 8080 --models-preset /etc/llama-router/models.ini'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

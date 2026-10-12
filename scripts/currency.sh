@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# currency reports every dependency, toolchain, and pin that trails its latest
+# currency reports every dependency and toolchain that trails its latest
 # release, one line each, and exits non-zero when it reports any. It reads the
 # network and writes nothing. Run it through `mise run currency`.
 #
@@ -38,18 +38,8 @@ while read -r line; do
 	[ -n "$line" ] && report "mise.toml: $line"
 done <<<"$outdated"
 
-# The engine and gateway pins of every host-class profile, against the newest
-# release tag of each pin's upstream repository. Pre-releases count, since
-# llama.cpp publishes every build as one. The profile tool lists the pins, one
-# per line as "<profile> <name> <pin> <owner/repo>"; until the profile task
-# adds it, there are no pins to scan.
-if [ -d cmd/profile ]; then
-	pins=$(go run ./cmd/profile pins)
-	while read -r profile name pin repo; do
-		[ -n "$profile" ] || continue
-		latest=$(gh api "repos/$repo/releases?per_page=1" --jq '.[0].tag_name')
-		[ "$pin" = "$latest" ] || report "$profile: $name $pin -> $latest"
-	done <<<"$pins"
-fi
+# The profiles pin no engine: they hold llama.cpp to a minimum build, a floor a
+# newer release never makes stale, so there is nothing of theirs to scan. Each
+# document and measurement names the build it ran on instead.
 
 exit "$stale"

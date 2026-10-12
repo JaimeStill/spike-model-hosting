@@ -1,16 +1,19 @@
 // Package profile loads a host-class profile from TOML, validates it, and renders the serving
-// configuration it describes: today, the llama.cpp router's model presets.
+// configuration it describes: the llama.cpp router's model presets and its systemd unit.
 //
 // A profile describes a class of host (its memory pool and backend), never one host: it carries
-// no host name or address. Values that belong to one machine are given at render time.
+// no host name or address, and neither does a render: the unit resolves the host's tailnet
+// address when it starts. Values that belong to one machine (Host) are given at render time.
 package profile
 
 import (
 	"errors"
 	"fmt"
 	"maps"
+	"path"
 	"regexp"
 	"slices"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -64,6 +67,15 @@ type Engine struct {
 	Backend string `toml:"backend"`
 	// MinBuild is a llama.cpp b-number, such as b11452.
 	MinBuild string `toml:"min_build"`
+}
+
+// engineRepositories maps each engine a profile may name to its upstream repository.
+var engineRepositories = map[string]string{EngineLlamaCPP: "ggml-org/llama.cpp"}
+
+// Repository returns the engine's upstream repository as owner/name on GitHub, such as
+// ggml-org/llama.cpp, or "" for an engine the schema doesn't name.
+func (e Engine) Repository() string {
+	return engineRepositories[e.Name]
 }
 
 // Defaults are the settings shared by every model, rendered into the presets' [*] section.
@@ -173,20 +185,35 @@ type Host struct {
 }
 
 // Validate reports each Host input that is empty, by name. A render that uses the host's values
-// calls it first, so it fails rather than render a unit with a blank in it.
+// calls it first, so it fails rather than render a unit with a blank in it. It also refuses a
+// value the unit can't carry as given: one with whitespace, a quote or backtick, a backslash, a
+// dollar sign or a percent sign, which the unit's shell or systemd would split or expand; and a
+// relative HF_HOME or models directory.
 func (h Host) Validate() error {
 	var errs []error
-	for _, in := range []struct{ name, value string }{
-		{"service user", h.ServiceUser},
-		{"HF_HOME", h.HFHome},
-		{"models directory", h.ModelsDir},
+	for _, in := range []struct {
+		name, value string
+		path        bool
+	}{
+		{"service user", h.ServiceUser, false},
+		{"HF_HOME", h.HFHome, true},
+		{"models directory", h.ModelsDir, true},
 	} {
-		if in.value == "" {
+		switch {
+		case in.value == "":
 			errs = append(errs, fmt.Errorf("host %s: required", in.name))
+		case strings.ContainsAny(in.value, unsafeHostChars):
+			errs = append(errs, fmt.Errorf("host %s: %q has a character the unit can't carry as given", in.name, in.value))
+		case in.path && !path.IsAbs(in.value):
+			errs = append(errs, fmt.Errorf("host %s: %q is not an absolute path", in.name, in.value))
 		}
 	}
 	return errors.Join(errs...)
 }
+
+// unsafeHostChars are the characters a Host value may not hold: whitespace and the characters
+// the unit's shell wrapper or systemd would read as syntax.
+const unsafeHostChars = " \t\n\r\v\f'\"\\$%`"
 
 // minBuild matches a llama.cpp build tag.
 var minBuild = regexp.MustCompile(`^b[0-9]+$`)

@@ -66,10 +66,11 @@ of the admin tooling.
   adds the dense models Mistral Medium 3.5, Gemma 4 31B, and Muse Glimmer 30B.
 - **Model origin:** models of Chinese origin are avoided where an alternative serves
   (`standards-lab/context/ai-strategy.md`, "Constraint: model origin").
-- **Versions:** every engine, gateway, and model runs its latest upstream release. Profiles pin
-  the exact versions, `mise run currency` reports the pins that trail, and every document names
-  the exact versions in use when it is written. llama.cpp is pinned as a b-number build, because
-  its semver releases ship no binaries and lag its model support.
+- **Versions:** every engine, gateway, and model runs its latest upstream release. Profiles hold
+  llama.cpp to a minimum build, a b-number, because its semver releases ship no binaries and lag
+  its model support; every document and measurement names the exact build it ran on, read from
+  the router's /props build_info. Other versions are pinned exactly, `mise run currency` reports
+  the pins that trail, and every document names the exact versions in use when it is written.
 
 ## Hosts and boundaries
 
