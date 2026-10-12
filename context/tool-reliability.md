@@ -74,6 +74,21 @@ On llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64) with gpt-oss-120b 
   gpt-oss-120b's carries none, so it ran at llama.cpp's 0.8 / 40 / 0.95 / 0.05 until the preset
   set the card's. personal-agents' `profiles/unified-96gb.ini` and the spike's
   `profiles/strix-halo.toml` state each card's values.
+- **Next for OpenCode.** Three levers, untested here; `consumers` and `gateway` take them up:
+  - *Force the shape.* OpenCode sends `tool_choice: "auto"`. Its `chat.params` plugin hook
+    edits a request's parameters before it is sent, and may set `required` the way Pi's bridge
+    does; whether it reaches `tool_choice` is unconfirmed. A gateway can inject `required` for
+    every client instead, which matches the convention's server layer.
+  - *Send reasoning back.* gpt-oss expects its reasoning from earlier tool-call turns in later
+    requests, as `reasoning_content` on llama.cpp, and tool calling degrades without it
+    ([alde.dev](https://alde.dev/blog/proper-tool-calling-with-gpt-oss/); llama.cpp
+    [discussion #15396](https://github.com/ggml-org/llama.cpp/discussions/15396)). OpenCode's
+    per-model `interleaved` setting names the field it returns; the conform configuration
+    doesn't set it yet. `consumers` tests each consumer's reasoning round-trip.
+  - *Retry the parse 5xx.* Related 500s with OpenCode and gpt-oss on reasoning plus tool calls
+    are reported in llama.cpp [#19703](https://github.com/ggml-org/llama.cpp/issues/19703) and
+    [#20500](https://github.com/ggml-org/llama.cpp/issues/20500). `gateway` evaluates a bounded
+    resample and a fallback model.
 
 ## Which task answers which layer
 

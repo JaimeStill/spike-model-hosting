@@ -1,13 +1,13 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** brief ready
-- **Task:** profile
-- **Branch:** profile
+- **State:** idle
+- **Task:** none
+- **Branch:** none
 
 ## Tasks
 
 1. [x] align
-2. [ ] profile
+2. [x] profile
 3. [ ] consumers
 4. [ ] rocm
 5. [ ] engines-strix
@@ -108,10 +108,6 @@ Door          two-way. The repository reverts by PR. On the Framework, b11529 st
               preset and documented unit restore the earlier setup through outpost. Decision 8
               accepts that there is no restore point.
 ```
-
-## Progress
-
-slices 6/6 committed · standards ✓ (72fc00c, b275b21) · spec ✓ (gaps closed 466c2e8) · editor ✓
 
 ## Decisions
 
@@ -272,6 +268,9 @@ slices 6/6 committed · standards ✓ (72fc00c, b275b21) · spec ✓ (gaps close
   code is 37fa153's, with OpenCode 1.18.34 installed with mise as the Framework's unprivileged account.
 - profile: EmbeddingGemma 2's `card_url` is Google's card; its ID stays the ggml-org GGUF
   repository.
+- profile (accepted): the presets installed on the Framework equal the committed render;
+  tool-reliability.md records three untested levers for OpenCode (force the shape, send
+  reasoning back, retry the parse 5xx) for consumers and gateway.
 
 ## Pending edits
 
