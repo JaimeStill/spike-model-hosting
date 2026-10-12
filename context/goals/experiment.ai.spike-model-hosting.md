@@ -1,113 +1,114 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** idle
-- **Task:** none
-- **Branch:** none
+- **State:** building
+- **Task:** consumers
+- **Branch:** consumers
 
 ## Tasks
 
 1. [x] align
 2. [x] profile
 3. [ ] consumers
-4. [ ] rocm
-5. [ ] engines-strix
-6. [ ] gateway
-7. [ ] admin (needs: go-cli-sdk v0.1.0)
-8. [ ] cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
-9. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
-10. [ ] validate
+4. [ ] main-model
+5. [ ] rocm
+6. [ ] engines-strix
+7. [ ] gateway
+8. [ ] admin (needs: go-cli-sdk v0.1.0)
+9. [ ] cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
+10. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
+11. [ ] validate
 
-## Task brief · profile
+## Task brief · consumers
 
 ```
-Problem       Every later task renders its serving setup from a host-class profile, and none
-              exists. The Framework's router runs personal-agents' presets and a unit file
-              written from its docs, on llama.cpp b11529, which trails upstream (b11565 at
-              PLAN). The schema must carry each model's sampling and reasoning settings from
-              its card. The spike also needs a note on reading a model card. There is no
-              restore point. Evidence 1.
-Behaviors     1. A profile missing a required field fails validation and names the field.
-                 Required: host class, engine with backend and minimum build, bind mode,
-                 slots, KV mode, the memory-budget record, models. Each model records ID,
-                 publisher, origin, card URL, c, and its reason for c. Validation doesn't judge
-                 origin; STANDARDS.md's convention governs it at review.
-              2. A key the schema doesn't define fails validation and names the key, so host
-                 state has nowhere to go. The service user, HF_HOME, and models directory are
-                 inputs given at render time, and rendering fails without them.
-              3. Each generative model has typed fields for temperature, top-p, top-k, min-p
-                 and reasoning, each traced to its card URL. A value out of range fails
-                 validation. The embedding model has none. Keys that only llama.cpp has
-                 (pooling, b/ub, no-mmproj, embeddings) go in a raw per-model args map.
-              4. Rendering the Strix Halo profile yields presets with shared defaults and four
-                 sections: gpt-oss-120b, Gemma 4 26B-A4B, gemma-4-E4B, EmbeddingGemma 2. Their
-                 sections, keys and values equal a pinned copy of personal-agents' tracked
-                 96 GiB preset, apart from load-on-startup on each of the four. Each model's
-                 reasons render as a comment above its section.
-              5. Rendering yields the router's systemd unit:
-                 - it runs the engine through the build's `current` link, in router mode, with
-                   the rendered presets;
-                 - it binds to the tailnet IPv4 the host resolves when the unit starts;
-                 - it takes the render-time host values;
-                 - it starts after tailscaled and restarts on failure.
-              6. The profile tool lists each engine with its upstream repository and minimum
-                 build. The profile pins no llama.cpp build, and `mise run currency` reports
-                 no llama.cpp line.
-              7. Installed on the Framework from exact commands the architect runs, the
-                 rendered unit and presets serve set A. These checks run from the laptop over
-                 HTTP:
-                 - /health is ok;
-                 - after a restart, /models lists the four as loaded with no manual load;
-                 - gpt-oss-120b answers a chat and a /v1/messages tool call;
-                 - 26B-A4B describes an image, and E4B transcribes an audio clip;
-                 - EmbeddingGemma 2 returns 768-dimension embeddings;
-                 - /props build_info is at or above the profile's minimum build, and the
-                   probe reports it;
-                 - each model's default sampling in /props equals the profile's.
-              8. The Framework moves to the newest b-tag at BUILD time. The spike records its
-                 review of the release notes after b11529: chat parser and /v1/messages,
+Problem       Evidence 4 and 5 need Pi, Claude Code and go-ai's model client to run against
+              the Framework's Vulkan router at once, with no response crossing between
+              requests. Evidence 5 needs that run measured, as the baseline every later
+              platform is measured against. Tool-call reliability has five-run rates for Pi
+              and OpenCode, but no pass^k against OpenAI's bar (0 invalid, >=90%). It has no
+              Claude Code row, because clutch runs Claude Code only on Anthropic, and no
+              reasoning round-trip check per consumer. The router runs b11565, and upstream
+              was at b11569 at PLAN. The architect moved every consumer and instrument to the
+              laptop: the Framework only hosts and serves inference. Mistral Small 4's probe
+              moved to `main-model`.
+Behaviors     1. The Framework moves to the newest b-tag at BUILD. The spike records its review
+                 of the release notes after b11565: chat parser, /v1/messages and thinking,
                  Vulkan MoE, Gemma 4 input and embeddings, flags and preset keys, sampling
-                 defaults. Presets change only where the notes require it, and the checks in
-                 7 pass on that build.
-              9. On that build, with all four loaded and 4 requests in flight on each, at
-                 least 3 GiB of the 96 GiB pool is free. The spike's memory-budget table is
-                 re-measured and names the build it ran on.
-              10. `clutch conform --provider llama.cpp`, run 5 times on the Framework, has its
-                 per-cell rates in the spike's tool-reliability note, beside align's b11529
-                 rates, each set naming its build and where it ran. Any cell that falls is
-                 named.
-              11. A spike note explains how to read a model card and what each value means:
-                 temperature, top-p, top-k, min-p, reasoning effort, chat template, context
-                 length. It says why a model runs at its card's values, and lists the values
-                 set A takes from each card, with sources.
-              12. The spike's standards and README say: the profile and renderer carry no host
-                 name or address (the unit resolves its tailnet address at start; host-local
-                 values come at render time); llama.cpp is held to a minimum build, and every
-                 document and measurement names the build it ran on.
-Test seams    The profile package's load, validate and render API: golden renders, plus the
-              pinned preset copy as test data. The profile tool's engine listing. One
-              integration-tagged HTTP probe at SPIKE_ROUTER_URL (7, 8). Measured evidence on
-              the Framework (9, 10).
-Slices        1. Walking skeleton (1, 4 for one model): load, validate, render one section,
-                 golden test.
-              2. Strix Halo profile (2, 3, 4): set A, typed sampling, the closed schema,
-                 equality with the pinned copy.
-              3. Unit and engines (5, 6, 12): the rendered unit; the engine listing;
-                 currency without a llama.cpp pin scan; the standards and README lines.
-              4. Rendered setup live on the running b11529 (7): the architect installs it,
-                 and the probe passes. The render change lands apart from the build change.
-              5. Build move (8, 9, 10): release-note review, newest build installed, probe,
-                 footprint, conform rates, memory-budget table.
-              6. Model-card note (11), and the pending coordinator edits in the goal record.
-Out of scope  Changes to personal-agents, spike-harness-driver or outpost. An install command
-              (admin). The consumer suite and pass^k (consumers). ROCm, vLLM, SGLang,
-              llama-swap, gateways. Rendering a CUDA profile (the schema allows the class).
-              Computing a memory estimate. Mistral Small 4. Writing the architecture-layer
-              page itself.
-Door          two-way. The repository reverts by PR. On the Framework, b11529 stays in its
-              versioned directory and `current` points back to it. personal-agents' tracked
-              preset and documented unit restore the earlier setup through outpost. Decision 8
-              accepts that there is no restore point.
+                 defaults. Presets change only where the notes require it. The probe passes,
+                 and every measurement below names the build from /props build_info.
+              2. The repository pins Pi 1.1.0, Claude Code 2.1.296, Node, Python and GuideLLM
+                 0.8.1 exactly, and runs them from the laptop. `mise run currency` reports each
+                 one when it trails. The check stays hermetic, and the architect's global
+                 installs and ~/.claude stay untouched.
+              3. Claude Code runs from a dedicated config directory in the spike's untracked
+                 state, under the architect's subscription login. Its base URL is the router,
+                 and opus, sonnet and haiku all map to gpt-oss-120b. A turn with tool use
+                 succeeds over streamed /v1/messages, with thinking intact: thinking blocks
+                 stream back, and the next request after a tool call carries them back to the
+                 model, as seen on the wire. The run records the exact thinking request
+                 Claude Code sends.
+              4. One command runs four streams at once against the router: Pi over OpenAI chat,
+                 Claude Code over /v1/messages, and the model client over chat and over
+                 embeddings. It keeps every gpt-oss-120b slot busy, for a fixed number of
+                 rounds. Each chat request carries a unique nonce. The run passes only when
+                 every answer echoes its own nonce and no other. Each embedding must equal the
+                 same input's embedding requested alone, within a stated cosine tolerance. An
+                 injected swap makes the run fail and name the two requests.
+              5. For each consumer, the record says whether it sends reasoning back on a turn
+                 that called tools: Pi as reasoning_content, Claude Code as thinking blocks,
+                 OpenCode with `interleaved` set. Each answer is seen on the wire.
+              6. pass^5 per consumer on gpt-oss-120b (Vulkan): conform's 9 capabilities run 5
+                 times for Pi, Claude Code over the router, and OpenCode with `interleaved`.
+                 Each consumer is judged against 9 of 9 at 5 of 5, and every cell below is
+                 named. The engine row is OpenAI's gpt-oss compatibility-test (30 cases, -k 5,
+                 Chat Completions): invalid requests, pass@5 and pass^5. Every row names the
+                 consumer version, the build, and that it ran from the laptop. Comparisons with
+                 align's rates note that they cross a Pi major.
+              7. GuideLLM measures gpt-oss-120b, 26B-A4B and E4B. The profiles are short
+                 (512/256) and agentic (8192/512), each at concurrency 1 and 4. Each row gives
+                 client TTFT, ITL and throughput beside the engine's own figures (timings,
+                 /metrics), and names the network path (DERP relay, its RTT).
+              8. Prefix reuse per model: a shared 8192-token prefix with varied suffixes. The
+                 record shows cache_n and TTFT for the first request and for each later one.
+              9. Cold load, timed from the laptop by polling /models until all four models are
+                 loaded: after a warm restart, and after a restart with the page cache dropped.
+              10. Footprint is sampled during behavior 4's run, beside the memory budget's
+                 synthetic 4-in-flight figure, and at least 3 GiB of the pool stays free.
+              11. The spike's instructions, README hosts and boundaries, and standards say:
+                 consumers and instruments run from the laptop, and the Framework only hosts
+                 and serves. The README's main-model pool points the probe to `main-model`.
+Test seams    The concurrent-run command's API, tested hermetically against fake endpoints:
+              nonce routing, swap detection, the embedding comparison. Building the conform
+              cell for Claude Code over the router (its environment and model map). Integration
+              runs at SPIKE_ROUTER_URL (3, 4, 6). Measured evidence (7-10).
+Slices        1. Build move (1): the architect runs the root commands; release-note review;
+                 the probe passes on the new build.
+              2. Laptop toolchain (2): the exact pins, currency lines, the check unchanged.
+              3. At once, walking skeleton (4 for Pi and the model client): nonces, the
+                 embedding comparison, the fake-endpoint tests, one live run.
+              4. Claude Code over the router (3, 5, and Claude Code joins 4): the architect
+                 logs in once in the dedicated directory. The first request shows whether the
+                 subscription works with the base-URL override; if it doesn't, BUILD
+                 escalates.
+              5. Reliability (5, 6): the conform cells, 5 runs, the compatibility-test row.
+              6. Baseline (7-10): the GuideLLM grid, prefix reuse, cold load (the architect
+                 runs the root command that drops the page cache), footprint during the run.
+              7. Records and boundaries (11), and the pending coordinator edits.
+Out of scope  Mistral Small 4 (main-model). Forcing tool_choice for OpenCode or Claude Code,
+              and resample or fallback on a parse 5xx (gateway). Any change to
+              spike-harness-driver, personal-agents or clutch itself. ROCm, vLLM, SGLang,
+              llama-swap, gateways. Installing consumers on the Framework.
+Door          two-way. The repository reverts by PR. On the Framework, the earlier b-tag stays
+              in its versioned directory, and `current` points back to it. On the laptop,
+              removing the pinned tools and the dedicated Claude config directory reverses
+              everything; the subscription session ends at logout. One effect isn't undone by
+              revert: with the base URL overridden, Claude Code sends its subscription bearer
+              token to the router over the tailnet (plain HTTP inside WireGuard).
 ```
+
+## Progress
+
+slices 0/7 committed · standards — · spec — · editor —
 
 ## Decisions
 
@@ -271,6 +272,22 @@ Door          two-way. The repository reverts by PR. On the Framework, b11529 st
 - profile (accepted): the presets installed on the Framework equal the committed render;
   tool-reliability.md records three untested levers for OpenCode (force the shape, send
   reasoning back, retry the parse 5xx) for consumers and gateway.
+- consumers (r1): Mistral Small 4's promotion probe becomes its own task, `main-model`, after `consumers` and before `rocm`.
+- consumers (r1): pass^k imports clutch's conform package and the claude driver at spike-harness-driver's pseudo-version (v0.0.0-20261009211659-9981a3e37466 or newer at BUILD). The Claude-Code-over-router cell is built through the driver's Env. k = 5 over the 9 capabilities. The bar is 0 invalid and pass^5 >= 90% (9 of 9).
+- consumers (r1): OpenAI's gpt-oss compatibility-test (30 cases, -k 5) is the engine row, and gives the count of invalid requests.
+- consumers (r1): a Go command in the spike drives Pi and Claude Code through spike-harness-driver's drivers, and the `model` client, at once, with per-request nonces.
+- consumers (r1, architect): every consumer and instrument runs from the laptop, and the Framework only hosts and serves inference. This supersedes setup's "consumers run on the Framework" and the laptop boundary in CLAUDE.md.
+- consumers (r1): the latest consumers (Pi 1.1.0, Claude Code 2.1.296), with versions recorded. Comparisons with align cross a Pi major.
+- consumers (r1): OpenCode's `interleaved` setting is tried here. Forcing tool_choice stays in `gateway`.
+- consumers (r2): GuideLLM 0.8.1 on the laptop at concurrency 1 and 4, with server-side numbers as the engine figures. The network path (DERP relay, 58 ms) is recorded.
+- consumers (r2): pi, claude, node, python and guidellm are pinned in the repository's mise.toml and covered by currency. Global installs stay untouched.
+- consumers (r2, architect): Claude Code uses the architect's subscription login with ANTHROPIC_BASE_URL at the router, and every tier maps to gpt-oss-120b. Rejected: a placeholder token. BUILD escalates if the override fails.
+- consumers (r2): the router moves to the newest b-tag at BUILD start, with release-note review and probe.
+- consumers (r2): cold load is measured warm and with the page cache dropped, polled from the laptop.
+- consumers (r2): footprint is sampled during the real concurrent run, beside the synthetic figure.
+- consumers (r3): a dedicated CLAUDE_CONFIG_DIR in untracked spike state, logged in once with the subscription.
+- consumers (r3): the GuideLLM grid is short 512/256 and agentic 8192/512 at concurrency 1 and 4 on three models, plus a shared-prefix run per model.
+- consumers (r3): "thinking intact" means thinking blocks stream back and return on tool turns. The exact form is observed at BUILD.
 
 ## Pending edits
 
@@ -284,3 +301,7 @@ Door          two-way. The repository reverts by PR. On the Framework, b11529 st
 - coordinator · ai-hosting.md, "The existing setup: personal-agents", the Serving line: it
   names release build b11529; the Framework's router now runs b11565 from the spike's rendered
   presets and unit, which hold llama.cpp to a minimum build (b11452).
+- coordinator · roadmap, consumers summary: the consumers run from the laptop against the Framework's router; drop the Mistral sentence; add pass^5 over conform's 9 capabilities plus the compatibility-test engine row.
+- coordinator · roadmap: add task `main-model` (the Mistral Small 4 probe) after `consumers`, before `rocm`.
+- coordinator · roadmap, the spike's goal summary: the new laptop boundary.
+- coordinator · ai-hosting.md, "Experiment: spike-model-hosting": the Hosts boundary change; point the main-model probe to `main-model`.
