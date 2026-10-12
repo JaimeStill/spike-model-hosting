@@ -108,7 +108,7 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
 
 ## Progress
 
-slices 4/7 committed, 5 part A (conform pass^5) committed · standards — · spec — · editor —
+slices 5/7 committed · standards — · spec — · editor —
 
 ## Decisions
 
@@ -322,6 +322,12 @@ slices 4/7 committed, 5 part A (conform pass^5) committed · standards — · sp
   this spike's conform, concurrent, and wire packages; it answers whether go-ai carries its own
   agent loop and what replacing the process-backed drivers costs. The intake waits for it. It is
   set up by `marathon plan experiment.ai` in its own session, not by this task.
+- consumers: the engine row (gpt-oss compatibility-test at 7b58334, -k 5, two sets) is 0/30 with
+  150/150 invalid, because the suite requires a `reasoning` field and llama.cpp sends
+  `reasoning_content`; on the tool call alone it is 29/30 pass@5 and 27-28/30 pass^5, every miss
+  `detect_language` answered in text. The script also reports errored runs, invalid responses by
+  field check, and pass on the tool call alone, from the suite's own records; renaming the field
+  is a gateway or validate matter.
 
 ## Pending edits
 
