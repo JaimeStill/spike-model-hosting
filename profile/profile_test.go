@@ -5,6 +5,8 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -14,7 +16,12 @@ import (
 // update rewrites the golden files from the current render: go test ./profile -update.
 var update = flag.Bool("update", false, "rewrite golden files")
 
-const skeleton = "testdata/skeleton.toml"
+const (
+	skeleton  = "testdata/skeleton.toml"
+	strixHalo = "../profiles/strix-halo.toml"
+	// pinned is personal-agents' 96GiB preset, copied at the commit testdata/README.md names.
+	pinned = "testdata/unified-96gb.ini"
+)
 
 func TestLoadAcceptsComplete(t *testing.T) {
 	p, err := profile.Load(skeleton)
@@ -120,28 +127,100 @@ func TestLoadAcceptsCUDAHostClass(t *testing.T) {
 	}
 }
 
-// TestRenderPresets compares the skeleton's rendered presets with its golden file.
+// TestRenderPresets compares each profile's rendered presets with its golden file.
 func TestRenderPresets(t *testing.T) {
-	p, err := profile.Load(skeleton)
+	for _, tt := range []struct{ profile, golden string }{
+		{skeleton, "testdata/skeleton.ini"},
+		{strixHalo, "testdata/strix-halo.ini"},
+	} {
+		t.Run(tt.golden, func(t *testing.T) {
+			got := render(t, tt.profile)
+			if *update {
+				if err := os.WriteFile(tt.golden, []byte(got), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want, err := os.ReadFile(tt.golden)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != string(want) {
+				t.Errorf("RenderPresets differs from %s (rerun with -update to accept):\n--- got\n%s\n--- want\n%s", tt.golden, got, want)
+			}
+		})
+	}
+}
+
+// TestStrixHaloMatchesPinnedPreset renders the Strix Halo profile and compares its sections,
+// keys and values with the pinned copy of personal-agents' 96GiB preset. The one difference
+// allowed is load-on-startup = true on each model's section, which the profile renders and the
+// pinned copy lacks.
+func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
+	got := parseINI(t, render(t, strixHalo))
+	text, err := os.ReadFile(pinned)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var got bytes.Buffer
-	if err := p.RenderPresets(&got); err != nil {
-		t.Fatalf("RenderPresets: %v", err)
+	want := parseINI(t, string(text))
+
+	models := 0
+	for name, keys := range got {
+		if name == "*" {
+			continue
+		}
+		models++
+		if keys["load-on-startup"] != "true" {
+			t.Errorf("[%s] load-on-startup = %q; want true", name, keys["load-on-startup"])
+		}
+		delete(keys, "load-on-startup")
 	}
-	golden := "testdata/skeleton.ini"
-	if *update {
-		if err := os.WriteFile(golden, got.Bytes(), 0o644); err != nil {
-			t.Fatal(err)
+	if models != 4 {
+		t.Errorf("rendered %d model sections; want 4", models)
+	}
+	for name, wantKeys := range want {
+		gotKeys, ok := got[name]
+		if !ok {
+			t.Errorf("[%s]: in %s, not rendered", name, pinned)
+			continue
+		}
+		for key, w := range wantKeys {
+			g, ok := gotKeys[key]
+			switch {
+			case !ok:
+				t.Errorf("[%s] %s: in %s, not rendered", name, key, pinned)
+			case !sameValue(g, w):
+				t.Errorf("[%s] %s = %q; %s has %q", name, key, g, pinned, w)
+			}
+		}
+		for key, g := range gotKeys {
+			if _, ok := wantKeys[key]; !ok {
+				t.Errorf("[%s] %s = %q: rendered, not in %s", name, key, g, pinned)
+			}
 		}
 	}
-	want, err := os.ReadFile(golden)
-	if err != nil {
-		t.Fatal(err)
+	for name := range got {
+		if _, ok := want[name]; !ok {
+			t.Errorf("[%s]: rendered, not in %s", name, pinned)
+		}
 	}
-	if got.String() != string(want) {
-		t.Errorf("RenderPresets differs from %s (rerun with -update to accept):\n--- got\n%s\n--- want\n%s", golden, got.String(), want)
+}
+
+// TestRenderPresetsCommentsReasons shows each model's reasons render as a comment above its
+// section.
+func TestRenderPresetsCommentsReasons(t *testing.T) {
+	got := render(t, strixHalo)
+	for _, tt := range []struct{ phrase, section string }{
+		{"; The harness model.", "[ggml-org/gpt-oss-120b-GGUF:MXFP4]"},
+		{`"Recommended Sampling Parameters"`, "[ggml-org/gpt-oss-120b-GGUF:MXFP4]"},
+		{"; The vision model;", "[ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0]"},
+		{"; The audio model;", "[ggml-org/gemma-4-E4B-it-GGUF:Q8_0]"},
+		{"; embeddings serves it as an embedding model.", "[ggml-org/embeddinggemma-2-GGUF:Q8_0]"},
+	} {
+		at := strings.Index(got, tt.phrase)
+		section := strings.Index(got, tt.section)
+		if at < 0 || section < 0 || at > section || strings.Contains(got[at:section], "\n[") {
+			t.Errorf("%q does not render in the comment above %s", tt.phrase, tt.section)
+		}
 	}
 }
 
@@ -160,6 +239,207 @@ func TestRenderPresetsRejectsInvalid(t *testing.T) {
 	if got.Len() != 0 {
 		t.Errorf("RenderPresets wrote %d bytes for an invalid profile; want none", got.Len())
 	}
+}
+
+// TestLoadNamesUndefinedKey adds a key the schema doesn't define, at each level, and expects
+// the error to name it.
+func TestLoadNamesUndefinedKey(t *testing.T) {
+	base, err := os.ReadFile(skeleton)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		after, add string // the line added, after the first line starting with after
+		key        string
+	}{
+		{"kv =", `service_user = "llama"`, "service_user"},
+		{"backend =", `hf_home = "/srv/hf"`, "engine.hf_home"},
+		{"gpu_layers =", "models_dir = 1", "defaults.models_dir"},
+		{"card_url =", "temperature = 0.7", "models.temperature"},
+		{"min_p =", "typical_p = 0.9", "models.sampling.typical_p"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			path := writeProfile(t, addLine(t, string(base), tt.after, tt.add))
+			assertFails(t, path, tt.key+": not a key the schema defines")
+		})
+	}
+}
+
+// TestLoadNamesSamplingOutOfRange sets each sampling value outside its range, or removes it.
+func TestLoadNamesSamplingOutOfRange(t *testing.T) {
+	base, err := os.ReadFile(skeleton)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		old, new string
+		want     string
+	}{
+		{"temperature = 1.0", "temperature = -0.1", "models[0].sampling.temperature: -0.1 is below 0"},
+		{"top_p = 1.0", "top_p = 1.5", "models[0].sampling.top_p: 1.5 is outside [0, 1]"},
+		{"top_p = 1.0", "top_p = -0.5", "models[0].sampling.top_p: -0.5 is outside [0, 1]"},
+		{"min_p = 0.0", "min_p = 2.0", "models[0].sampling.min_p: 2 is outside [0, 1]"},
+		{"top_k = 0", "top_k = -1", "models[0].sampling.top_k: -1 is below 0"},
+		{"top_k = 0", `reasoning = "max"`, `models[0].sampling.reasoning: "max" is not one of`},
+		{"temperature = 1.0\n", "", "models[0].sampling.temperature: required"},
+		{"top_p = 1.0\n", "", "models[0].sampling.top_p: required"},
+		{"top_k = 0\n", "", "models[0].sampling.top_k: required"},
+		{"min_p = 0.0\n", "", "models[0].sampling.min_p: required"},
+		{`source = "https://github.com/openai/gpt-oss"`, "", "models[0].sampling.source: required"},
+		{"[models.sampling]", "[models.unused]", "models[0].sampling: required for a generative model"},
+		{`kind = "generative"`, `kind = "embedding"`, "models[0].sampling: an embedding model doesn't sample"},
+		{`kind = "generative"`, `kind = "reranker"`, `models[0].kind: "reranker" is not one of`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if !strings.Contains(string(base), tt.old) {
+				t.Fatalf("skeleton has no %q", tt.old)
+			}
+			path := writeProfile(t, strings.Replace(string(base), tt.old, tt.new, 1))
+			assertFails(t, path, tt.want)
+		})
+	}
+}
+
+// TestRenderPresetsReasoning shows a reasoning effort, when one is set, renders as the chat
+// template's reasoning_effort; set A sets none.
+func TestRenderPresetsReasoning(t *testing.T) {
+	base, err := os.ReadFile(skeleton)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := writeProfile(t, addLine(t, string(base), "min_p =", `reasoning = "high"`))
+	want := `chat-template-kwargs = {"reasoning_effort":"high"}`
+	if got := render(t, path); !strings.Contains(got, want) {
+		t.Errorf("RenderPresets(reasoning high) lacks %q:\n%s", want, got)
+	}
+	if got := render(t, skeleton); strings.Contains(got, "chat-template-kwargs") {
+		t.Errorf("RenderPresets(no reasoning) sets chat-template-kwargs:\n%s", got)
+	}
+}
+
+// TestLoadNamesInvalidArgs shows a raw arg may not set a key the profile types, nor hold a value
+// that isn't a scalar, and that args need a reason.
+func TestLoadNamesInvalidArgs(t *testing.T) {
+	base, err := os.ReadFile(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		add, want string
+	}{
+		{"c = 4096", "models[3].args.c: rendered from the profile's typed fields"},
+		{"temp = 0.5", "models[3].args.temp: rendered from the profile's typed fields"},
+		{"load-on-startup = false", "models[3].args.load-on-startup: rendered from the profile's typed fields"},
+		{"lora = [1, 2]", "models[3].args.lora: a []interface {}, not a string, integer, float or boolean"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			path := writeProfile(t, addLine(t, string(base), "ub =", tt.add))
+			assertFails(t, path, tt.want)
+		})
+	}
+
+	p, err := profile.Load(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Models[3].ArgsReason = ""
+	if err := p.Validate(); err == nil || !strings.Contains(err.Error(), "models[3].args_reason: required") {
+		t.Errorf("Validate(args without a reason) = %v; want models[3].args_reason: required", err)
+	}
+}
+
+// TestHostValidateNamesMissing shows a render-time host input left empty fails, named.
+func TestHostValidateNamesMissing(t *testing.T) {
+	full := profile.Host{ServiceUser: "llama", HFHome: "/var/lib/llama/hf", ModelsDir: "/var/lib/llama/models"}
+	if err := full.Validate(); err != nil {
+		t.Errorf("Validate(complete host) = %v; want nil", err)
+	}
+	tests := []struct {
+		host profile.Host
+		want string
+	}{
+		{profile.Host{HFHome: full.HFHome, ModelsDir: full.ModelsDir}, "host service user: required"},
+		{profile.Host{ServiceUser: full.ServiceUser, ModelsDir: full.ModelsDir}, "host HF_HOME: required"},
+		{profile.Host{ServiceUser: full.ServiceUser, HFHome: full.HFHome}, "host models directory: required"},
+	}
+	for _, tt := range tests {
+		err := tt.host.Validate()
+		if err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("Validate(%+v) = %v; want an error containing %q", tt.host, err, tt.want)
+		}
+	}
+}
+
+func render(t *testing.T, path string) string {
+	t.Helper()
+	p, err := profile.Load(path)
+	if err != nil {
+		t.Fatalf("Load(%s): %v", path, err)
+	}
+	var b bytes.Buffer
+	if err := p.RenderPresets(&b); err != nil {
+		t.Fatalf("RenderPresets(%s): %v", path, err)
+	}
+	return b.String()
+}
+
+// parseINI reads presets text into its sections' keys and values. Comments, blank lines and
+// order are ignored; a key set twice in a section, or outside one, fails the test.
+func parseINI(t *testing.T, text string) map[string]map[string]string {
+	t.Helper()
+	sections := map[string]map[string]string{}
+	var current map[string]string
+	for n, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "" || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "#"):
+		case strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]"):
+			name := line[1 : len(line)-1]
+			if _, ok := sections[name]; ok {
+				t.Fatalf("line %d: section [%s] repeated", n+1, name)
+			}
+			current = map[string]string{}
+			sections[name] = current
+		default:
+			key, value, ok := strings.Cut(line, "=")
+			if !ok || current == nil {
+				t.Fatalf("line %d: %q is not a key in a section", n+1, line)
+			}
+			key = strings.TrimSpace(key)
+			if _, ok := current[key]; ok {
+				t.Fatalf("line %d: key %s repeated", n+1, key)
+			}
+			current[key] = strings.TrimSpace(value)
+		}
+	}
+	return sections
+}
+
+// sameValue reports whether two presets values are equal, as numbers when both are: llama.cpp
+// reads temp = 1 and temp = 1.0 alike.
+func sameValue(a, b string) bool {
+	x, errA := strconv.ParseFloat(a, 64)
+	y, errB := strconv.ParseFloat(b, 64)
+	if errA == nil && errB == nil {
+		return x == y
+	}
+	return a == b
+}
+
+// addLine inserts line after the first line of text that starts with prefix.
+func addLine(t *testing.T, text, prefix, line string) string {
+	t.Helper()
+	lines := strings.Split(text, "\n")
+	for i, l := range lines {
+		if strings.HasPrefix(l, prefix) {
+			return strings.Join(slices.Insert(lines, i+1, line), "\n")
+		}
+	}
+	t.Fatalf("addLine: no line starts with %q", prefix)
+	return ""
 }
 
 func assertFails(t *testing.T, path string, want ...string) {

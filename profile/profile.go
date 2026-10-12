@@ -8,6 +8,7 @@ package profile
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 
@@ -38,7 +39,7 @@ const (
 )
 
 // Profile is a host-class profile, decoded from TOML. Its keys are snake_case versions of the
-// field names below; the testdata directory holds a complete example.
+// field names below; profiles/strix-halo.toml, at the repository root, is a complete example.
 type Profile struct {
 	// HostClass names the class of host the profile serves: HostStrixHalo or HostNvidiaCUDA.
 	HostClass string `toml:"host_class"`
@@ -90,6 +91,28 @@ type MemoryBudget struct {
 	Source string `toml:"source"`
 }
 
+// The kinds of model. A generative model samples, so it carries Sampling; an embedding model
+// doesn't, and carries none.
+const (
+	KindGenerative = "generative"
+	KindEmbedding  = "embedding"
+)
+
+// The reasoning efforts a model's Sampling may set. Empty, the default, leaves the effort to the
+// chat template.
+const (
+	ReasoningLow    = "low"
+	ReasoningMedium = "medium"
+	ReasoningHigh   = "high"
+)
+
+// reservedArgs are the presets keys the profile renders from its typed fields, which a model's
+// raw Args may not set.
+var reservedArgs = []string{
+	"jinja", "n-gpu-layers", "metrics", "checkpoint-min-step", "parallel", "kv-unified",
+	"load-on-startup", "c", "temp", "top-p", "top-k", "min-p", "chat-template-kwargs",
+}
+
 // Model is one model the router serves, with the provenance its settings come from.
 type Model struct {
 	// ID is the model's router ID, such as ggml-org/gpt-oss-120b-GGUF:MXFP4; it names the
@@ -105,19 +128,83 @@ type Model struct {
 	C int `toml:"c"`
 	// CReason says why the model runs at C. It renders as a comment above the model's section.
 	CReason string `toml:"c_reason"`
+	// Kind is KindGenerative or KindEmbedding.
+	Kind string `toml:"kind"`
+	// Sampling is a generative model's sampling, required for one and refused for an embedding
+	// model.
+	Sampling *Sampling `toml:"sampling"`
+	// Args are llama.cpp keys the schema doesn't type, such as pooling, b, ub, no-mmproj and
+	// embeddings, keyed by llama-server argument name without its dashes. They render into the
+	// model's section as given, in key order. A value is a string, integer, float or boolean.
+	Args map[string]any `toml:"args"`
+	// ArgsReason says why the model sets Args; required when it sets any. It renders as a comment
+	// above the model's section.
+	ArgsReason string `toml:"args_reason"`
+}
+
+// Sampling is a generative model's sampling, every value traced to Source. Each value is
+// required, so the card, not the engine's or the conversion's defaults, is what the model runs
+// at; a truncation the card doesn't name is turned off (top-k 0, min-p 0).
+type Sampling struct {
+	// Source is the page the values come from: the model card, or the README it defers to.
+	Source string `toml:"source"`
+	// Temperature is at least 0.
+	Temperature *float64 `toml:"temperature"`
+	// TopP is in [0, 1].
+	TopP *float64 `toml:"top_p"`
+	// TopK is at least 0; 0 turns the truncation off.
+	TopK *int `toml:"top_k"`
+	// MinP is in [0, 1]; 0 turns the truncation off.
+	MinP *float64 `toml:"min_p"`
+	// Reasoning is ReasoningLow, ReasoningMedium or ReasoningHigh, or empty for the chat
+	// template's default. Set, it renders as the template's reasoning_effort.
+	Reasoning string `toml:"reasoning"`
+	// Reason says why the model samples at these values. It renders as a comment above the
+	// model's section.
+	Reason string `toml:"reason"`
+}
+
+// Host is the render-time input naming what belongs to one machine, never to a profile: the
+// service user the router runs as, its HF_HOME, and the directory its models are kept in.
+type Host struct {
+	ServiceUser string
+	HFHome      string
+	ModelsDir   string
+}
+
+// Validate reports each Host input that is empty, by name. A render that uses the host's values
+// calls it first, so it fails rather than render a unit with a blank in it.
+func (h Host) Validate() error {
+	var errs []error
+	for _, in := range []struct{ name, value string }{
+		{"service user", h.ServiceUser},
+		{"HF_HOME", h.HFHome},
+		{"models directory", h.ModelsDir},
+	} {
+		if in.value == "" {
+			errs = append(errs, fmt.Errorf("host %s: required", in.name))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // minBuild matches a llama.cpp build tag.
 var minBuild = regexp.MustCompile(`^b[0-9]+$`)
 
 // Load reads the profile at path and validates it. A profile that fails validation returns its
-// errors, each naming the field at fault by its TOML key path.
+// errors, each naming the field at fault by its TOML key path; a key the schema doesn't define
+// is one of them.
 func Load(path string) (*Profile, error) {
 	var p Profile
-	if _, err := toml.DecodeFile(path, &p); err != nil {
+	md, err := toml.DecodeFile(path, &p)
+	if err != nil {
 		return nil, fmt.Errorf("profile: %w", err)
 	}
-	if err := p.Validate(); err != nil {
+	var errs []error
+	for _, key := range md.Undecoded() {
+		errs = append(errs, fmt.Errorf("%s: not a key the schema defines", key))
+	}
+	if err := errors.Join(append(errs, p.Validate())...); err != nil {
 		return nil, fmt.Errorf("profile %s: %w", path, err)
 	}
 	return &p, nil
@@ -187,6 +274,68 @@ func (p *Profile) Validate() error {
 		required(field("card_url"), m.CardURL)
 		positive(field("c"), m.C)
 		required(field("c_reason"), m.CReason)
+		oneOf(field("kind"), m.Kind, KindGenerative, KindEmbedding)
+		switch {
+		case m.Kind == KindGenerative && m.Sampling == nil:
+			errs = append(errs, fmt.Errorf("%s: required for a generative model", field("sampling")))
+		case m.Kind == KindGenerative:
+			errs = append(errs, m.Sampling.validate(field("sampling"))...)
+		case m.Kind == KindEmbedding && m.Sampling != nil:
+			errs = append(errs, fmt.Errorf("%s: an embedding model doesn't sample", field("sampling")))
+		}
+		for _, key := range slices.Sorted(maps.Keys(m.Args)) {
+			name := field("args." + key)
+			if slices.Contains(reservedArgs, key) {
+				errs = append(errs, fmt.Errorf("%s: rendered from the profile's typed fields", name))
+			}
+			switch m.Args[key].(type) {
+			case string, int64, float64, bool:
+			default:
+				errs = append(errs, fmt.Errorf("%s: a %T, not a string, integer, float or boolean", name, m.Args[key]))
+			}
+		}
+		if len(m.Args) > 0 {
+			required(field("args_reason"), m.ArgsReason)
+		}
 	}
 	return errors.Join(errs...)
+}
+
+// validate reports each Sampling value that is missing or out of range, under the key path
+// prefix.
+func (s *Sampling) validate(prefix string) []error {
+	var errs []error
+	report := func(name, format string, args ...any) {
+		errs = append(errs, fmt.Errorf("%s.%s: "+format, append([]any{prefix, name}, args...)...))
+	}
+	unit := func(name string, v *float64) {
+		if v == nil {
+			report(name, "required")
+		} else if *v < 0 || *v > 1 {
+			report(name, "%v is outside [0, 1]", *v)
+		}
+	}
+	if s.Source == "" {
+		report("source", "required")
+	}
+	if s.Reason == "" {
+		report("reason", "required")
+	}
+	if s.Temperature == nil {
+		report("temperature", "required")
+	} else if *s.Temperature < 0 {
+		report("temperature", "%v is below 0", *s.Temperature)
+	}
+	unit("top_p", s.TopP)
+	if s.TopK == nil {
+		report("top_k", "required")
+	} else if *s.TopK < 0 {
+		report("top_k", "%d is below 0", *s.TopK)
+	}
+	unit("min_p", s.MinP)
+	reasoning := []string{ReasoningLow, ReasoningMedium, ReasoningHigh}
+	if s.Reasoning != "" && !slices.Contains(reasoning, s.Reasoning) {
+		report("reasoning", "%q is not one of %q, or empty for the template's default", s.Reasoning, reasoning)
+	}
+	return errs
 }
