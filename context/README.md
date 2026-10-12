@@ -95,6 +95,8 @@ of the admin tooling.
 - **Measurement:** footprint, speed, prefix cache, cold load, and the capability matrix. Set
   A's memory budget on the Framework, estimated against measured, is in
   [`memory-budget.md`](memory-budget.md).
+- **llama.cpp builds:** each build move on the Framework, with its release-note review and
+  what was re-verified on the new build, in [`llama-cpp-builds.md`](llama-cpp-builds.md).
 - **Tool-call reliability:** the layered convention every platform, profile, consumer, and
   gateway is held to, with pass^k as its measure, in [`tool-reliability.md`](tool-reliability.md).
 - **Gateways:** none, agentgateway, and LiteLLM.

@@ -44,6 +44,31 @@ On llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64) with gpt-oss-120b 
   `clutch conform` runs, Pi passed every cell 5 of 5, and OpenCode, still on `auto`, passed
   `tool` 4/5, `skill` 3/5, and `audio-tool` 2/5, each failure a text answer instead of
   `respond` (spike-harness-driver `context/findings.md`, "Capabilities").
+- **Conformance rates by build.** Five `clutch conform --provider llama.cpp` runs per set,
+  with all four set-A models loaded, Pi 0.99.2 and OpenCode 1.18.34 (the suite's pins), and
+  clutch at `37fa153` (the b11565 set ran a build from `5afeac3`, whose code is `37fa153`'s;
+  only spike-harness-driver's findings changed). The b11529 set ran from the laptop against
+  personal-agents' presets in `align` (spike-harness-driver `context/findings.md`,
+  "Capabilities"); the b11565 set ran on the Framework itself, against the profile's rendered
+  presets, on 2026-10-12:
+
+  | Build, where it ran | Harness | exchange | cancel | resume | tool | skill | structured | vision | dropped-image | audio-tool |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | b11529, laptop | pi | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 |
+  | b11529, laptop | opencode | 5/5 | 5/5 | 5/5 | 4/5 | 3/5 | 5/5 | 5/5 | 5/5 | 2/5 |
+  | b11565, Framework | pi | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 |
+  | b11565, Framework | opencode | 5/5 | 5/5 | 5/5 | 3/5 | 3/5 | 5/5 | 5/5 | 5/5 | 4/5 |
+
+  Pi, constrained to `required`, held every cell. One cell fell: OpenCode's `tool`, from 4/5
+  to 3/5; its `skill` held at 3/5 and its `audio-tool` rose from 2/5 to 4/5. At five runs a
+  cell moves by one or two on chance alone, so the sets show OpenCode on `auto` failing about a
+  third of its `tool`, `skill`, and `audio-tool` exchanges on both builds (6 of 15 on b11529,
+  5 of 15 on b11565), not a regression. The failures differ in kind:
+  every b11529 failure was a text answer instead of `respond`, while on b11565 the two `tool`
+  failures and the `audio-tool` failure were text answers and both `skill` failures were the
+  HTTP 500 "does not match the expected peg-native format". b11565 leaves the gpt-oss parser
+  rules unchanged ([`llama-cpp-builds.md`](llama-cpp-builds.md)), so the parse 5xx that
+  `required` keeps from Pi still reaches a client on `auto`.
 - **Sampling.** b11529 applies a GGUF's `general.sampling.*` keys as the server default
   (`/props` `default_generation_settings`). The Gemma 4 GGUFs carry their card's values;
   gpt-oss-120b's carries none, so it ran at llama.cpp's 0.8 / 40 / 0.95 / 0.05 until the preset
