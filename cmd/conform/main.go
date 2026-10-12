@@ -43,7 +43,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"slices"
@@ -52,6 +51,7 @@ import (
 
 	"github.com/JaimeStill/spike-harness-driver/clutch/conform"
 
+	"github.com/JaimeStill/spike-model-hosting/consumers"
 	"github.com/JaimeStill/spike-model-hosting/passk"
 	"github.com/JaimeStill/spike-model-hosting/router"
 	"github.com/JaimeStill/spike-model-hosting/wire"
@@ -187,7 +187,7 @@ func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.R
 		return nil, err
 	}
 	for _, name := range o.consumers {
-		if o.commands[name], err = resolveTool(ctx, o.commands[name], name); err != nil {
+		if o.commands[name], err = consumers.Executable(ctx, o.commands[name], name); err != nil {
 			return nil, err
 		}
 	}
@@ -344,20 +344,4 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
-}
-
-// resolveTool returns a consumer's executable: given, or else the one named name that the
-// consumers mise environment pins, rather than whatever the user's PATH finds first.
-func resolveTool(ctx context.Context, given, name string) (string, error) {
-	if given != "" {
-		return given, nil
-	}
-	cmd := exec.CommandContext(ctx, "mise", "which", name)
-	cmd.Env = append(os.Environ(), "MISE_ENV=consumers")
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("finding the pinned %s (MISE_ENV=consumers mise which %s): %w; set -%s or SPIKE_%s",
-			name, name, err, name, strings.ToUpper(name))
-	}
-	return strings.TrimSpace(string(out)), nil
 }

@@ -40,7 +40,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -53,21 +52,14 @@ import (
 	"github.com/JaimeStill/spike-harness-driver/pi"
 
 	"github.com/JaimeStill/spike-model-hosting/concurrent"
+	"github.com/JaimeStill/spike-model-hosting/consumers"
 	"github.com/JaimeStill/spike-model-hosting/profile"
 	"github.com/JaimeStill/spike-model-hosting/router"
 )
 
-// chatModel is the router ID the chat streams send to, gpt-oss-120b, the harness model. The
-// profile types no role, so the tool names it, and fails if the profile doesn't list it.
-const chatModel = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
-
 // maxTokens caps a model-client chat completion, reasoning included: room for gpt-oss-120b's
 // reasoning before a one-token answer.
 const maxTokens = 4096
-
-// llamaProvider is Pi's built-in provider for a llama.cpp server, which speaks OpenAI chat to
-// LLAMA_BASE_URL.
-const llamaProvider = "llama.cpp"
 
 // inputs are the embedding stream's texts: distinct sentences, so each input's vector is told
 // from every other's.
@@ -187,14 +179,14 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 	hc := &http.Client{}
 	// Pi's provider can't carry autoload=false, so the run never starts against a model a request
 	// would load.
-	if err := router.CheckLoaded(ctx, hc, o.router, chatModel, embedModel); err != nil {
+	if err := router.CheckLoaded(ctx, hc, o.router, consumers.ChatModel, embedModel); err != nil {
 		return concurrent.Report{}, err
 	}
 	build, err := router.Build(ctx, hc, o.router)
 	if err != nil {
 		return concurrent.Report{}, err
 	}
-	piCmd, err := resolveTool(ctx, o.pi, "pi", "-pi or SPIKE_PI")
+	piCmd, err := consumers.Executable(ctx, o.pi, "pi")
 	if err != nil {
 		return concurrent.Report{}, err
 	}
@@ -202,7 +194,7 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 	if err != nil {
 		return concurrent.Report{}, err
 	}
-	claudeCmd, err := resolveTool(ctx, o.claude, "claude", "-claude or SPIKE_CLAUDE")
+	claudeCmd, err := consumers.Executable(ctx, o.claude, "claude")
 	if err != nil {
 		return concurrent.Report{}, err
 	}
@@ -229,7 +221,7 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 			{Name: "pi", Workers: workers[0], Chatter: concurrent.HarnessChat{
 				Driver: piDriver,
 				Options: harness.Options{
-					Provider: llamaProvider, Model: chatModel,
+					Provider: consumers.Provider, Model: consumers.ChatModel,
 					Dir:          filepath.Join(o.state, "pi", "work"),
 					HarnessTools: []string{},
 				},
@@ -237,13 +229,13 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 			{Name: "claude", Workers: workers[1], Chatter: concurrent.HarnessChat{
 				Driver: claudeDriver,
 				Options: harness.Options{
-					Provider: claude.Provider, Model: chatModel,
+					Provider: claude.Provider, Model: consumers.ChatModel,
 					Dir:          filepath.Join(o.state, "claude-work"),
 					HarnessTools: []string{},
 				},
 			}},
 			{Name: "model-chat", Workers: workers[2], Chatter: concurrent.ModelChat{
-				Client: client, Model: chatModel, MaxTokens: maxTokens,
+				Client: client, Model: consumers.ChatModel, MaxTokens: maxTokens,
 			}},
 		},
 		Embed: []concurrent.EmbedStream{
@@ -251,7 +243,7 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 		},
 	}
 	if _, err := fmt.Fprintf(stdout, "router %s, build %s\nchat %s on %d slots: pi %d, claude %d, model-chat %d workers, %d rounds\nembed %s: %d inputs, batch after batch until the chats finish, at least %d rounds\n\n",
-		o.router, build, chatModel, p.Slots, workers[0], workers[1], workers[2], o.rounds, embedModel, len(inputs), o.rounds); err != nil {
+		o.router, build, consumers.ChatModel, p.Slots, workers[0], workers[1], workers[2], o.rounds, embedModel, len(inputs), o.rounds); err != nil {
 		return concurrent.Report{}, err
 	}
 	rep, err := concurrent.Run(ctx, cfg)
@@ -261,43 +253,29 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 	return rep, write(stdout, rep, build)
 }
 
-// checkProfile checks the profile lists the chat model and returns its embedding model.
+// checkProfile checks the profile lists the chat model, consumers.ChatModel, and returns its
+// embedding model. The profile types no role, so the tool names the chat model, and fails if the
+// profile doesn't list it.
 func checkProfile(p *profile.Profile) (string, error) {
 	var embed string
 	listed := false
 	for _, m := range p.Models {
-		listed = listed || m.ID == chatModel
+		listed = listed || m.ID == consumers.ChatModel
 		if m.Kind == profile.KindEmbedding {
 			embed = m.ID
 		}
 	}
 	switch {
 	case !listed:
-		return "", fmt.Errorf("the profile doesn't list %s, which the chat streams send to", chatModel)
+		return "", fmt.Errorf("the profile doesn't list %s, which the chat streams send to", consumers.ChatModel)
 	case embed == "":
 		return "", errors.New("the profile lists no embedding model")
 	}
 	return embed, nil
 }
 
-// resolveTool returns a consumer's executable: given, or else the one named name that the
-// consumers mise environment pins, rather than whatever the user's PATH finds first. override
-// names the flag and variable that set it.
-func resolveTool(ctx context.Context, given, name, override string) (string, error) {
-	if given != "" {
-		return given, nil
-	}
-	cmd := exec.CommandContext(ctx, "mise", "which", name)
-	cmd.Env = append(os.Environ(), "MISE_ENV=consumers")
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("finding the pinned %s (MISE_ENV=consumers mise which %s): %w; set %s", name, name, err, override)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
 // newPiDriver returns Pi's driver, its agent directory, sessions and cache under the state
-// directory, on Pi's llama.cpp provider pointed at the router.
+// directory, on Pi's llama.cpp provider pointed at the router (consumers.Pi).
 func newPiDriver(o options, command string) (pi.Driver, error) {
 	root := filepath.Join(o.state, "pi")
 	// Pi runs code from its agent directory and cache, so the driver refuses either unless it
@@ -307,28 +285,13 @@ func newPiDriver(o options, command string) (pi.Driver, error) {
 			return pi.Driver{}, err
 		}
 	}
-	return pi.Driver{
-		Command:    command,
-		AgentDir:   filepath.Join(root, "agent"),
-		SessionDir: filepath.Join(root, "sessions"),
-		CacheDir:   filepath.Join(root, "cache"),
-		// Pi's llama.cpp provider takes the router's root.
-		Env: []string{"LLAMA_BASE_URL=" + o.router},
-		// Pi starts with an empty catalog in its own agent directory and lists the router's
-		// models once its background refresh lands; two sessions starting at once share the
-		// router's answer time.
-		CatalogWait: 30 * time.Second,
-	}, nil
+	return consumers.Pi(command, o.router, root), nil
 }
 
-// claudeLogin is the file Claude Code writes its subscription login to, in its configuration
-// directory, on Linux.
-const claudeLogin = ".credentials.json"
-
 // newClaudeDriver returns Claude Code's driver, its configuration directory under the state
-// directory, its model requests sent to the router. It fails, naming the command that signs in,
-// when that directory holds no login, rather than start a run in which every Claude Code request
-// fails.
+// directory, its model requests sent to the router as the chat model (consumers.ClaudeCode). It
+// fails, naming the command that signs in, when that directory holds no login
+// (consumers.CheckClaudeLogin), rather than start a run in which every Claude Code request fails.
 func newClaudeDriver(o options, command string) (claude.Driver, error) {
 	dir := filepath.Join(o.state, "claude")
 	for _, d := range []string{dir, filepath.Join(o.state, "claude-work")} {
@@ -336,11 +299,10 @@ func newClaudeDriver(o options, command string) (claude.Driver, error) {
 			return claude.Driver{}, err
 		}
 	}
-	if _, err := os.Stat(filepath.Join(dir, claudeLogin)); err != nil {
-		return claude.Driver{}, fmt.Errorf("claude code has no login in %s (%w): sign in once with "+
-			"`CLAUDE_CONFIG_DIR=%s MISE_ENV=consumers mise exec -- claude`, then /login", dir, err, dir)
+	if err := consumers.CheckClaudeLogin(dir); err != nil {
+		return claude.Driver{}, fmt.Errorf("claude code has no login in %s: %w", dir, err)
 	}
-	return concurrent.ClaudeCode(command, dir, o.router, chatModel), nil
+	return consumers.ClaudeCode(command, dir, o.router, consumers.ChatModel), nil
 }
 
 // write writes the report: one line per request, then the failures and the verdict.

@@ -1,18 +1,16 @@
 package passk_test
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
-	"github.com/BurntSushi/toml"
 	"github.com/JaimeStill/spike-harness-driver/claude"
 	"github.com/JaimeStill/spike-harness-driver/clutch/conform"
 
-	"github.com/JaimeStill/spike-model-hosting/concurrent"
+	"github.com/JaimeStill/spike-model-hosting/consumers"
 	"github.com/JaimeStill/spike-model-hosting/passk"
 )
 
@@ -29,95 +27,17 @@ func config(t *testing.T) passk.Config {
 	}
 }
 
-// TestPiDriver shows Pi runs the given executable on its llama.cpp provider at the router, its
-// agent directory, sessions and cache all under the run's state directory, never ~/.pi.
-func TestPiDriver(t *testing.T) {
-	cfg := config(t)
-	d := passk.PiDriver(cfg)
-	root := filepath.Join(cfg.State, "pi")
-	if d.Command != cfg.Command {
-		t.Errorf("Command = %q, want %q", d.Command, cfg.Command)
-	}
-	for name, got := range map[string]string{"AgentDir": d.AgentDir, "SessionDir": d.SessionDir, "CacheDir": d.CacheDir} {
-		if filepath.Dir(got) != root {
-			t.Errorf("%s = %q, want a directory in %s", name, got, root)
-		}
-	}
-	if want := []string{"LLAMA_BASE_URL=" + cfg.Router}; !slices.Equal(d.Env, want) {
-		t.Errorf("Env = %q, want %q", d.Env, want)
-	}
-}
-
-// TestOpenCodeDriver shows OpenCode talks to the router's OpenAI-compatible base, lists the
-// vision model as taking images, keeps its state under the run's own directory, and loads the
-// configuration file that sets gpt-oss-120b's interleaved field to reasoning_content.
-func TestOpenCodeDriver(t *testing.T) {
-	cfg := config(t)
-	d, err := passk.OpenCodeDriver(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p, ok := d.Providers[passk.Provider]
-	if !ok || len(d.Providers) != 1 {
-		t.Fatalf("Providers = %v, want only %q", d.Providers, passk.Provider)
-	}
-	if p.BaseURL != "http://127.0.0.1:9999/v1" {
-		t.Errorf("BaseURL = %q, want the router's /v1", p.BaseURL)
-	}
-	if m, ok := p.Models[passk.VisionModel]; !ok || !m.Image {
-		t.Errorf("Models = %v, want %s taking images", p.Models, passk.VisionModel)
-	}
-	if !strings.HasPrefix(d.StateDir, cfg.State) || !strings.HasPrefix(d.CacheDir, cfg.State) {
-		t.Errorf("StateDir %q, CacheDir %q; want both under %s", d.StateDir, d.CacheDir, cfg.State)
-	}
-	file := filepath.Join(cfg.State, "opencode", "interleaved.json")
-	if want := []string{"OPENCODE_CONFIG=" + file}; !slices.Equal(d.Env, want) {
-		t.Fatalf("Env = %q, want %q", d.Env, want)
-	}
-	info, err := os.Stat(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Errorf("%s has mode %v, want 0600: OpenCode reads configuration that can name commands", file, info.Mode().Perm())
-	}
-	b, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got struct {
-		Provider map[string]struct {
-			Models map[string]struct {
-				Interleaved struct {
-					Field string `json:"field"`
-				} `json:"interleaved"`
-			} `json:"models"`
-		} `json:"provider"`
-	}
-	if err := json.Unmarshal(b, &got); err != nil {
-		t.Fatal(err)
-	}
-	if f := got.Provider[passk.Provider].Models[passk.ChatModel].Interleaved.Field; f != "reasoning_content" {
-		t.Errorf("%s: %s's interleaved field is %q, want reasoning_content (%s)", file, passk.ChatModel, f, b)
-	}
-}
-
 // TestClaudeDriver shows Claude Code runs from the given configuration directory with every
-// model request sent to the router as gpt-oss-120b, and no API key or token in its environment,
-// which would take the place of the subscription login.
+// model request sent to the router as gpt-oss-120b, as consumers.ClaudeEnv points it, its skill
+// plugin cached under the run's state directory.
 func TestClaudeDriver(t *testing.T) {
 	cfg := config(t)
 	d := passk.ClaudeDriver(cfg)
 	if d.Command != cfg.Command || d.ConfigDir != cfg.ClaudeConfig {
 		t.Errorf("Command %q, ConfigDir %q; want %q and %q", d.Command, d.ConfigDir, cfg.Command, cfg.ClaudeConfig)
 	}
-	if want := concurrent.ClaudeEnv(cfg.Router, passk.ChatModel); !slices.Equal(d.Env, want) {
+	if want := consumers.ClaudeEnv(cfg.Router, consumers.ChatModel); !slices.Equal(d.Env, want) {
 		t.Errorf("Env = %q, want %q", d.Env, want)
-	}
-	for _, v := range d.Env {
-		if strings.HasPrefix(v, "ANTHROPIC_API_KEY=") || strings.HasPrefix(v, "ANTHROPIC_AUTH_TOKEN=") {
-			t.Errorf("Env carries %q, which replaces the subscription login", v)
-		}
 	}
 	if !strings.HasPrefix(d.CacheDir, cfg.State) {
 		t.Errorf("CacheDir = %q, want it under %s", d.CacheDir, cfg.State)
@@ -129,8 +49,8 @@ func TestClaudeDriver(t *testing.T) {
 func TestSessionOptions(t *testing.T) {
 	cfg := config(t)
 	o := passk.SessionOptions(cfg, "claude", claude.Provider)
-	if o.Provider != claude.Provider || o.Model != passk.ChatModel {
-		t.Errorf("Provider %q, Model %q; want %q and %q", o.Provider, o.Model, claude.Provider, passk.ChatModel)
+	if o.Provider != claude.Provider || o.Model != consumers.ChatModel {
+		t.Errorf("Provider %q, Model %q; want %q and %q", o.Provider, o.Model, claude.Provider, consumers.ChatModel)
 	}
 	if o.Dir != filepath.Join(cfg.State, "work", "claude") {
 		t.Errorf("Dir = %q, want the consumer's own under %s", o.Dir, cfg.State)
@@ -153,13 +73,13 @@ func TestCells(t *testing.T) {
 		cell                     conform.Cell
 		harness, pinned, profile string
 	}{
-		{passk.Pi(cfg), "pi", passk.PiVersion, "Pi"},
-		{passk.Claude(cfg), "claude", passk.ClaudeVersion, "Claude Code"},
-		{oc, "opencode", passk.OpenCodeVersion, "OpenCode"},
+		{passk.Pi(cfg), "pi", consumers.PiVersion, "Pi"},
+		{passk.Claude(cfg), "claude", consumers.ClaudeVersion, "Claude Code"},
+		{oc, "opencode", consumers.OpenCodeVersion, "OpenCode"},
 	}
 	for _, tc := range cases {
 		c := tc.cell
-		if c.Harness != tc.harness || c.Provider != passk.Provider || c.Pinned != tc.pinned || c.Profile.Name != tc.profile {
+		if c.Harness != tc.harness || c.Provider != consumers.Provider || c.Pinned != tc.pinned || c.Profile.Name != tc.profile {
 			t.Errorf("%s: Harness %q, Provider %q, Pinned %q, Profile %q", tc.harness, c.Harness, c.Provider, c.Pinned, c.Profile.Name)
 		}
 		if c.VisionModel != passk.VisionModel || c.DefaultTakesImages {
@@ -210,25 +130,4 @@ func consumer(t *testing.T, body string) string {
 		t.Fatal(err)
 	}
 	return path
-}
-
-// TestPinsMatchConsumersEnvironment shows each consumer's pin, which its cell's Pinned names and
-// a run's report checks the running version against, is the version the consumers mise
-// environment installs, so bumping one without the other fails here.
-func TestPinsMatchConsumersEnvironment(t *testing.T) {
-	var env struct {
-		Tools map[string]string `toml:"tools"`
-	}
-	if _, err := toml.DecodeFile("../mise.consumers.toml", &env); err != nil {
-		t.Fatal(err)
-	}
-	for tool, pin := range map[string]string{
-		"aqua:earendil-works/pi":      passk.PiVersion,
-		"aqua:anthropics/claude-code": passk.ClaudeVersion,
-		"aqua:anomalyco/opencode":     passk.OpenCodeVersion,
-	} {
-		if got := env.Tools[tool]; got != pin {
-			t.Errorf("mise.consumers.toml pins %s at %q, the cell at %q", tool, got, pin)
-		}
-	}
 }

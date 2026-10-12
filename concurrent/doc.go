@@ -19,9 +19,7 @@
 //     they drive. SplitSlots divides the chat model's slots among the chat streams' workers.
 //   - Prompt is the chat prompt that carries a request's nonce.
 //   - ModelChat and ModelEmbed drive the model client (spike-harness-driver's model package).
-//   - HarnessChat drives any harness.Driver, such as Pi's or Claude Code's, one session per
-//     request; a further coding agent joins a run as another HarnessChat stream.
-//   - ClaudeCode returns Claude Code's driver on the router, under the user's subscription
-//     login, and ClaudeEnv the environment that points it there.
+//   - HarnessChat drives any harness.Driver, such as the consumers package's Pi or Claude Code,
+//     one session per request; a further coding agent joins a run as another HarnessChat stream.
 //   - Cosine is the similarity the embedding check compares by, within EmbedTolerance.
 package concurrent

@@ -11,17 +11,13 @@ import (
 
 	"github.com/JaimeStill/spike-harness-driver/harness"
 	"github.com/JaimeStill/spike-harness-driver/model"
-	"github.com/JaimeStill/spike-harness-driver/pi"
 
 	"github.com/JaimeStill/spike-model-hosting/concurrent"
+	"github.com/JaimeStill/spike-model-hosting/consumers"
 	"github.com/JaimeStill/spike-model-hosting/profile"
 )
 
-// The live run's chat model, the harness model, by router ID; the embedding model is the
-// profile's embedding kind.
-const liveChatModel = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
-
-// TestLiveRun runs the streams at once against the router SPIKE_ROUTER_URL names, keeping the
+// TestLiveRun runs the streams at once, on consumers.ChatModel and the profile's embedding kind, against the router SPIKE_ROUTER_URL names, keeping the
 // profile's slots busy for two rounds. Pi joins when SPIKE_PI names its executable (such as
 // `MISE_ENV=consumers mise which pi`); without it the model client's chat stream takes every
 // slot. The models must be loaded already: the model client's requests carry autoload=false,
@@ -48,7 +44,7 @@ func TestLiveRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	modelChat := concurrent.ChatStream{
-		Name: "model-chat", Chatter: concurrent.ModelChat{Client: client, Model: liveChatModel, MaxTokens: 4096},
+		Name: "model-chat", Chatter: concurrent.ModelChat{Client: client, Model: consumers.ChatModel, MaxTokens: 4096},
 	}
 	var chats []concurrent.ChatStream
 	if command := os.Getenv("SPIKE_PI"); command != "" {
@@ -56,11 +52,8 @@ func TestLiveRun(t *testing.T) {
 		workers := concurrent.SplitSlots(p.Slots, 2)
 		modelChat.Workers = workers[1]
 		chats = append(chats, concurrent.ChatStream{Name: "pi", Workers: workers[0], Chatter: concurrent.HarnessChat{
-			Driver: pi.Driver{
-				Command: command, AgentDir: state + "/agent", SessionDir: state + "/sessions",
-				CacheDir: state + "/cache", Env: []string{"LLAMA_BASE_URL=" + base},
-			},
-			Options: harness.Options{Provider: "llama.cpp", Model: liveChatModel, Dir: state, HarnessTools: []string{}},
+			Driver:  consumers.Pi(command, base, state),
+			Options: harness.Options{Provider: consumers.Provider, Model: consumers.ChatModel, Dir: state, HarnessTools: []string{}},
 		}})
 	} else {
 		modelChat.Workers = p.Slots

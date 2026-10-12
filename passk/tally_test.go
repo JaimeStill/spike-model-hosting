@@ -7,13 +7,14 @@ import (
 
 	"github.com/JaimeStill/spike-harness-driver/clutch/conform"
 
+	"github.com/JaimeStill/spike-model-hosting/consumers"
 	"github.com/JaimeStill/spike-model-hosting/passk"
 	"github.com/JaimeStill/spike-model-hosting/wire"
 )
 
 // report is a trial's report in which every capability passed except those in statuses.
 func report(statuses map[string]conform.Status) conform.Report {
-	rep := conform.Report{Harness: "pi", Provider: passk.Provider, Version: "1.1.0"}
+	rep := conform.Report{Harness: "pi", Provider: consumers.Provider, Version: "1.1.0"}
 	for _, c := range conform.Capabilities {
 		s, ok := statuses[c.Name]
 		if !ok {

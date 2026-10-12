@@ -17,15 +17,12 @@ import (
 
 	"github.com/JaimeStill/spike-harness-driver/claude"
 	"github.com/JaimeStill/spike-harness-driver/harness"
-	"github.com/JaimeStill/spike-harness-driver/pi"
 
 	"github.com/JaimeStill/spike-model-hosting/concurrent"
+	"github.com/JaimeStill/spike-model-hosting/consumers"
 	"github.com/JaimeStill/spike-model-hosting/passk"
 	"github.com/JaimeStill/spike-model-hosting/wire"
 )
-
-// chatModel is the harness model, gpt-oss-120b, by router ID; it must be loaded already.
-const chatModel = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
 
 // state is the repository's untracked state directory, where the recordings and the consumers'
 // working directories go.
@@ -142,13 +139,13 @@ func TestClaudeThinkingRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(config, ".credentials.json")); err != nil {
-		t.Skipf("no Claude Code login in %s: sign in with `CLAUDE_CONFIG_DIR=%s MISE_ENV=consumers mise exec -- claude`, then /login", config, config)
+	if err := consumers.CheckClaudeLogin(config); err != nil {
+		t.Skipf("no Claude Code login in %s: %v", config, err)
 	}
 	dir, prompt, code := toolTurn(t, "claude")
 	defer save(t, rec, "claude")
-	text := send(t, concurrent.ClaudeCode(command, config, proxy, chatModel), harness.Options{
-		Provider: claude.Provider, Model: chatModel, Dir: dir, HarnessTools: []string{"Read"},
+	text := send(t, consumers.ClaudeCode(command, config, proxy, consumers.ChatModel), harness.Options{
+		Provider: claude.Provider, Model: consumers.ChatModel, Dir: dir, HarnessTools: []string{"Read"},
 	}, prompt)
 	t.Logf("answer: %q", text)
 	if !strings.Contains(text, code) {
@@ -236,10 +233,7 @@ func TestPiReasoningRoundTrip(t *testing.T) {
 	dir, prompt, code := toolTurn(t, "pi")
 	agent := t.TempDir()
 	defer save(t, rec, "pi")
-	text := send(t, pi.Driver{
-		Command: command, AgentDir: agent + "/agent", SessionDir: agent + "/sessions", CacheDir: agent + "/cache",
-		Env: []string{"LLAMA_BASE_URL=" + proxy}, CatalogWait: 30 * time.Second,
-	}, harness.Options{Provider: "llama.cpp", Model: chatModel, Dir: dir, HarnessTools: []string{"read"}}, prompt)
+	text := send(t, consumers.Pi(command, proxy, agent), harness.Options{Provider: consumers.Provider, Model: consumers.ChatModel, Dir: dir, HarnessTools: []string{"read"}}, prompt)
 	t.Logf("answer: %q", text)
 	if !strings.Contains(text, code) {
 		t.Errorf("the answer %q doesn't carry the file's code %s", text, code)
@@ -269,7 +263,7 @@ func TestOpenCodeReasoningRoundTrip(t *testing.T) {
 			rec, proxy := liveRouter(t)
 			consumer := "opencode-" + name
 			dir, prompt, code := toolTurn(t, consumer)
-			d, err := passk.OpenCodeDriver(passk.Config{Command: command, Router: proxy, State: t.TempDir()})
+			d, err := consumers.OpenCode(command, proxy, filepath.Join(t.TempDir(), "opencode"), passk.VisionModel)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -277,7 +271,7 @@ func TestOpenCodeReasoningRoundTrip(t *testing.T) {
 				d.Env = nil
 			}
 			defer save(t, rec, consumer)
-			text := send(t, d, harness.Options{Provider: passk.Provider, Model: chatModel, Dir: dir, HarnessTools: []string{"read"}}, prompt)
+			text := send(t, d, harness.Options{Provider: consumers.Provider, Model: consumers.ChatModel, Dir: dir, HarnessTools: []string{"read"}}, prompt)
 			t.Logf("answer: %q", text)
 			if !strings.Contains(text, code) {
 				t.Errorf("the answer %q doesn't carry the file's code %s", text, code)
