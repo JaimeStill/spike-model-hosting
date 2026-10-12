@@ -33,7 +33,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -55,6 +54,7 @@ import (
 
 	"github.com/JaimeStill/spike-model-hosting/concurrent"
 	"github.com/JaimeStill/spike-model-hosting/profile"
+	"github.com/JaimeStill/spike-model-hosting/router"
 )
 
 // chatModel is the router ID the chat streams send to, gpt-oss-120b, the harness model. The
@@ -185,10 +185,12 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 		return concurrent.Report{}, err
 	}
 	hc := &http.Client{}
-	if err := checkLoaded(ctx, hc, o.router, chatModel, embedModel); err != nil {
+	// Pi's provider can't carry autoload=false, so the run never starts against a model a request
+	// would load.
+	if err := router.CheckLoaded(ctx, hc, o.router, chatModel, embedModel); err != nil {
 		return concurrent.Report{}, err
 	}
-	build, err := buildInfo(ctx, hc, o.router)
+	build, err := router.Build(ctx, hc, o.router)
 	if err != nil {
 		return concurrent.Report{}, err
 	}
@@ -276,62 +278,6 @@ func checkProfile(p *profile.Profile) (string, error) {
 		return "", errors.New("the profile lists no embedding model")
 	}
 	return embed, nil
-}
-
-// checkLoaded checks GET /models lists each of ids as loaded: Pi's provider can't carry
-// autoload=false, so the run never starts against a model a request would load.
-func checkLoaded(ctx context.Context, hc *http.Client, router string, ids ...string) error {
-	var got struct {
-		Data []struct {
-			ID     string `json:"id"`
-			Status struct {
-				Value string `json:"value"`
-			} `json:"status"`
-		} `json:"data"`
-	}
-	if err := getJSON(ctx, hc, router+"/models", &got); err != nil {
-		return err
-	}
-	status := map[string]string{}
-	for _, m := range got.Data {
-		status[m.ID] = m.Status.Value
-	}
-	for _, id := range ids {
-		if s := status[id]; s != "loaded" {
-			return fmt.Errorf("the router lists %s as %q, not loaded; the run never loads a model", id, s)
-		}
-	}
-	return nil
-}
-
-// buildInfo returns the router's build, from GET /props.
-func buildInfo(ctx context.Context, hc *http.Client, router string) (string, error) {
-	var got struct {
-		BuildInfo string `json:"build_info"`
-	}
-	err := getJSON(ctx, hc, router+"/props", &got)
-	return got.BuildInfo, err
-}
-
-func getJSON(ctx context.Context, hc *http.Client, u string, out any) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := hc.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GET %s: %s", u, resp.Status)
-	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("GET %s: %w", u, err)
-	}
-	return nil
 }
 
 // resolveTool returns a consumer's executable: given, or else the one named name that the

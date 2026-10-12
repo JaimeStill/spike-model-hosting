@@ -46,6 +46,7 @@ import (
 	"time"
 
 	"github.com/JaimeStill/spike-model-hosting/profile"
+	"github.com/JaimeStill/spike-model-hosting/router"
 )
 
 // questions end the prefix, one per request, in turn: each differs from the next from its first
@@ -181,13 +182,11 @@ func measure(ctx context.Context, o options, stdout io.Writer) error {
 		return errors.New("the profile lists no generative model")
 	}
 	hc := &http.Client{}
-	if err := checkLoaded(ctx, hc, o.router, ids...); err != nil {
+	if err := router.CheckLoaded(ctx, hc, o.router, ids...); err != nil {
 		return err
 	}
-	var props struct {
-		BuildInfo string `json:"build_info"`
-	}
-	if err := call(ctx, hc, http.MethodGet, o.router+"/props", nil, &props); err != nil {
+	build, err := router.Build(ctx, hc, o.router)
+	if err != nil {
 		return err
 	}
 	slot := "unpinned, the server's choice"
@@ -195,7 +194,7 @@ func measure(ctx context.Context, o options, stdout io.Writer) error {
 		slot = fmt.Sprintf("pinned to slot %d", o.slot)
 	}
 	if _, err := fmt.Fprintf(stdout, "router %s, build %s\nprefix %d tokens, %d requests per model, %d tokens out, %s\n\n",
-		o.router, props.BuildInfo, o.prefixTokens, o.requests, o.maxTokens, slot); err != nil {
+		o.router, build, o.prefixTokens, o.requests, o.maxTokens, slot); err != nil {
 		return err
 	}
 
@@ -221,7 +220,7 @@ func measure(ctx context.Context, o options, stdout io.Writer) error {
 
 // buildPrefix returns a prefix exactly n of the model's tokens long, its first words a nonce
 // unique to the run, cut from filler text with the router's /tokenize and /detokenize.
-func buildPrefix(ctx context.Context, hc *http.Client, router, id string, n int) (string, error) {
+func buildPrefix(ctx context.Context, hc *http.Client, base, id string, n int) (string, error) {
 	nonce := make([]byte, 8)
 	if _, err := rand.Read(nonce); err != nil {
 		return "", err
@@ -241,7 +240,7 @@ func buildPrefix(ctx context.Context, hc *http.Client, router, id string, n int)
 	var tok struct {
 		Tokens []int `json:"tokens"`
 	}
-	if err := call(ctx, hc, http.MethodPost, router+"/tokenize?autoload=false",
+	if err := post(ctx, hc, base+"/tokenize?autoload=false",
 		map[string]any{"model": id, "content": text.String()}, &tok); err != nil {
 		return "", err
 	}
@@ -251,7 +250,7 @@ func buildPrefix(ctx context.Context, hc *http.Client, router, id string, n int)
 	var detok struct {
 		Content string `json:"content"`
 	}
-	if err := call(ctx, hc, http.MethodPost, router+"/detokenize?autoload=false",
+	if err := post(ctx, hc, base+"/detokenize?autoload=false",
 		map[string]any{"model": id, "tokens": tok.Tokens[:n]}, &detok); err != nil {
 		return "", err
 	}
@@ -344,62 +343,29 @@ func complete(ctx context.Context, hc *http.Client, o options, id, prompt string
 	return r, nil
 }
 
-// checkLoaded checks GET /models lists each of ids as loaded, so the run never starts against a
-// model a request would load.
-func checkLoaded(ctx context.Context, hc *http.Client, router string, ids ...string) error {
-	var got struct {
-		Data []struct {
-			ID     string `json:"id"`
-			Status struct {
-				Value string `json:"value"`
-			} `json:"status"`
-		} `json:"data"`
-	}
-	if err := call(ctx, hc, http.MethodGet, router+"/models", nil, &got); err != nil {
-		return err
-	}
-	status := map[string]string{}
-	for _, m := range got.Data {
-		status[m.ID] = m.Status.Value
-	}
-	for _, id := range ids {
-		if s := status[id]; s != "loaded" {
-			return fmt.Errorf("the router lists %s as %q, not loaded; the run never loads a model", id, s)
-		}
-	}
-	return nil
-}
-
-// call sends a request, its body in (JSON, or none when nil), and decodes the JSON answer into
-// out.
-func call(ctx context.Context, hc *http.Client, method, u string, in, out any) error {
+// post sends in as a JSON POST to u, and decodes the JSON answer into out.
+func post(ctx context.Context, hc *http.Client, u string, in, out any) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	var body io.Reader
-	if in != nil {
-		data, err := json.Marshal(in)
-		if err != nil {
-			return err
-		}
-		body = bytes.NewReader(data)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, u, body)
+	data, err := json.Marshal(in)
 	if err != nil {
 		return err
 	}
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(data))
+	if err != nil {
+		return err
 	}
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := hc.Do(req)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s %s: %s", method, u, resp.Status)
+		return fmt.Errorf("POST %s: %s", u, resp.Status)
 	}
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("%s %s: %w", method, u, err)
+		return fmt.Errorf("POST %s: %w", u, err)
 	}
 	return nil
 }
