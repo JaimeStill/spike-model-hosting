@@ -12,13 +12,16 @@
 //
 // The API:
 //   - Run runs a Config and returns its Report; Report.Passed and Report.Failures say whether
-//     the run passed and, when it didn't, which requests failed and why.
+//     the run passed and, when it didn't, which requests failed and why. DefaultRequestTimeout
+//     bounds a request when the Config doesn't.
+//   - ChatResult and EmbedResult are the Report's requests, each with its Passed.
 //   - ChatStream and EmbedStream are a run's streams; Chatter and Embedder are the consumers
-//     they drive.
+//     they drive. SplitSlots divides the chat model's slots among the chat streams' workers.
+//   - Prompt is the chat prompt that carries a request's nonce.
 //   - ModelChat and ModelEmbed drive the model client (spike-harness-driver's model package).
 //   - HarnessChat drives any harness.Driver, such as Pi's or Claude Code's, one session per
 //     request; a further coding agent joins a run as another HarnessChat stream.
 //   - ClaudeCode returns Claude Code's driver on the router, under the user's subscription
 //     login, and ClaudeEnv the environment that points it there.
-//   - Cosine is the similarity the embedding check compares by.
+//   - Cosine is the similarity the embedding check compares by, within EmbedTolerance.
 package concurrent

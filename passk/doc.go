@@ -19,9 +19,16 @@
 // over nine tasks means all nine.
 //
 // The API:
-//   - Pi, OpenCode and Claude return a consumer's cell from a Config.
-//   - Tally counts a consumer's k trials into a Row: each capability's passes, failures and
-//     reasons, its pass^k, and its invalid requests; Row.MeetsBar applies the bar.
+//   - Pi, OpenCode and Claude return a consumer's cell from a Config; PiDriver, OpenCodeDriver
+//     and ClaudeDriver its driver, SessionOptions the options its sessions open with, and
+//     InterleavedConfig the OpenCode configuration file the OpenCode driver loads.
+//   - ChatModel, VisionModel, AudioModel and EmbedModel are the router's models the cells run
+//     on, and Models lists them; Provider is the provider Pi's and OpenCode's sessions name.
+//   - PiVersion, ClaudeVersion and OpenCodeVersion are the consumers mise environment's pins,
+//     and Version reads the version a consumer's executable reports.
+//   - Tally counts a consumer's k trials, each a Trial, into a Row: a Cell per capability with
+//     its passes, failures and reasons, the Row's pass^k (Row.Passed, Row.PassK), and its
+//     invalid requests; Row.MeetsBar applies Bar.
 //   - Invalid picks out of a recording (wire.Recorder) the model requests the router answered
 //     with an error.
 package passk

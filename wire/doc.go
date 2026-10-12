@@ -10,8 +10,10 @@
 // Claude Code, sends that login's bearer token to its base URL, and the router needs none.
 //
 // The API:
-//   - New returns a Recorder for a target; it is an http.Handler, served on a local listener.
+//   - New returns a Recorder for a target; it is an http.Handler (Recorder.ServeHTTP), served on
+//     a local listener.
+//   - Exchange is one recorded request and its response, each credential's value Redacted.
 //   - Recorder.Exchanges returns the exchanges so far, and Recorder.WriteJSONL writes them, one
 //     JSON object a line.
-//   - Events splits a recorded server-sent event stream into its events.
+//   - Events splits a recorded server-sent event stream into its events, each an Event.
 package wire
