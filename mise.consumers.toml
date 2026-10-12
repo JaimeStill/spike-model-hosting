@@ -1,0 +1,28 @@
+# The consumer and instrument tools the spike runs from the laptop: the coding agents it drives
+# against the router (Claude Code, Pi, OpenCode), the load tool it measures with (GuideLLM), and
+# the runtimes they need. They live in this environment, not mise.toml, so the root shell's PATH
+# keeps the architect's own Claude Code and Pi: run them as
+# `MISE_ENV=consumers mise exec -- <tool>`.
+[tools]
+"aqua:anthropics/claude-code" = "2.1.296"
+"aqua:earendil-works/pi" = "1.1.0"
+"aqua:anomalyco/opencode" = "1.19.0"
+node = "26.11.1"
+# torch, which GuideLLM requires, publishes no wheels for Python 3.15 yet: hold Python at 3.14.
+python = "3.14.8"
+# mise's pipx backend installs GuideLLM through uv.
+uv = "0.13.0"
+"pipx:guidellm" = "0.8.1"
+
+# The engine row: OpenAI's gpt-oss compatibility test against SPIKE_ROUTER_URL, run from the
+# laptop. It fetches the suite into .state/ and reads the network, so `check` never runs it.
+[tasks.gpt-oss-compat]
+description = "Run OpenAI's gpt-oss compatibility test (Chat Completions, -k 5) against SPIKE_ROUTER_URL"
+run = "scripts/gpt-oss-compat.sh"
+
+# The baseline's GuideLLM grid against SPIKE_ROUTER_URL, run from the laptop: three models, two
+# profiles, 1 and 4 streams, client figures beside the engine's. It reads the network, so `check`
+# never runs it.
+[tasks.baseline]
+description = "Run the GuideLLM baseline grid (client beside engine figures) against SPIKE_ROUTER_URL"
+run = "scripts/baseline.sh"
