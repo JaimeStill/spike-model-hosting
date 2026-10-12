@@ -108,7 +108,7 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
 
 ## Progress
 
-slices 5/7 committed · standards — · spec — · editor —
+slices 6/7 committed · standards — · spec — · editor —
 
 ## Decisions
 
@@ -328,6 +328,14 @@ slices 5/7 committed · standards — · spec — · editor —
   `detect_language` answered in text. The script also reports errored runs, invalid responses by
   field check, and pass on the tool call alone, from the suite's own records; renaming the field
   is a gateway or validate matter.
+- consumers: the baseline (context/baseline.md) is GuideLLM's grid with fixed output
+  (`ignore_eos`), each model's upstream tokenizer fetched into `.state/hf`, and engine rates
+  from /metrics deltas. Both Gemmas exceed their 32768-token unified KV at 4 agentic streams
+  (about 35k needed); recorded, not retuned. Prefix reuse needs no `id_slot` pinning.
+- consumers: footprint during the four-stream run leaves 3.21 GiB of the pool free (bar 3 GiB),
+  read read-only over ssh with `amdgpu_top -p`; the Gemmas were idle in that run.
+- consumers: cold load is 21.5 s warm and 21.0 s with the page cache dropped, the same because
+  the GTT pool leaves about 25 GiB of page cache, less than set A's files.
 
 ## Pending edits
 
