@@ -108,7 +108,7 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
 
 ## Progress
 
-slices 4/7 committed · standards — · spec — · editor —
+slices 4/7 committed, 5 part A (conform pass^5) committed · standards — · spec — · editor —
 
 ## Decisions
 
@@ -307,6 +307,16 @@ slices 4/7 committed · standards — · spec — · editor —
 - consumers: the four-stream run on b11572 (pi 2, claude 1, model-chat 1 slots, 3 rounds, embeddings
   until the chats finish) passed 12/12 chats and 328 embeddings in 17.21s; the live tools run with
   the session's inherited CLAUDE_* variables unset.
+- consumers: pass^5 on b11572 from the laptop, two sets: Pi 1.1.0 9/9 with 0 invalid (meets);
+  Claude Code 2.1.296 5/9 (fails: tool, skill, audio-tool, and dropped-image n/a); OpenCode
+  1.19.0 6/9 and 7/9 with 14-17 invalid parse 5xx inside 200 streams (fails). n/a and skip count
+  as not passing; invalid counts error statuses and error events in a 200 stream, not
+  consumer-cancel 502s.
+- consumers: Claude Code's dropped-image cell is n/a, since clutch's profile marks every model as
+  image-capable; making it run would change clutch, which this task can't write.
+- consumers: OpenCode's `interleaved` setting goes in a file named by OPENCODE_CONFIG, merged
+  beneath the driver's config; on 1.19.0 it changes nothing on the wire, since OpenCode sends
+  reasoning_content back either way.
 
 ## Pending edits
 
