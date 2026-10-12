@@ -20,6 +20,7 @@ import (
 	"github.com/JaimeStill/spike-harness-driver/pi"
 
 	"github.com/JaimeStill/spike-model-hosting/concurrent"
+	"github.com/JaimeStill/spike-model-hosting/passk"
 	"github.com/JaimeStill/spike-model-hosting/wire"
 )
 
@@ -244,6 +245,55 @@ func TestPiReasoningRoundTrip(t *testing.T) {
 		t.Errorf("the answer %q doesn't carry the file's code %s", text, code)
 	}
 
+	if logReasoningSentBack(t, rec) == 0 {
+		t.Fatal("no request carried a tool result: the model never called read")
+	}
+}
+
+// TestOpenCodeReasoningRoundTrip runs one OpenCode turn that calls its read tool, through a
+// Recorder, once with gpt-oss-120b's interleaved setting naming reasoning_content, as the passk
+// cell sets it, and once without it, and reports whether the request after the tool call carries
+// the assistant's reasoning back. OpenCode's answer is a finding, not a pass or fail. SPIKE_OPENCODE
+// names OpenCode (MISE_ENV=consumers mise which opencode).
+func TestOpenCodeReasoningRoundTrip(t *testing.T) {
+	command := os.Getenv("SPIKE_OPENCODE")
+	if command == "" {
+		t.Skip("SPIKE_OPENCODE is unset: set it to OpenCode (MISE_ENV=consumers mise which opencode)")
+	}
+	for _, interleaved := range []bool{true, false} {
+		name := "interleaved"
+		if !interleaved {
+			name = "unset"
+		}
+		t.Run(name, func(t *testing.T) {
+			rec, proxy := liveRouter(t)
+			consumer := "opencode-" + name
+			dir, prompt, code := toolTurn(t, consumer)
+			d, err := passk.OpenCodeDriver(passk.Config{Command: command, Router: proxy, State: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !interleaved {
+				d.Env = nil
+			}
+			defer save(t, rec, consumer)
+			text := send(t, d, harness.Options{Provider: passk.Provider, Model: chatModel, Dir: dir, HarnessTools: []string{"read"}}, prompt)
+			t.Logf("answer: %q", text)
+			if !strings.Contains(text, code) {
+				t.Errorf("the answer %q doesn't carry the file's code %s", text, code)
+			}
+			if n := logReasoningSentBack(t, rec); n == 0 {
+				t.Fatal("no request carried a tool result: the model never called read")
+			}
+		})
+	}
+}
+
+// logReasoningSentBack logs, for each OpenAI chat request rec holds that carries a tool result,
+// the fields of the assistant message before it and whether reasoning_content went back, and
+// returns how many tool results it found.
+func logReasoningSentBack(t *testing.T, rec *wire.Recorder) int {
+	t.Helper()
 	toolTurns := 0
 	for _, x := range rec.Exchanges() {
 		if !strings.HasPrefix(x.Path, "/v1/chat/completions") {
@@ -270,7 +320,5 @@ func TestPiReasoningRoundTrip(t *testing.T) {
 				keys, reasoning != "", len(reasoning))
 		}
 	}
-	if toolTurns == 0 {
-		t.Fatal("no request carried a tool result: the model never called read")
-	}
+	return toolTurns
 }
