@@ -1,0 +1,27 @@
+{{/*
+  The llama.cpp router's model presets, rendered from a host-class profile. Keys are llama-server
+  argument names without their leading dashes. Every model runs its GGUF's embedded chat
+  template (jinja) and exposes /metrics, so those two are not profile fields. Setting parallel
+  turns kv-unified's auto default off, so a unified KV pool is stated explicitly, and a per-slot
+  one is the absence of the key.
+*/ -}}
+; llama.cpp router presets for the {{.HostClass}} host class, rendered from its profile.
+; Engine: {{.Engine.Name}} ({{.Engine.Backend}}), build {{.Engine.MinBuild}} or later.
+
+[*]
+jinja = true
+n-gpu-layers = {{.Defaults.GPULayers}}
+c = {{.Defaults.C}}
+metrics = true
+checkpoint-min-step = {{.Defaults.CheckpointMinStep}}
+parallel = {{.Slots}}
+{{- if eq .KV "unified"}}
+kv-unified = true
+{{- end}}
+{{range .Models}}
+; {{.Publisher}} ({{.Origin}}). Card: {{.CardURL}}
+;
+{{comment .CReason -}}
+[{{.ID}}]
+c = {{.C}}
+{{end -}}
