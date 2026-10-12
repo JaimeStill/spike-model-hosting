@@ -90,6 +90,50 @@ On llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64) with gpt-oss-120b 
     [#20500](https://github.com/ggml-org/llama.cpp/issues/20500). `gateway` evaluates a bounded
     resample and a fallback model.
 
+## Reasoning round-trip by consumer
+
+On llama.cpp b11572 (`b11572-efe3626b1`) with gpt-oss-120b (ggml-org `MXFP4`), with each
+consumer run from the laptop against the Framework's router, through the spike's recording proxy
+(`wire.Recorder`, which drops credentials before forwarding and records them only as
+`[redacted]`), on 2026-10-12. Each consumer ran one turn that had to call its read tool on a
+file in a scratch directory, and then answer with the code the file held. The `wire` package's
+`RoundTrip` integration tests run these turns and save the recordings under `.state/wire/`.
+
+| Consumer | Sends reasoning back after a tool call | As |
+|---|---|---|
+| Pi 1.1.0 (`llama.cpp` provider, OpenAI chat) | yes | `reasoning_content` on the assistant message beside `tool_calls` |
+| Claude Code 2.1.296 (Anthropic messages) | yes | `thinking` blocks, before `tool_use`, in the assistant message |
+
+- **Claude Code on the router.** Claude Code ran from its own configuration directory,
+  `.state/claude`, on the architect's subscription login, with no API key or auth token. It
+  had `ANTHROPIC_BASE_URL` at the router and `ANTHROPIC_MODEL` plus the opus, sonnet and haiku
+  defaults all mapped to gpt-oss-120b. Every model request reached the router: three streamed
+  `POST /v1/messages?beta=true` and a `HEAD /api/hello` (404). It sends the login's bearer
+  token to the base URL, and the proxy kept the token from reaching the router or the recording.
+- **The thinking request.** Claude Code asks for adaptive thinking at high effort, even on a
+  model it doesn't know. The first request's parameters, without `system`, `messages`, `tools`
+  and `metadata`:
+
+  ```json
+  {"context_management":{"edits":[{"type":"clear_thinking_20251015","keep":"all"}]},
+   "max_tokens":32000,"model":"ggml-org/gpt-oss-120b-GGUF:MXFP4",
+   "output_config":{"effort":"high"},"stream":true,
+   "thinking":{"type":"adaptive","display":"updates"}}
+  ```
+
+  Its `anthropic-beta` header names `interleaved-thinking-2025-05-14`, `effort-2025-11-24`,
+  `thinking-display-updates-2026-08-18` and `context-management-2025-06-27`, among others.
+  b11572 answers without an error.
+- **Thinking streams back, unsigned.** Each response streamed a `thinking` content block
+  (`content_block_start`, then `thinking_delta`s) that carried gpt-oss's reasoning, followed by a
+  `signature_delta` with an empty signature. After each tool call, the next request carried the earlier turns' assistant messages
+  as `[thinking, tool_use]`, with the whole reasoning text and no signature. The turn called
+  Read twice: once with a relative path, which failed, and again with the absolute path. Both
+  thinking blocks went back.
+- **Pi.** On the turn after its `read` call, Pi's assistant message carried `content`,
+  `reasoning_content` and `tool_calls`, and the reasoning was gpt-oss's own (111 characters on
+  that turn). The consumers line below expected this; now it has been seen on the wire.
+
 ## Which task answers which layer
 
 - `profile`: `profiles/strix-halo.toml` sets each model's card sampling and leaves reasoning to
