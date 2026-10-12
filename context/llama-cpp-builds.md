@@ -100,5 +100,10 @@ is read from the router's `/props` `build_info`.
 
 ### What was re-verified on b11572
 
-- The integration probe runs against the router once the architect installs b11572; this
-  section records it then.
+- **The install.** The architect installed b11572 from its Vulkan x64 asset (sha256 checked)
+  into `/opt/llama.cpp/b11572`. `--list-devices` showed Vulkan0 (RADV STRIX_HALO). Then the
+  architect repointed `current` and restarted `llama-router`. All four models loaded with no
+  manual load, and `/props` reports `b11572-efe3626b1`.
+- **The probe.** `mise run integration` against the router passed on b11572, with the same
+  rendered unit and presets. The footprint, the conform rates, and the baseline on this build
+  are `consumers`' measurements, recorded in their notes.
