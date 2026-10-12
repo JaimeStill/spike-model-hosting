@@ -1,14 +1,14 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** brief ready
-- **Task:** consumers
-- **Branch:** consumers
+- **State:** idle
+- **Task:** none
+- **Branch:** none
 
 ## Tasks
 
 1. [x] align
 2. [x] profile
-3. [ ] consumers
+3. [x] consumers
 4. [ ] main-model
 5. [ ] rocm
 6. [ ] engines-strix
@@ -105,10 +105,6 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
               revert: with the base URL overridden, Claude Code sends its subscription bearer
               token to the router over the tailnet (plain HTTP inside WireGuard).
 ```
-
-## Progress
-
-slices 7/7 committed · standards done · spec done (1 gap closed) · editor done
 
 ## Decisions
 
@@ -356,6 +352,8 @@ slices 7/7 committed · standards done · spec done (1 gap closed) · editor don
   this spike's conform, concurrent, and wire packages; it answers whether go-ai carries its own
   agent loop and what replacing the process-backed drivers costs. The intake waits for it. It is
   set up by `marathon plan experiment.ai` in its own session, not by this task.
+- consumers (accepted): the boundary wording names the Framework only; the workstation's is set
+  when its tasks start.
 
 ## Pending edits
 
