@@ -108,7 +108,7 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
 
 ## Progress
 
-slices 7/7 committed · standards done · spec done (1 gap closed) · editor —
+slices 7/7 committed · standards done · spec done (1 gap closed) · editor done
 
 ## Decisions
 
@@ -272,70 +272,90 @@ slices 7/7 committed · standards done · spec done (1 gap closed) · editor —
 - profile (accepted): the presets installed on the Framework equal the committed render;
   tool-reliability.md records three untested levers for OpenCode (force the shape, send
   reasoning back, retry the parse 5xx) for consumers and gateway.
-- consumers (r1): Mistral Small 4's promotion probe becomes its own task, `main-model`, after `consumers` and before `rocm`.
-- consumers (r1): pass^k imports clutch's conform package and the claude driver at spike-harness-driver's pseudo-version (v0.0.0-20261009211659-9981a3e37466 or newer at BUILD). The Claude-Code-over-router cell is built through the driver's Env. k = 5 over the 9 capabilities. The bar is 0 invalid and pass^5 >= 90% (9 of 9).
-- consumers (r1): OpenAI's gpt-oss compatibility-test (30 cases, -k 5) is the engine row, and gives the count of invalid requests.
-- consumers (r1): a Go command in the spike drives Pi and Claude Code through spike-harness-driver's drivers, and the `model` client, at once, with per-request nonces.
-- consumers (r1, architect): every consumer and instrument runs from the laptop, and the Framework only hosts and serves inference. This supersedes setup's "consumers run on the Framework" and the laptop boundary in CLAUDE.md.
-- consumers (r1): the latest consumers (Pi 1.1.0, Claude Code 2.1.296), with versions recorded. Comparisons with align cross a Pi major.
-- consumers (r1): OpenCode's `interleaved` setting is tried here. Forcing tool_choice stays in `gateway`.
-- consumers (r2): GuideLLM 0.8.1 on the laptop at concurrency 1 and 4, with server-side numbers as the engine figures. The network path (DERP relay, 58 ms) is recorded.
-- consumers (r2): pi, claude, node, python and guidellm are pinned in the repository's mise.toml and covered by currency. Global installs stay untouched.
-- consumers (r2, architect): Claude Code uses the architect's subscription login with ANTHROPIC_BASE_URL at the router, and every tier maps to gpt-oss-120b. Rejected: a placeholder token. BUILD escalates if the override fails.
-- consumers (r2): the router moves to the newest b-tag at BUILD start, with release-note review and probe.
-- consumers (r2): cold load is measured warm and with the page cache dropped, polled from the laptop.
-- consumers (r2): footprint is sampled during the real concurrent run, beside the synthetic figure.
-- consumers (r3): a dedicated CLAUDE_CONFIG_DIR in untracked spike state, logged in once with the subscription.
-- consumers (r3): the GuideLLM grid is short 512/256 and agentic 8192/512 at concurrency 1 and 4 on three models, plus a shared-prefix run per model.
-- consumers (r3): "thinking intact" means thinking blocks stream back and return on tool turns. The exact form is observed at BUILD.
-- consumers: the laptop's consumer and instrument tools live in `mise.consumers.toml`, loaded
-  only with `MISE_ENV=consumers` and run through `mise exec`, and mise.toml excludes their shims,
-  so the architect's own `claude`, `pi`, and system Python still resolve in the repo root.
+- consumers (r1): Mistral Small 4's promotion probe becomes its own task, `main-model`, after
+  `consumers` and before `rocm`.
+- consumers (r1, architect): every consumer and instrument runs from the laptop. The Framework
+  only hosts and serves inference: the architect runs the root commands that configure its
+  hosting layer, and sessions observe that layer read-only (amdgpu_top over ssh). Supersedes
+  setup's "consumers run on the Framework" and CLAUDE.md's laptop boundary.
+- consumers (r1): pass^k imports clutch's conform package and the claude driver at
+  spike-harness-driver's pseudo-version (v0.0.0-20261009211659-9981a3e37466 or newer at BUILD);
+  the Claude-Code-over-router cell is built through the driver's Env; k = 5 over the 9
+  capabilities; the bar is 0 invalid and pass^5 >= 90% (9 of 9).
+- consumers (r1): OpenAI's gpt-oss compatibility-test (30 cases, -k 5) is the engine row and
+  gives the count of invalid requests.
+- consumers (r1): a Go command in the spike drives Pi and Claude Code through
+  spike-harness-driver's drivers, and the `model` client, at once, with per-request nonces.
+- consumers (r1): the latest consumers (Pi 1.1.0, Claude Code 2.1.296), versions recorded;
+  comparisons with align cross a Pi major.
+- consumers (r1): OpenCode's `interleaved` setting is tried here; forcing tool_choice stays in
+  `gateway`.
+- consumers (r2): GuideLLM 0.8.1 on the laptop at concurrency 1 and 4, with server-side numbers
+  as the engine figures; the network path (DERP relay, 58 ms) is recorded.
+- consumers (r2): pi, claude, node, python and guidellm are pinned exactly and covered by
+  currency; global installs stay untouched.
+- consumers (r2, architect): Claude Code uses the architect's subscription login with
+  ANTHROPIC_BASE_URL at the router, and every tier maps to gpt-oss-120b; rejected a placeholder
+  token; BUILD escalates if the override fails.
+- consumers (r2): the router moves to the newest b-tag at BUILD start (b11572), with
+  release-note review and probe.
+- consumers (r2): cold load is measured warm and with the page cache dropped, polled from the
+  laptop.
+- consumers (r2): footprint is sampled during the real concurrent run, beside the synthetic
+  figure.
+- consumers (r3): Claude Code runs from a dedicated CLAUDE_CONFIG_DIR in untracked spike state,
+  logged in once with the subscription.
+- consumers (r3): the GuideLLM grid is short 512/256 and agentic 8192/512 at concurrency 1 and 4
+  on three models, plus a shared-prefix run per model.
+- consumers (r3): "thinking intact" means thinking blocks stream back and return on tool turns;
+  the exact form is observed at BUILD.
+- consumers: the consumer and instrument pins live in `mise.consumers.toml`, loaded only with
+  `MISE_ENV=consumers` and run through `mise exec`, and mise.toml excludes their shims, so the
+  architect's own `claude`, `pi`, and system Python still resolve in the repository root.
 - consumers: Python is held at 3.14.8, because GuideLLM needs torch, which ships no Python 3.15
   wheels; currency keeps reporting the hold. OpenCode is pinned at 1.19.0, the latest.
+- consumers: a shared `consumers` package owns the consumer pins, the harness drivers, the
+  Claude Code login check, and the pinned-tool lookup (standards review).
+- consumers: usage tests run binaries in an empty environment, so the check stays hermetic with
+  SPIKE_ROUTER_URL set (spec review gap).
 - consumers: the concurrent run opens one harness session per request, so no nonce reaches a
-  later answer through history; it refuses to start unless gpt-oss-120b and the embedding model
-  are loaded, since Pi's provider can't send `autoload=false`; Pi uses its built-in llama.cpp
-  provider with its agent directory under the untracked `.state/`.
+  later answer through history.
+- consumers: the concurrent run refuses to start unless gpt-oss-120b and the embedding model are
+  loaded, since Pi's provider can't send `autoload=false`.
+- consumers: Pi uses its built-in llama.cpp provider, with its agent directory under the
+  untracked `.state/`.
 - consumers: the run's prompt frames the nonce as a request ID to repeat, after gpt-oss-120b
-  refused "reply with exactly this token"; the embedding tolerance is cosine 1e-3 (batching moved
-  EmbeddingGemma 2 by at most 1.4e-4; distinct inputs sit below 0.67).
-- consumers: Claude Code 2.1.296 on the subscription login reaches the router with no API key or
-  token; it sends `thinking: {type: adaptive}` with `output_config.effort: high`, which b11572
-  accepts, and carries thinking blocks back after tool calls. The wire recorder strips
-  credentials before forwarding and redacts them in its record.
-- consumers: the four-stream run on b11572 (pi 2, claude 1, model-chat 1 slots, 3 rounds, embeddings
-  until the chats finish) passed 12/12 chats and 328 embeddings in 17.21s; the live tools run with
-  the session's inherited CLAUDE_* variables unset.
-- consumers: pass^5 on b11572 from the laptop, two sets: Pi 1.1.0 9/9 with 0 invalid (meets);
-  Claude Code 2.1.296 5/9 (fails: tool, skill, audio-tool, and dropped-image n/a); OpenCode
-  1.19.0 6/9 and 7/9 with 14-17 invalid parse 5xx inside 200 streams (fails). n/a and skip count
-  as not passing; invalid counts error statuses and error events in a 200 stream, not
-  consumer-cancel 502s.
+  refused "reply with exactly this token".
+- consumers: the embedding tolerance is cosine 1e-3 (batching moved EmbeddingGemma 2 by at most
+  1.4e-4; distinct inputs sit below 0.67).
+- consumers: the live tools run with the session's inherited CLAUDE_* variables unset.
+- consumers: the wire recorder strips credentials before forwarding and redacts them in its
+  record, because Claude Code sends its subscription bearer token to the base URL.
+- consumers: the wire round-trip tests are opt-in, each run only when SPIKE_PI, SPIKE_CLAUDE, or
+  SPIKE_OPENCODE names its consumer's executable.
 - consumers: Claude Code's dropped-image cell is n/a, since clutch's profile marks every model as
   image-capable; making it run would change clutch, which this task can't write.
+- consumers: n/a and skip count as not passing; invalid counts error statuses and error events in
+  a 200 stream, not consumer-cancel 502s.
 - consumers: OpenCode's `interleaved` setting goes in a file named by OPENCODE_CONFIG, merged
   beneath the driver's config; on 1.19.0 it changes nothing on the wire, since OpenCode sends
   reasoning_content back either way.
+- consumers: the engine row's 0/30 (150/150 invalid) comes from the suite requiring a `reasoning`
+  field where llama.cpp sends `reasoning_content`; the script also reports pass on the tool call
+  alone (29/30 pass@5, 27-28/30 pass^5) from the suite's own records. Renaming the field is a
+  gateway or validate matter.
+- consumers: the baseline (context/baseline.md) is GuideLLM's grid with fixed output
+  (`ignore_eos`), each model's upstream tokenizer fetched into `.state/hf`, and engine rates
+  from /metrics deltas.
+- consumers: the baseline names the network path once per section, since every row shares it.
+- consumers: both Gemmas exceed their 32768-token unified KV at 4 agentic streams (about 35k
+  needed); recorded, not retuned.
+- consumers: prefix reuse needs no `id_slot` pinning.
 - consumers (architect): experiment.ai gains a fourth spike, a native Go harness behind
   spike-harness-driver's driver interface, measured beside Pi, Claude Code, and OpenCode with
   this spike's conform, concurrent, and wire packages; it answers whether go-ai carries its own
   agent loop and what replacing the process-backed drivers costs. The intake waits for it. It is
   set up by `marathon plan experiment.ai` in its own session, not by this task.
-- consumers: the engine row (gpt-oss compatibility-test at 7b58334, -k 5, two sets) is 0/30 with
-  150/150 invalid, because the suite requires a `reasoning` field and llama.cpp sends
-  `reasoning_content`; on the tool call alone it is 29/30 pass@5 and 27-28/30 pass^5, every miss
-  `detect_language` answered in text. The script also reports errored runs, invalid responses by
-  field check, and pass on the tool call alone, from the suite's own records; renaming the field
-  is a gateway or validate matter.
-- consumers: the baseline (context/baseline.md) is GuideLLM's grid with fixed output
-  (`ignore_eos`), each model's upstream tokenizer fetched into `.state/hf`, and engine rates
-  from /metrics deltas. Both Gemmas exceed their 32768-token unified KV at 4 agentic streams
-  (about 35k needed); recorded, not retuned. Prefix reuse needs no `id_slot` pinning.
-- consumers: footprint during the four-stream run leaves 3.21 GiB of the pool free (bar 3 GiB),
-  read read-only over ssh with `amdgpu_top -p`; the Gemmas were idle in that run.
-- consumers: cold load is 21.5 s warm and 21.0 s with the page cache dropped, the same because
-  the GTT pool leaves about 25 GiB of page cache, less than set A's files.
 
 ## Pending edits
 
@@ -349,7 +369,13 @@ slices 7/7 committed · standards done · spec done (1 gap closed) · editor —
 - coordinator · ai-hosting.md, "The existing setup: personal-agents", the Serving line: it
   names release build b11529; the Framework's router now runs b11565 from the spike's rendered
   presets and unit, which hold llama.cpp to a minimum build (b11452).
-- coordinator · roadmap, consumers summary: the consumers run from the laptop against the Framework's router; drop the Mistral sentence; add pass^5 over conform's 9 capabilities plus the compatibility-test engine row.
-- coordinator · roadmap: add task `main-model` (the Mistral Small 4 probe) after `consumers`, before `rocm`.
-- coordinator · roadmap, the spike's goal summary: the new laptop boundary.
-- coordinator · ai-hosting.md, "Experiment: spike-model-hosting": the Hosts boundary change; point the main-model probe to `main-model`.
+- coordinator · roadmap, consumers summary: the consumers run from the laptop against the
+  Framework's router; drop the Mistral sentence; add pass^5 over conform's 9 capabilities, OpenAI's
+  gpt-oss compatibility test as the engine row, and the baseline note (`context/baseline.md`)
+  that every later platform is measured against.
+- coordinator · roadmap: add task `main-model` (the Mistral Small 4 probe) after `consumers`,
+  before `rocm`.
+- coordinator · roadmap, the spike's goal summary: the new boundary: every consumer and
+  instrument runs from the laptop, and the Framework only hosts and serves inference.
+- coordinator · ai-hosting.md, "Experiment: spike-model-hosting": the Hosts boundary change;
+  point the main-model probe to `main-model`.

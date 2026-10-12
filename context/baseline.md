@@ -3,8 +3,8 @@
 The tables measure the Framework's llama.cpp router on b11572 (`b11572-efe3626b1`, the upstream
 Vulkan x64 build) serving set A, all four models loaded (`profiles/strix-halo.toml`), on
 2026-10-12. Every figure was taken from the architect's laptop over HTTP; nothing ran on the
-Framework but the router. Each later platform fills the same tables, from the same place, with
-the same workloads.
+Framework but the router. Each later platform is planned to fill the same tables, from the
+same place, with the same workloads.
 
 **Network path.** The laptop reached the Framework over a Tailscale DERP relay (`iad`), not a
 direct connection. `tailscale ping -c 3` read 308, 66 and 51 ms at 16:24 UTC, before the grid;
@@ -15,14 +15,14 @@ between a client TTFT and the engine's prompt time is mostly the relay.
 ## Throughput and latency
 
 GuideLLM 0.8.1 (Python 3.14.8, the consumers mise environment) drove each model over
-`/v1/chat/completions`, streaming, with its synthetic text at fixed token counts: the short
+`/v1/chat/completions` across the relay above, streaming, with its synthetic text at fixed token counts: the short
 profile is 512 prompt tokens and 256 out, the agentic profile 8192 and 512. Each prompt is cut
 to its count by the model's upstream tokenizer (`openai/gpt-oss-120b`, `google/gemma-4-26B-A4B-it`,
 `google/gemma-4-E4B-it`), and the chat template adds the rest of the input column: 579 and 8259
 tokens on gpt-oss-120b, 528 and 8208 on the Gemmas. Every request generates exactly its output
 count (`max_completion_tokens` with `ignore_eos`), so the generation figures don't depend on
-what the model would have said. The profile is GuideLLM's concurrent one at 1 and 4 streams, each
-stream sending its requests back to back: 8 per stream on the short profile, 4 on the agentic
+what the model would have said. GuideLLM's `concurrent` load profile ran at 1 and 4 streams,
+each stream sending its requests back to back: 8 per stream on the short profile, 4 on the agentic
 one, so a cell at 4 streams sends 32 or 16. The cells ran one at a time, 16:24 to 16:43 UTC, with
 nothing else sent to the router.
 
@@ -52,8 +52,8 @@ client's output throughput is the aggregate.
 **The Gemmas can't hold four agentic requests.** Every agentic request at 4 streams failed on
 both Gemma models with llama.cpp's `Context size has been exceeded.`, after its prompt and a few
 output tokens. Each runs at `c = 32768` with the KV pool shared across its 4 slots
-(`--kv-unified`), and four requests of 8208 prompt tokens and 512 out need 34880. The memory
-budget sized the 26B-A4B down from 65536 to fit the pool; at 32768 it holds about three requests
+(`--kv-unified`), and four requests of 8208 prompt tokens and 512 out need 34880. The
+[memory budget](memory-budget.md) sized the 26B-A4B down from 65536 to fit the pool; at 32768 it holds about three requests
 of this shape at once. gpt-oss-120b, at 131072, holds four. The rows' engine prompt rate is the
 prefill of those failed requests; their generation rate is left out, since they generated almost
 nothing.
@@ -106,7 +106,9 @@ time unpinned, against 0.4 pinned; the warm requests don't show it.
 
 ## Cold load
 
-`go run ./cmd/coldload` timed both restarts from the laptop on 2026-10-12. It starts with every
+A router restart takes about 21 s until all four models are loaded, warm or cold, set by
+gpt-oss-120b's read from NVMe. `go run ./cmd/coldload` timed both restarts from the laptop,
+over the same relay, on 2026-10-12. It starts with every
 model loaded and polls `/models` every 250 ms. It takes the restart's start as the first poll
 that doesn't see every model loaded, so each time is late by up to one poll. A model counts as
 loaded only when it is listed as loaded after it was seen gone. The architect ran each restart
@@ -122,5 +124,4 @@ Warm and cold are the same within a poll, because the page cache can't hold set 
 Framework has 128 GB of RAM, and set A's 96 GiB GTT pool takes most of it. After the cold run,
 `free -m` showed 25520 MiB of buffers and cache and 103610 MiB used. Set A's files are far
 larger than 25 GiB (gpt-oss-120b alone is about 60 GiB), on an ext4 NVMe drive. So even a
-"warm" restart reads most of set A from disk again. On this host class, a router restart costs
-about 21 s, set by gpt-oss-120b's read from NVMe, whatever the cache held before.
+"warm" restart reads most of set A from disk again.

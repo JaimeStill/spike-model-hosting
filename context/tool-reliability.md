@@ -74,7 +74,8 @@ On llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64) with gpt-oss-120b 
   gpt-oss-120b's carries none, so it ran at llama.cpp's 0.8 / 40 / 0.95 / 0.05 until the preset
   set the card's. personal-agents' `profiles/unified-96gb.ini` and the spike's
   `profiles/strix-halo.toml` state each card's values.
-- **Next for OpenCode.** Three levers, untested here; `consumers` and `gateway` take them up:
+- **Levers for OpenCode.** Three levers could cut OpenCode's failures. `consumers` answered the
+  second (see "Reasoning round-trip by consumer"); `gateway` takes up the other two:
   - *Force the shape.* OpenCode sends `tool_choice: "auto"`. Its `chat.params` plugin hook
     edits a request's parameters before it is sent, and may set `required` the way Pi's bridge
     does; whether it reaches `tool_choice` is unconfirmed. A gateway can inject `required` for
@@ -82,9 +83,8 @@ On llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64) with gpt-oss-120b 
   - *Send reasoning back.* gpt-oss expects its reasoning from earlier tool-call turns in later
     requests, as `reasoning_content` on llama.cpp, and tool calling degrades without it
     ([alde.dev](https://alde.dev/blog/proper-tool-calling-with-gpt-oss/); llama.cpp
-    [discussion #15396](https://github.com/ggml-org/llama.cpp/discussions/15396)). OpenCode's
-    per-model `interleaved` setting names the field it returns; the conform configuration
-    doesn't set it yet. `consumers` tests each consumer's reasoning round-trip.
+    [discussion #15396](https://github.com/ggml-org/llama.cpp/discussions/15396)). OpenCode
+    1.19.0 already sends it, with or without its per-model `interleaved` setting.
   - *Retry the parse 5xx.* Related 500s with OpenCode and gpt-oss on reasoning plus tool calls
     are reported in llama.cpp [#19703](https://github.com/ggml-org/llama.cpp/issues/19703) and
     [#20500](https://github.com/ggml-org/llama.cpp/issues/20500). `gateway` evaluates a bounded
@@ -92,12 +92,14 @@ On llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64) with gpt-oss-120b 
 
 ## Reasoning round-trip by consumer
 
-On llama.cpp b11572 (`b11572-efe3626b1`) with gpt-oss-120b (ggml-org `MXFP4`), with each
-consumer run from the laptop against the Framework's router, through the spike's recording proxy
-(`wire.Recorder`, which drops credentials before forwarding and records them only as
-`[redacted]`), on 2026-10-12. Each consumer ran one turn that had to call its read tool on a
-file in a scratch directory, and then answer with the code the file held. The `wire` package's
-`RoundTrip` integration tests run these turns and save the recordings under `.state/wire/`.
+Pi, Claude Code, and OpenCode each send gpt-oss's reasoning back on the turn after a tool call,
+as seen on the wire. Each consumer ran one turn that had to call its read tool on a file in a
+scratch directory and then answer with the code the file held. The runs used llama.cpp b11572
+(`b11572-efe3626b1`) and gpt-oss-120b (ggml-org `MXFP4`), from the laptop against the
+Framework's router, on 2026-10-12. Each consumer's requests passed through a `wire.Recorder`,
+which drops credentials before forwarding and records them only as `[redacted]`. The `wire`
+package's `RoundTrip` integration tests run these turns and save the recordings under
+`.state/wire/`.
 
 | Consumer | Sends reasoning back after a tool call | As |
 |---|---|---|
@@ -128,13 +130,14 @@ file in a scratch directory, and then answer with the code the file held. The `w
   b11572 answers without an error.
 - **Thinking streams back, unsigned.** Each response streamed a `thinking` content block
   (`content_block_start`, then `thinking_delta`s) that carried gpt-oss's reasoning, followed by a
-  `signature_delta` with an empty signature. After each tool call, the next request carried the earlier turns' assistant messages
-  as `[thinking, tool_use]`, with the whole reasoning text and no signature. The turn called
+  `signature_delta` with an empty signature. After each tool call, the next request carried the
+  earlier turns' assistant messages as `[thinking, tool_use]`, with the whole reasoning text and
+  no signature. The turn called
   Read twice: once with a relative path, which failed, and again with the absolute path. Both
   thinking blocks went back.
 - **Pi.** On the turn after its `read` call, Pi's assistant message carried `content`,
   `reasoning_content` and `tool_calls`, and the reasoning was gpt-oss's own (111 characters on
-  that turn). The consumers line below expected this; now it has been seen on the wire.
+  that turn).
 - **OpenCode.** OpenCode ran with gpt-oss-120b's `interleaved` set to
   `{"field": "reasoning_content"}`, in an explicit configuration file (`OPENCODE_CONFIG`) that
   OpenCode merges beneath the driver's own. On each turn after a `read` call, the assistant
@@ -142,19 +145,18 @@ file in a scratch directory, and then answer with the code the file held. The `w
   the previous response had streamed as `reasoning_content` deltas, byte for byte. The same turn
   with the setting left out sent the same field, matching its stream too. So OpenCode 1.19.0
   sends reasoning back on llama.cpp's OpenAI chat with or without `interleaved`; the setting
-  changes nothing on the wire here. The earlier expectation that OpenCode doesn't, drawn from
-  its conform configuration lacking the setting, was wrong for this version. The same held for the
-  conform suite's vision turns on Gemma 4 26B-A4B, which the setting doesn't name.
+  changes nothing on the wire here. OpenCode also sent it back on the conform suite's vision
+  turns on Gemma 4 26B-A4B, which the setting doesn't name.
 
 ## pass^5 by consumer
 
-On llama.cpp b11572 (`b11572-efe3626b1`) with gpt-oss-120b (ggml-org `MXFP4`, Vulkan), all
-four set-A models loaded, each consumer ran from the laptop against the Framework's router on
-2026-10-12. `go run ./cmd/conform -k 5` runs clutch's conform suite (clutch at `9981a3e`, the
-`conform` package) five times per consumer, trial after trial, the consumers in turn within
-each trial. Each consumer's requests pass through a `wire.Recorder` of its own; a model request
-the router answers with an error, as a status or as an error event in a stream that began
-with 200, counts as invalid. The `passk` package builds the cells:
+Only Pi meets OpenAI's bar. `go run ./cmd/conform -k 5` runs clutch's conform suite (clutch at
+`9981a3e`, the `conform` package) five times per consumer, the consumers in turn within each
+trial. The runs used llama.cpp b11572 (`b11572-efe3626b1`, Vulkan) and gpt-oss-120b (ggml-org
+`MXFP4`), with all four set-A models loaded, from the laptop against the Framework's router, on
+2026-10-12. Each consumer's requests pass through a `wire.Recorder` of its own. A model request
+counts as invalid when the router answers it with an error, as a status or as an error event in
+a stream that began with 200. The `passk` package builds the cells:
 
 - **Pi 1.1.0** on its `llama.cpp` provider, its agent directory under `.state/conform/pi`.
   The driver's bridge sets `tool_choice: "required"` on every request that offers `respond`.
@@ -166,8 +168,8 @@ with 200, counts as invalid. The `passk` package builds the cells:
 A capability is a task, and it passes at 5 only when all five trials pass. pass^5 is the
 share of the nine tasks that do; the bar is 0 invalid and pass^5 of at least 90%, which over
 nine tasks means 9 of 9 (8 of 9 is 88.9%). n/a counts as not passing. Two sets ran back to
-back. The second is the tool's own report. The first ran before the tool counted streamed
-errors, so its invalid counts were recounted from its saved recordings with the same rule:
+back. Set 2 is the tool's own report. Set 1 ran before the tool counted streamed errors, so its
+invalid counts were recounted from its saved recordings with the same rule:
 
 | Set | Consumer | exchange | cancel | resume | tool | skill | structured | vision | dropped-image | audio-tool | pass^5 | invalid | Bar |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -206,7 +208,8 @@ Each set took about 16 minutes (15m33s and 17m17s).
 
 ### The engine row
 
-The engine row is OpenAI's compatibility test for gpt-oss implementations, the one
+The engine row fails OpenAI's bar on a field name, and its tool calls sit at the bar's line.
+The row is OpenAI's compatibility test for gpt-oss implementations, the one
 [verifying gpt-oss implementations](https://developers.openai.com/cookbook/articles/gpt-oss/verifying-implementations)
 sets its bar with: openai/gpt-oss at `7b58334` (`7b583341fe16729127f6d5b94a7b09ccae97e1a1`),
 `compatibility-test/`, 30 cases over six tools, each run five times through the OpenAI Agents
@@ -214,8 +217,8 @@ SDK. It ran from the laptop against the Framework's router on 2026-10-12, on the
 (`b11572-efe3626b1`) and model (`ggml-org/gpt-oss-120b-GGUF:MXFP4`), in Chat Completions mode
 with `-k 5`, on Node 26.11.1 (tsx 4.23.15, which the suite's `npm start` needs but doesn't
 pin). `mise run gpt-oss-compat` in the consumers environment, with `SPIKE_ROUTER_URL` set,
-fetches the suite into `.state/`, installs it from its lockfile, runs it, and prints this. It
-measures the engine and model at the Chat Completions layer, with no consumer between, not the
+fetches the suite into `.state/`, installs it from its lockfile, runs it, and prints the table
+below. It measures the engine and model at the Chat Completions layer, with no consumer between, not the
 `/v1/messages` Claude Code uses. A run counts only when its response is valid and it called the
 case's tool with arguments the tool's schema accepts:
 

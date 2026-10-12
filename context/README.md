@@ -75,9 +75,11 @@ of the admin tooling.
 
 ## Hosts and boundaries
 
-- **Framework desktop** (Strix Halo, 96 GB GTT pool): the first host class, available now. The
-  spike may change anything on it, including the runtime, its configuration, and the models.
-  Only the OS install and the Tailscale registration stay fixed, and there is no restore point.
+- **Framework desktop** (Strix Halo, 96 GB GTT pool): the first host class, available now. It
+  hosts and serves inference only. The spike may change anything in its hosting layer,
+  including the runtime, its configuration, and the models, through root commands the architect
+  runs; sessions observe that layer read-only, such as `amdgpu_top` over SSH. Only the OS
+  install and the Tailscale registration stay fixed, and there is no restore point.
 - **Dell NVIDIA workstation** (CUDA): available from 2026-10-14. The tasks that need it say so.
 - **Remote access:** sessions reach both hosts by Tailscale SSH in accept mode, set by the
   architect before the first task and reverted to check mode when the spike completes.
@@ -85,12 +87,9 @@ of the admin tooling.
   client) and every instrument (GuideLLM, OpenAI's gpt-oss compatibility test, the concurrent
   run, pass^k, prefix, and cold load) runs from it, pinned in `mise.consumers.toml` and run as
   `MISE_ENV=consumers mise exec -- <tool>`, off the root PATH so the architect's own Claude Code
-  and Pi are untouched. Their untracked state is under `.state/`; Claude Code runs from its own
+  and Pi stay untouched. Their untracked state is under `.state/`; Claude Code runs from its own
   `CLAUDE_CONFIG_DIR` there, on the architect's subscription login, with `ANTHROPIC_BASE_URL` at
   the router. Nothing is served on the laptop.
-- **What the Framework does:** it hosts and serves inference only. The architect runs the root
-  commands that configure its hosting layer; sessions may observe that layer read-only, such as
-  amdgpu_top over SSH.
 - Nothing committed here names a host: no tailnet names or addresses, no hostnames. The profile
   and its renderer carry no host's name or address; the rendered unit resolves the host's tailnet
   address when it starts, and host-local values (the service user, HF_HOME, and the models
@@ -106,16 +105,35 @@ of the admin tooling.
   from each card, in [`model-cards.md`](model-cards.md).
 - **Serving platforms:** llama.cpp (Vulkan, ROCm, CUDA), vLLM, SGLang, and llama-swap, each with
   its setup and management record.
-- **Consumers:** Pi, Claude Code, and spike-harness-driver's `model` package as go-ai's
-  stand-in, run from the laptop.
-- **Measurement:** footprint, speed, prefix cache, cold load, and the capability matrix. Set
-  A's memory budget on the Framework, estimated against measured, is in
+- **Consumers:** Pi, Claude Code, OpenCode, and spike-harness-driver's `model` package as
+  go-ai's stand-in, run from the laptop. The `consumers` package sets up Pi, Claude Code, and
+  OpenCode against the router for every tool and test: the pinned version, its harness driver,
+  the Claude Code login check, and state under the run's own directory.
+- **Router state:** the `router` package reads a router's models, their status, and its build
+  over HTTP, so each tool refuses to start against an unloaded model and names the build it ran
+  on.
+- **Concurrent run:** the `concurrent` package and the `concurrent` command (`cmd/concurrent`)
+  run Pi, Claude Code, and the model client's chat and embedding streams against the router at
+  once. The run fails when an answer carries another request's nonce, or an embedding differs
+  from its input's lone embedding by more than the cosine tolerance.
+- **Wire recording:** the `wire` package's `Recorder` is a reverse proxy that records what a
+  consumer sends the router and what comes back, with credentials dropped. Its `RoundTrip`
+  integration tests record each consumer's reasoning round-trip; each runs only when
+  `SPIKE_PI`, `SPIKE_CLAUDE`, or `SPIKE_OPENCODE` names its executable.
+- **Tool-call reliability:** the layered convention every platform, profile, consumer, and
+  gateway is held to, with pass^k as its measure, in [`tool-reliability.md`](tool-reliability.md).
+  The `passk` package and the `conform` command (`cmd/conform`) run clutch's conformance suite k
+  times per consumer and judge each by pass^k; `mise run gpt-oss-compat` runs OpenAI's gpt-oss
+  compatibility test as the engine row.
+- **Measurement:** footprint, speed, prefix cache, cold load, and the capability matrix. The
+  llama.cpp Vulkan baseline every platform is measured against is in
+  [`baseline.md`](baseline.md): the GuideLLM grid (`mise run baseline`), prefix reuse (the
+  `prefix` command, `cmd/prefix`), and cold load (the `coldload` package and command,
+  `cmd/coldload`). Set A's memory budget on the Framework, estimated against measured, is in
   [`memory-budget.md`](memory-budget.md).
 - **llama.cpp builds:** each build move on the Framework, with its release-note review and
   what was re-verified on the new build, in [`llama-cpp-builds.md`](llama-cpp-builds.md). The
-  Framework runs b11565; `align` measured b11529.
-- **Tool-call reliability:** the layered convention every platform, profile, consumer, and
-  gateway is held to, with pass^k as its measure, in [`tool-reliability.md`](tool-reliability.md).
+  Framework runs b11572.
 - **Gateways:** none, agentgateway, and LiteLLM.
 - **Admin tool:** a CLI on go-cli-sdk over the profile, with personal-agents' `outpost` as its
   baseline.
@@ -129,8 +147,8 @@ The tasks, in the order they run; each cites the evidence it proves.
    driving Pi" artifact brought in line with set A on an upstream b-number build (evidence 1).
 2. `profile`: the profile schema and the Strix Halo llama.cpp profile, which holds llama.cpp to
    a minimum build (evidence 1).
-3. `consumers`: the three consumers at once on the Vulkan router, the baseline every platform is
-   measured against, all run from the laptop (evidence 4, 5).
+3. `consumers`: the three consumers at once on the Vulkan router, and the baseline every
+   platform is measured against, all run from the laptop (evidence 4, 5).
 4. `main-model`: Mistral Small 4's promotion probe against gpt-oss-120b (evidence 4, 6).
 5. `rocm`: llama.cpp's ROCm backend against Vulkan (evidence 2–7).
 6. `engines-strix`: vLLM, and SGLang time-boxed, on Strix Halo (evidence 2–7).

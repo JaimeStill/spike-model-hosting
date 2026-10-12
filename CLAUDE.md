@@ -17,8 +17,13 @@ repository is managed with the marathon workflow; start from `context/README.md`
 - **References:** the repositories this spike reads are keys in the coordinator's
   `references.toml` and `references.local.toml`. The spike reads them and writes to none of them,
   except personal-agents and spike-harness-driver in its `align` task.
-- **Hosts:** the spike may change anything on the Framework desktop and the Dell NVIDIA
-  workstation, which host and serve inference only. The consumers and instruments run from the
-  architect's laptop, where nothing is served.
-- **Consumers:** `mise.consumers.toml` pins the consumers and instruments, run as
-  `MISE_ENV=consumers mise exec -- <tool>`; their untracked state is under `.state/`.
+- **Hosts:** the spike may change anything in the hosting layer of the Framework desktop and
+  the Dell NVIDIA workstation, through root commands the architect runs. The Framework only
+  hosts and serves inference; sessions observe its hosting layer read-only, such as
+  `amdgpu_top` over SSH. Every consumer and instrument runs from the architect's laptop, where
+  nothing is served.
+- **Consumers and instruments:** `mise.consumers.toml` pins them, run as
+  `MISE_ENV=consumers mise exec -- <tool>`; their untracked state is under `.state/`. The
+  commands are `cmd/concurrent`, `cmd/conform`, `cmd/prefix`, and `cmd/coldload`; each package's
+  `doc.go` lists its API. Their results are in `context/baseline.md` and
+  `context/tool-reliability.md`.

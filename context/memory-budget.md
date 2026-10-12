@@ -43,20 +43,21 @@ free, and failed it.
 The Mistral Small 4 swap takes gpt-oss-120b and the 26B-A4B out (82878MiB measured) and puts
 Mistral Small 4 in, about 69GiB at `Q4`. That figure is estimated, not measured.
 
-## During the consumers' run, b11572
+## During the concurrent run, b11572
 
-The same read during a live run of `concurrent` (`go run ./cmd/concurrent -rounds 10`): Pi,
-Claude Code and the model client on gpt-oss-120b's 4 slots, and the model client's embedding
-stream on EmbeddingGemma 2, all at once, on b11572 (`b11572-efe3626b1`) on 2026-10-12. The run
-passed: 40 chat requests and 1032 embeddings in 51.7 seconds. `scripts/footprint.sh` read
-`amdgpu_top -p` over a non-interactive ssh eight times, six seconds apart, from 16:44:51 to
-16:45:35 UTC. `/slots` showed 3 or 4 of gpt-oss-120b's slots processing at the first seven
-samples and none at the last, after the run ended; EmbeddingGemma 2's batches finish in about 350
-ms, so only one sample caught its 4 slots busy; the two Gemmas carry no stream in this run and
-sat idle. Every sample read the same figures, beside the synthetic 4-in-flight measurement on
-b11565 above. Figures in MiB:
+With Pi, Claude Code and the model client streaming at once on b11572, 3.21GiB of the pool
+stayed free, above the 3GiB bar. The read is the same as above, taken during a live run of the `concurrent` command
+(`go run ./cmd/concurrent -rounds 10`) on b11572 (`b11572-efe3626b1`) on 2026-10-12: Pi, Claude
+Code and the model client on gpt-oss-120b's 4 slots, and the model client's embedding stream on
+EmbeddingGemma 2, all at once. The run passed: 40 chat requests and 1032 embeddings in 51.7
+seconds. `scripts/footprint.sh` read `amdgpu_top -p` over a non-interactive ssh eight times, six
+seconds apart, from 16:44:51 to 16:45:35 UTC. `/slots` showed 3 or 4 of gpt-oss-120b's slots
+processing at the first seven samples, and none at the last, after the run ended.
+EmbeddingGemma 2's batches finish in about 350 ms, so only one sample caught its 4 slots busy.
+The two Gemmas carry no stream in this run and sat idle. Every sample read the same figures,
+shown beside the synthetic 4-in-flight measurement on b11565 above. Figures in MiB:
 
-| Model | Synthetic, 4 in flight on each, b11565 | During the consumers' run, b11572 |
+| Model | Synthetic, 4 in flight on each, b11565 | During the concurrent run, b11572 |
 |---|---|---|
 | gpt-oss-120b `MXFP4` | 65517 | 65529 |
 | Gemma 4 26B-A4B `Q4_0` + mmproj `Q8_0` | 17372 | 17412 |
@@ -66,9 +67,9 @@ b11565 above. Figures in MiB:
 | pool used, with the desktop | 94926 | 95018 |
 | **pool free, of 98304** | **3378 (3.30GiB)** | **3286 (3.21GiB)** |
 
-At least 3GiB of the pool stayed free, with 214MiB to spare. The set is 93MiB larger than the
-synthetic figure, and the Gemmas account for 79 of it. They grew during the baseline's grid
-(`baseline.md`), run just before, which sent both 8192-token prompts: read during its
-gpt-oss-120b cells, before their own, they were 17388 and 9955. The consumers' run itself
-moved nothing between samples; gpt-oss-120b, the model it sends to, is 12MiB over its synthetic
-figure.
+The pool kept 214MiB more than the 3GiB bar. The set is 93MiB larger than the synthetic
+figure, and the Gemmas account for 79 of it. They grew during the baseline's grid
+([`baseline.md`](baseline.md)), run just before, which sent both 8192-token prompts: read
+during its gpt-oss-120b cells, before their own, they were 17388 and 9955. The concurrent run
+itself moved nothing between samples; gpt-oss-120b, the model it sends to, is 12MiB over its
+synthetic figure.

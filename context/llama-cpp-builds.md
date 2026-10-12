@@ -85,8 +85,7 @@ is read from the router's `/props` `build_info`.
 - **Graph reallocations.** [#30329](https://github.com/ggml-org/llama.cpp/pull/30329) (b11567)
   counts the times a compute graph's buffers are reserved again during inference, logs each
   unexpected one, and adds a `graph reallocs` line to each slot's timings in the router log.
-  It reports and changes nothing; the line is a new reading for the footprint and baseline
-  runs.
+  It reports and changes nothing; the footprint and baseline runs can read the new line.
 - **Sampling defaults.** Unchanged. [#30095](https://github.com/ggml-org/llama.cpp/pull/30095)
   fixes draft sampling in the speculative example only. The GGUF `general.sampling.*` defaults
   and the presets' values apply as before.
@@ -106,4 +105,5 @@ is read from the router's `/props` `build_info`.
   manual load, and `/props` reports `b11572-efe3626b1`.
 - **The probe.** `mise run integration` against the router passed on b11572, with the same
   rendered unit and presets. The footprint, the conform rates, and the baseline on this build
-  are `consumers`' measurements, recorded in their notes.
+  are in [`memory-budget.md`](memory-budget.md), [`tool-reliability.md`](tool-reliability.md),
+  and [`baseline.md`](baseline.md).
