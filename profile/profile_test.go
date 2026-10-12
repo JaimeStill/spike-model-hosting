@@ -319,8 +319,8 @@ func TestRenderPresetsReasoning(t *testing.T) {
 	}
 }
 
-// TestLoadNamesInvalidArgs shows a raw arg may not set a key the profile types, nor hold a value
-// that isn't a scalar, and that args need a reason.
+// TestLoadNamesInvalidArgs shows a raw arg may not set a key the profile types or the unit or
+// host owns, nor hold a value that isn't a scalar, and that args need a reason.
 func TestLoadNamesInvalidArgs(t *testing.T) {
 	base, err := os.ReadFile(strixHalo)
 	if err != nil {
@@ -333,6 +333,15 @@ func TestLoadNamesInvalidArgs(t *testing.T) {
 		{"temp = 0.5", "models[3].args.temp: rendered from the profile's typed fields"},
 		{"load-on-startup = false", "models[3].args.load-on-startup: rendered from the profile's typed fields"},
 		{"lora = [1, 2]", "models[3].args.lora: a []interface {}, not a string, integer, float or boolean"},
+	}
+	for _, key := range []string{
+		"host", "port", "models-dir", "models-preset", "models-max", "no-models-autoload",
+		"slot-save-path", "log-file", "api-key-file", "ssl-key-file", "ssl-cert-file", "model",
+		"mmproj", "chat-template-file",
+	} {
+		tests = append(tests, struct{ add, want string }{
+			key + ` = "x"`, "models[3].args." + key + ": owned by the unit or the host, not the profile",
+		})
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {

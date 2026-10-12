@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/JaimeStill/spike-model-hosting/profile"
 )
@@ -167,6 +168,10 @@ func TestRouter(t *testing.T) {
 	t.Run("chat", func(t *testing.T) {
 		text := r.chat(t, chatModel, "Reply with one word: ready.", 2048)
 		t.Logf("%s: %q", chatModel, text)
+		// The prompt asks for one word; casing and punctuation are the model's to choose.
+		if !strings.Contains(strings.ToLower(text), "ready") {
+			t.Errorf("%s: the reply %q doesn't say ready", chatModel, text)
+		}
 	})
 
 	t.Run("tool call", func(t *testing.T) {
@@ -217,6 +222,14 @@ func TestRouter(t *testing.T) {
 			}},
 		}, 512)
 		t.Logf("%s: %q", visionModel, text)
+		// shapes.png is a red circle, a blue square, and a green triangle. Each shape and each
+		// colour must be named, in any phrasing; which colour goes with which shape isn't checked.
+		reply := strings.ToLower(text)
+		for _, word := range []string{"circle", "square", "triangle", "red", "blue", "green"} {
+			if !strings.Contains(reply, word) {
+				t.Errorf("%s: the description %q doesn't name %s", visionModel, text, word)
+			}
+		}
 	})
 
 	t.Run("audio", func(t *testing.T) {
@@ -229,6 +242,12 @@ func TestRouter(t *testing.T) {
 			}},
 		}, 512)
 		t.Logf("%s: %q", audioModel, text)
+		// phrase.wav says "The access code is seven four two nine." The code may come back as
+		// digits or words, spaced or not: compared with everything but letters and digits
+		// stripped, either form passes.
+		if got := alphanumeric(text); !strings.Contains(got, "7429") && !strings.Contains(got, "sevenfourtwonine") {
+			t.Errorf("%s: the transcript %q doesn't carry the code 7429", audioModel, text)
+		}
 	})
 
 	t.Run("embeddings", func(t *testing.T) {
@@ -349,6 +368,17 @@ func buildNumber(build string) (int, error) {
 		return 0, fmt.Errorf("%q is not a llama.cpp build such as b11452", build)
 	}
 	return n, nil
+}
+
+// alphanumeric lowercases s and keeps only its letters and digits, so "7 4 2 9." and
+// "Seven, four, two, nine" compare as 7429 and sevenfourtwonine.
+func alphanumeric(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, s)
 }
 
 func readFile(t *testing.T, path string) []byte {

@@ -82,7 +82,10 @@ of the admin tooling.
   architect before the first task and reverted to check mode when the spike completes.
 - **The architect's laptop:** it runs only this repository, its check, read-only probes, and
   HTTP. Nothing is installed, served, or run as a consumer there.
-- Nothing committed here names a host: no tailnet names or addresses, no hostnames.
+- Nothing committed here names a host: no tailnet names or addresses, no hostnames. The profile
+  and its renderer carry no host's name or address; the rendered unit resolves the host's tailnet
+  address when it starts, and host-local values (the service user, HF_HOME, and the models
+  directory) are given at render time.
 
 ## Capabilities
 

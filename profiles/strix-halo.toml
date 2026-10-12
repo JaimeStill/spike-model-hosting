@@ -34,7 +34,7 @@ checkpoint_min_step = 4096
 [memory_budget]
 pool_mib = 98304
 measured_mib = 94926
-build = "b11529"
+build = "b11565"
 source = "context/memory-budget.md"
 
 [[models]]
@@ -121,7 +121,7 @@ sets min-p = 0 because the card names no min_p (llama.cpp's default is 0.05).
 id = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
 publisher = "Google"
 origin = "United States"
-card_url = "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF"
+card_url = "https://huggingface.co/google/embeddinggemma-2"
 kind = "embedding"
 c = 8192
 c_reason = """

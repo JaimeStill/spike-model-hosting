@@ -119,6 +119,23 @@ var reservedArgs = []string{
 	"load-on-startup", "c", "temp", "top-p", "top-k", "min-p", "chat-template-kwargs",
 }
 
+// hostArgs are the keys the unit or the host owns, which a model's raw Args may not set either:
+// the router's own flags, which the rendered unit sets on its command line (unit.service.tmpl),
+// and the llama-server flags that take a host path, which a host-free profile can't name. Short
+// aliases are listed beside their long names. It is a fixed list of keys; values aren't scanned.
+var hostArgs = []string{
+	// Set by the rendered unit, or router-wide.
+	"host", "port", "reuse-port", "models-dir", "models-preset", "models-max", "models-autoload",
+	"no-models-autoload",
+	// Take a host path.
+	"m", "model", "mm", "mmproj", "md", "model-draft", "spec-draft-model", "lora", "lora-scaled",
+	"control-vector", "control-vector-scaled", "grammar-file", "jf", "json-schema-file", "lcs",
+	"lookup-cache-static", "lcd", "lookup-cache-dynamic", "chat-template-file", "log-file",
+	"log-prompts-dir", "slot-save-path", "media-path", "path", "api-key-file", "ssl-key-file",
+	"ssl-cert-file", "ui-config-file", "webui-config-file", "mcp-servers-config",
+	"video-ffmpeg-dir",
+}
+
 // Model is one model the router serves, with the provenance its settings come from.
 type Model struct {
 	// ID is the model's router ID, such as ggml-org/gpt-oss-120b-GGUF:MXFP4; it names the
@@ -308,6 +325,9 @@ func (p *Profile) Validate() error {
 			name := field("args." + key)
 			if slices.Contains(reservedArgs, key) {
 				errs = append(errs, fmt.Errorf("%s: rendered from the profile's typed fields", name))
+			}
+			if slices.Contains(hostArgs, key) {
+				errs = append(errs, fmt.Errorf("%s: owned by the unit or the host, not the profile", name))
 			}
 			switch m.Args[key].(type) {
 			case string, int64, float64, bool:
