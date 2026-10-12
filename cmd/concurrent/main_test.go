@@ -106,3 +106,33 @@ func TestRefusesUnloadedModel(t *testing.T) {
 		t.Errorf("the router got %d requests beyond GET, want 0", n)
 	}
 }
+
+// TestRefusesClaudeWithoutLogin shows the tool sends no request when Claude Code's configuration
+// directory holds no login, and names the command that signs in there.
+func TestRefusesClaudeWithoutLogin(t *testing.T) {
+	var posts atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method != http.MethodGet:
+			posts.Add(1)
+			http.Error(w, "unexpected", http.StatusTeapot)
+		case r.URL.Path == "/props":
+			_, _ = w.Write([]byte(`{"build_info":"b0-test"}`))
+		default:
+			_, _ = w.Write([]byte(`{"data":[
+				{"id":"ggml-org/gpt-oss-120b-GGUF:MXFP4","status":{"value":"loaded"}},
+				{"id":"ggml-org/embeddinggemma-2-GGUF:Q8_0","status":{"value":"loaded"}}]}`))
+		}
+	}))
+	defer srv.Close()
+	state := t.TempDir()
+	_, errOut, code := run(t, []string{"SPIKE_ROUTER_URL=" + srv.URL},
+		"-state", state, "-pi", "/nonexistent/pi", "-claude", "/nonexistent/claude")
+	want := "CLAUDE_CONFIG_DIR=" + filepath.Join(state, "claude") + " MISE_ENV=consumers mise exec -- claude"
+	if code != 1 || !strings.Contains(errOut, want) || !strings.Contains(errOut, "/login") {
+		t.Errorf("exit %d, stderr %q; want 1, naming %q and /login", code, errOut, want)
+	}
+	if n := posts.Load(); n != 0 {
+		t.Errorf("the router got %d requests beyond GET, want 0", n)
+	}
+}

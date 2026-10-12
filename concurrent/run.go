@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 )
@@ -36,7 +37,8 @@ type ChatStream struct {
 	Workers int
 }
 
-// EmbedStream is one consumer's embedding traffic: Inputs embedded together, once per round.
+// EmbedStream is one consumer's embedding traffic: Inputs embedded together, once per round,
+// round after round until the chat streams finish.
 type EmbedStream struct {
 	// Name names the stream in request IDs and the report, such as "model-embed".
 	Name     string
@@ -47,8 +49,10 @@ type EmbedStream struct {
 
 // Config is one run.
 type Config struct {
-	// Rounds is how many requests each chat worker sends, and how many batches each embedding
-	// stream sends.
+	// Rounds is how many requests each chat worker sends, and the fewest batches each embedding
+	// stream sends: an embedding stream sends batch after batch until every chat request has
+	// returned, so it runs beside the chat streams for their whole run, and sends at least
+	// Rounds even when they finish first.
 	Rounds int
 	Chat   []ChatStream
 	Embed  []EmbedStream
@@ -160,7 +164,8 @@ func (r Report) Failures() []string {
 }
 
 // Run runs cfg: it embeds each embedding stream's inputs alone, then starts every stream at
-// once and checks each answer. Its error is for a run that couldn't start, such as a Config
+// once, keeps the embedding streams sending until the chat streams finish, and checks each
+// answer. Its error is for a run that couldn't start, such as a Config
 // without streams or a lone embedding that failed; a request that fails once the streams run
 // is a failure in the Report.
 func Run(ctx context.Context, cfg Config) (Report, error) {
@@ -194,43 +199,41 @@ func Run(ctx context.Context, cfg Config) (Report, error) {
 			}
 		}
 	}
-	var embeds []EmbedResult
-	for _, s := range cfg.Embed {
-		for r := range cfg.Rounds {
-			for i, in := range s.Inputs {
-				embeds = append(embeds, EmbedResult{
-					ID: fmt.Sprintf("%s/r%d/%d", s.Name, r, i), Stream: s.Name, Input: in, index: i,
-				})
-			}
-		}
-	}
 
 	start := time.Now()
-	var wg sync.WaitGroup
+	var chatWG, embedWG sync.WaitGroup
 	next := 0
 	for _, s := range cfg.Chat {
 		for range s.Workers {
 			mine := chats[next : next+cfg.Rounds]
 			next += cfg.Rounds
-			wg.Go(func() {
+			chatWG.Go(func() {
 				for i := range mine {
 					mine[i].chat(ctx, s.Chatter, start, timeout)
 				}
 			})
 		}
 	}
-	next = 0
+	// chatsDone closes once every chat request has returned, which ends the embedding streams'
+	// extra rounds.
+	chatsDone := make(chan struct{})
+	go func() { chatWG.Wait(); close(chatsDone) }()
+	streams := make([][]EmbedResult, len(cfg.Embed))
 	for i, s := range cfg.Embed {
-		mine := embeds[next : next+cfg.Rounds*len(s.Inputs)]
-		next += len(mine)
-		wg.Go(func() {
-			for r := range cfg.Rounds {
-				embedRound(ctx, s, refs[i], mine[r*len(s.Inputs):(r+1)*len(s.Inputs)], r, start, timeout)
+		embedWG.Go(func() {
+			for r := 0; r < cfg.Rounds || !closed(chatsDone); r++ {
+				out := make([]EmbedResult, len(s.Inputs))
+				for j, in := range s.Inputs {
+					out[j] = EmbedResult{ID: fmt.Sprintf("%s/r%d/%d", s.Name, r, j), Stream: s.Name, Input: in, index: j}
+				}
+				embedRound(ctx, s, refs[i], out, r, start, timeout)
+				streams[i] = append(streams[i], out...)
 			}
 		})
 	}
-	wg.Wait()
-	rep := Report{Chats: chats, Embeds: embeds, Elapsed: time.Since(start)}
+	<-chatsDone
+	embedWG.Wait()
+	rep := Report{Chats: chats, Embeds: slices.Concat(streams...), Elapsed: time.Since(start)}
 	if cfg.InjectSwap {
 		rep.Swapped = injectSwap(rep.Chats)
 	}
@@ -357,6 +360,16 @@ func embedRound(ctx context.Context, s EmbedStream, refs [][]float32, out []Embe
 		}
 		r.Cosine = Cosine(vecs[pos], refs[idx])
 		r.Closest = closest(vecs[pos], refs)
+	}
+}
+
+// closed reports whether ch is closed.
+func closed(ch <-chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
 	}
 }
 

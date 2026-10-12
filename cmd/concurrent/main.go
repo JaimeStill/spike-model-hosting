@@ -1,22 +1,31 @@
-// Command concurrent runs Pi and the model client against the router at once, and checks that
-// every answer reached its own request.
+// Command concurrent runs Pi, Claude Code and the model client against the router at once, and
+// checks that every answer reached its own request.
 //
 // Usage:
 //
-//	concurrent [-router url] [-profile path] [-rounds n] [-pi path] [-state dir] [-inject-swap]
+//	concurrent [-router url] [-profile path] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
 //
-// It runs three streams at once: Pi over OpenAI chat, the model client over chat, and the model
-// client over embeddings. The chat streams share the chat model's slots, from the profile, so
-// every slot carries a request; each chat worker sends -rounds requests, each with its own
-// nonce. The run passes when every answer carries its own nonce and no other, and every batched
-// embedding matches its input's lone embedding within the concurrent package's EmbedTolerance.
-// -inject-swap swaps two answers before the check, which must then fail and name both.
+// It runs four streams at once: Pi over OpenAI chat, Claude Code over Anthropic messages, the
+// model client over chat, and the model client over embeddings. The chat streams share the chat
+// model's slots, from the profile, so every slot carries a request; each chat worker sends
+// -rounds requests, each with its own nonce. The embedding stream sends batch after batch until
+// the last chat request returns. The run passes when every answer carries its own nonce and no
+// other, and every batched embedding matches its input's lone embedding within the concurrent
+// package's EmbedTolerance. -inject-swap swaps two answers before the check, which must then
+// fail and name both.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. Every model the run sends to must be loaded
-// already: the tool checks GET /models first and never loads one. Pi is -pi, or SPIKE_PI, or
-// else the Pi the consumers mise environment pins (MISE_ENV=consumers mise which pi). Pi's agent
-// directory, sessions and cache live under -state, or SPIKE_STATE_DIR, which defaults to the
-// repository's untracked .state/, never the user's ~/.pi.
+// already: the tool checks GET /models first and never loads one. Pi is -pi, or SPIKE_PI, and
+// Claude Code is -claude, or SPIKE_CLAUDE; each defaults to the one the consumers mise
+// environment pins (MISE_ENV=consumers mise which pi, or claude). Their state lives under
+// -state, or SPIKE_STATE_DIR, which defaults to the repository's untracked .state/: Pi's agent
+// directory, sessions and cache under pi/, never the user's ~/.pi, and Claude Code's
+// configuration directory at claude/, never the user's ~/.claude. Claude Code runs on the
+// architect's subscription login, made once in that directory:
+//
+//	CLAUDE_CONFIG_DIR=$PWD/.state/claude MISE_ENV=consumers mise exec -- claude
+//
+// then /login. Its model requests go to the router, every model alias mapped to the chat model.
 //
 // It exits 0 when the run passes, 1 when it fails or can't run, and 2 on a usage error.
 package main
@@ -39,6 +48,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/JaimeStill/spike-harness-driver/claude"
 	"github.com/JaimeStill/spike-harness-driver/harness"
 	"github.com/JaimeStill/spike-harness-driver/model"
 	"github.com/JaimeStill/spike-harness-driver/pi"
@@ -84,15 +94,15 @@ func main() {
 
 // usage is the tool's usage, printed on -h and after a usage error.
 const usage = `usage:
-  concurrent [-router url] [-profile path] [-rounds n] [-pi path] [-state dir] [-inject-swap]
+  concurrent [-router url] [-profile path] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
 `
 
 // options are the tool's flags, after the environment's fallbacks.
 type options struct {
-	router, profile, pi, state string
-	rounds                     int
-	timeout                    time.Duration
-	injectSwap                 bool
+	router, profile, pi, claude, state string
+	rounds                             int
+	timeout                            time.Duration
+	injectSwap                         bool
 }
 
 // run runs the tool with args, reading the environment through getenv, and returns its exit
@@ -135,7 +145,8 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs.StringVar(&o.profile, "profile", "profiles/strix-halo.toml", "the profile the router serves")
 	fs.IntVar(&o.rounds, "rounds", 3, "the requests each chat worker sends")
 	fs.StringVar(&o.pi, "pi", getenv("SPIKE_PI"), "the Pi executable (SPIKE_PI); empty asks mise for the pinned one")
-	fs.StringVar(&o.state, "state", cmp.Or(getenv("SPIKE_STATE_DIR"), ".state"), "Pi's untracked state directory (SPIKE_STATE_DIR)")
+	fs.StringVar(&o.claude, "claude", getenv("SPIKE_CLAUDE"), "the Claude Code executable (SPIKE_CLAUDE); empty asks mise for the pinned one")
+	fs.StringVar(&o.state, "state", cmp.Or(getenv("SPIKE_STATE_DIR"), ".state"), "the consumers' untracked state directory (SPIKE_STATE_DIR)")
 	fs.DurationVar(&o.timeout, "timeout", concurrent.DefaultRequestTimeout, "the bound on one request")
 	fs.BoolVar(&o.injectSwap, "inject-swap", false, "swap two answers before the check, which must then fail")
 	if err := fs.Parse(args); err != nil {
@@ -153,8 +164,8 @@ func parse(args []string, getenv func(string) string) (options, error) {
 		return o, fmt.Errorf("%w: -rounds must be at least 1", errUsage)
 	}
 	o.router = strings.TrimSuffix(o.router, "/")
-	// Pi runs in its own working directory and reads the paths the driver gives it from there,
-	// so the state directory is made absolute.
+	// Pi and Claude Code run in working directories of their own and read the paths their
+	// drivers give them from there, so the state directory is made absolute.
 	state, err := filepath.Abs(o.state)
 	if err != nil {
 		return o, err
@@ -181,11 +192,19 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 	if err != nil {
 		return concurrent.Report{}, err
 	}
-	piCmd, err := resolvePi(ctx, o.pi)
+	piCmd, err := resolveTool(ctx, o.pi, "pi", "-pi or SPIKE_PI")
 	if err != nil {
 		return concurrent.Report{}, err
 	}
 	piDriver, err := newPiDriver(o, piCmd)
+	if err != nil {
+		return concurrent.Report{}, err
+	}
+	claudeCmd, err := resolveTool(ctx, o.claude, "claude", "-claude or SPIKE_CLAUDE")
+	if err != nil {
+		return concurrent.Report{}, err
+	}
+	claudeDriver, err := newClaudeDriver(o, claudeCmd)
 	if err != nil {
 		return concurrent.Report{}, err
 	}
@@ -199,7 +218,7 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 		return concurrent.Report{}, err
 	}
 
-	workers := concurrent.SplitSlots(p.Slots, 2)
+	workers := concurrent.SplitSlots(p.Slots, 3)
 	cfg := concurrent.Config{
 		Rounds:         o.rounds,
 		RequestTimeout: o.timeout,
@@ -213,7 +232,15 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 					HarnessTools: []string{},
 				},
 			}},
-			{Name: "model-chat", Workers: workers[1], Chatter: concurrent.ModelChat{
+			{Name: "claude", Workers: workers[1], Chatter: concurrent.HarnessChat{
+				Driver: claudeDriver,
+				Options: harness.Options{
+					Provider: claude.Provider, Model: chatModel,
+					Dir:          filepath.Join(o.state, "claude-work"),
+					HarnessTools: []string{},
+				},
+			}},
+			{Name: "model-chat", Workers: workers[2], Chatter: concurrent.ModelChat{
 				Client: client, Model: chatModel, MaxTokens: maxTokens,
 			}},
 		},
@@ -221,8 +248,8 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 			{Name: "model-embed", Embedder: concurrent.ModelEmbed{Client: client, Model: embedModel}, Inputs: inputs},
 		},
 	}
-	if _, err := fmt.Fprintf(stdout, "router %s, build %s\nchat %s on %d slots: pi %d, model-chat %d workers, %d rounds\nembed %s: %d inputs, %d rounds\n\n",
-		o.router, build, chatModel, p.Slots, workers[0], workers[1], o.rounds, embedModel, len(inputs), o.rounds); err != nil {
+	if _, err := fmt.Fprintf(stdout, "router %s, build %s\nchat %s on %d slots: pi %d, claude %d, model-chat %d workers, %d rounds\nembed %s: %d inputs, batch after batch until the chats finish, at least %d rounds\n\n",
+		o.router, build, chatModel, p.Slots, workers[0], workers[1], workers[2], o.rounds, embedModel, len(inputs), o.rounds); err != nil {
 		return concurrent.Report{}, err
 	}
 	rep, err := concurrent.Run(ctx, cfg)
@@ -307,17 +334,18 @@ func getJSON(ctx context.Context, hc *http.Client, u string, out any) error {
 	return nil
 }
 
-// resolvePi returns the Pi executable: given, or else the one the consumers mise environment
-// pins, rather than whatever pi the user's PATH finds first.
-func resolvePi(ctx context.Context, given string) (string, error) {
+// resolveTool returns a consumer's executable: given, or else the one named name that the
+// consumers mise environment pins, rather than whatever the user's PATH finds first. override
+// names the flag and variable that set it.
+func resolveTool(ctx context.Context, given, name, override string) (string, error) {
 	if given != "" {
 		return given, nil
 	}
-	cmd := exec.CommandContext(ctx, "mise", "which", "pi")
+	cmd := exec.CommandContext(ctx, "mise", "which", name)
 	cmd.Env = append(os.Environ(), "MISE_ENV=consumers")
 	out, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("finding the pinned Pi (MISE_ENV=consumers mise which pi): %w; set -pi or SPIKE_PI", err)
+		return "", fmt.Errorf("finding the pinned %s (MISE_ENV=consumers mise which %s): %w; set %s", name, name, err, override)
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -345,6 +373,28 @@ func newPiDriver(o options, command string) (pi.Driver, error) {
 		// router's answer time.
 		CatalogWait: 30 * time.Second,
 	}, nil
+}
+
+// claudeLogin is the file Claude Code writes its subscription login to, in its configuration
+// directory, on Linux.
+const claudeLogin = ".credentials.json"
+
+// newClaudeDriver returns Claude Code's driver, its configuration directory under the state
+// directory, its model requests sent to the router. It fails, naming the command that signs in,
+// when that directory holds no login, rather than start a run in which every Claude Code request
+// fails.
+func newClaudeDriver(o options, command string) (claude.Driver, error) {
+	dir := filepath.Join(o.state, "claude")
+	for _, d := range []string{dir, filepath.Join(o.state, "claude-work")} {
+		if err := os.MkdirAll(d, 0o700); err != nil {
+			return claude.Driver{}, err
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, claudeLogin)); err != nil {
+		return claude.Driver{}, fmt.Errorf("claude code has no login in %s (%w): sign in once with "+
+			"`CLAUDE_CONFIG_DIR=%s MISE_ENV=consumers mise exec -- claude`, then /login", dir, err, dir)
+	}
+	return concurrent.ClaudeCode(command, dir, o.router, chatModel), nil
 }
 
 // write writes the report: one line per request, then the failures and the verdict.

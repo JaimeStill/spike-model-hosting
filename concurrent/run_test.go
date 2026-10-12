@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/JaimeStill/spike-model-hosting/concurrent"
 )
@@ -67,8 +68,37 @@ func TestRunPasses(t *testing.T) {
 			t.Errorf("%s answered %q, want its nonce %s", c.ID, c.Answer, c.Nonce)
 		}
 	}
-	if n := len(rep.Embeds); n != 12 {
-		t.Errorf("%d embedding results, want 3 rounds of 4", n)
+	if n := len(rep.Embeds); n < 12 || n%4 != 0 {
+		t.Errorf("%d embedding results, want at least 3 rounds of 4", n)
+	}
+}
+
+// TestEmbedRunsUntilChatsFinish shows an embedding stream keeps sending batches, each checked,
+// for as long as a chat request is in flight, beyond its Rounds, and stops once the chats
+// return.
+func TestEmbedRunsUntilChatsFinish(t *testing.T) {
+	const hold = 300 * time.Millisecond
+	cfg, _ := setup(t, &backend{reply: func(n string) string { time.Sleep(hold); return n }}, 1, 1, false)
+	cfg.Chat = cfg.Chat[1:2]
+	cfg.Chat[0].Workers = 1
+	rep, err := concurrent.Run(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rep.Passed() {
+		t.Fatalf("the run failed:\n%s", strings.Join(rep.Failures(), "\n"))
+	}
+	if n := len(rep.Embeds) / len(embedInputs); n < 2 {
+		t.Fatalf("the embedding stream sent %d batches while the chat took %s, want more than its one round", n, hold)
+	}
+	chat := rep.Chats[0]
+	late := chat.Start + chat.Duration/2
+	var last time.Duration
+	for _, e := range rep.Embeds {
+		last = max(last, e.Start)
+	}
+	if last < late {
+		t.Errorf("the last batch started at %s, before the chat's second half (from %s): the stream stopped early", last, late)
 	}
 }
 
@@ -184,6 +214,9 @@ func TestRunAnswerChecks(t *testing.T) {
 // naming both vectors, each as the other input's.
 func TestEmbedSwap(t *testing.T) {
 	cfg, _ := setup(t, &backend{}, 1, 1, true)
+	// Without chat streams the embedding stream sends its one round alone, so the fake's swap
+	// lands in one batch only.
+	cfg.Chat = nil
 	rep, err := concurrent.Run(t.Context(), cfg)
 	if err != nil {
 		t.Fatal(err)
