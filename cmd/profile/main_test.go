@@ -38,7 +38,9 @@ func run(t *testing.T, env []string, args ...string) (stdout, stderr string, cod
 	t.Helper()
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = root
-	cmd.Env = env
+	// A nil Env would inherit this process's environment, SPIKE_ROUTER_URL and the consumer
+	// variables with it; a non-nil slice holds the tool to exactly env.
+	cmd.Env = append([]string{}, env...)
 	var out, errOut bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errOut
 	err := cmd.Run()
