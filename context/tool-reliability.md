@@ -103,6 +103,8 @@ file in a scratch directory, and then answer with the code the file held. The `w
 |---|---|---|
 | Pi 1.1.0 (`llama.cpp` provider, OpenAI chat) | yes | `reasoning_content` on the assistant message beside `tool_calls` |
 | Claude Code 2.1.296 (Anthropic messages) | yes | `thinking` blocks, before `tool_use`, in the assistant message |
+| OpenCode 1.19.0 (`@ai-sdk/openai-compatible`, OpenAI chat), `interleaved` set | yes | `reasoning_content` on the assistant message beside `tool_calls` |
+| OpenCode 1.19.0, `interleaved` unset | yes | the same |
 
 - **Claude Code on the router.** Claude Code ran from its own configuration directory,
   `.state/claude`, on the architect's subscription login, with no API key or auth token. It
@@ -133,6 +135,74 @@ file in a scratch directory, and then answer with the code the file held. The `w
 - **Pi.** On the turn after its `read` call, Pi's assistant message carried `content`,
   `reasoning_content` and `tool_calls`, and the reasoning was gpt-oss's own (111 characters on
   that turn). The consumers line below expected this; now it has been seen on the wire.
+- **OpenCode.** OpenCode ran with gpt-oss-120b's `interleaved` set to
+  `{"field": "reasoning_content"}`, in an explicit configuration file (`OPENCODE_CONFIG`) that
+  OpenCode merges beneath the driver's own. On each turn after a `read` call, the assistant
+  message carried `content`, `reasoning_content` and `tool_calls`, and the reasoning was the text
+  the previous response had streamed as `reasoning_content` deltas, byte for byte. The same turn
+  with the setting left out sent the same field, matching its stream too. So OpenCode 1.19.0
+  sends reasoning back on llama.cpp's OpenAI chat with or without `interleaved`; the setting
+  changes nothing on the wire here. The earlier expectation that OpenCode doesn't, drawn from
+  its conform configuration lacking the setting, was wrong for this version. The same held for the
+  conform suite's vision turns on Gemma 4 26B-A4B, which the setting doesn't name.
+
+## pass^5 by consumer
+
+On llama.cpp b11572 (`b11572-efe3626b1`) with gpt-oss-120b (ggml-org `MXFP4`, Vulkan), all
+four set-A models loaded, each consumer ran from the laptop against the Framework's router on
+2026-10-12. `go run ./cmd/conform -k 5` runs clutch's conform suite (clutch at `9981a3e`, the
+`conform` package) five times per consumer, trial after trial, the consumers in turn within
+each trial. Each consumer's requests pass through a `wire.Recorder` of its own; a model request
+the router answers with an error, as a status or as an error event in a stream that began
+with 200, counts as invalid. The `passk` package builds the cells:
+
+- **Pi 1.1.0** on its `llama.cpp` provider, its agent directory under `.state/conform/pi`.
+  The driver's bridge sets `tool_choice: "required"` on every request that offers `respond`.
+- **Claude Code 2.1.296** over the router's Anthropic messages, from `.state/claude` on the
+  subscription login, every model alias mapped to gpt-oss-120b, as in the round-trip run.
+- **OpenCode 1.19.0** with gpt-oss-120b's `interleaved` set to `reasoning_content`. Its
+  `tool_choice` stays `auto`: forcing it is `gateway`'s.
+
+A capability is a task, and it passes at 5 only when all five trials pass. pass^5 is the
+share of the nine tasks that do; the bar is 0 invalid and pass^5 of at least 90%, which over
+nine tasks means 9 of 9 (8 of 9 is 88.9%). n/a counts as not passing. Two sets ran back to
+back. The second is the tool's own report. The first ran before the tool counted streamed
+errors, so its invalid counts were recounted from its saved recordings with the same rule:
+
+| Set | Consumer | exchange | cancel | resume | tool | skill | structured | vision | dropped-image | audio-tool | pass^5 | invalid | Bar |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Pi 1.1.0 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 9/9 (100%) | 0 | meets |
+| 1 | Claude Code 2.1.296 | 5/5 | 5/5 | 5/5 | 0/5 | 0/5 | 5/5 | 5/5 | n/a | 3/5 | 5/9 (55.6%) | 0 | fails |
+| 1 | OpenCode 1.19.0 | 5/5 | 5/5 | 5/5 | 4/5 | 3/5 | 5/5 | 5/5 | 5/5 | 2/5 | 6/9 (66.7%) | 17 | fails |
+| 2 | Pi 1.1.0 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 9/9 (100%) | 0 | meets |
+| 2 | Claude Code 2.1.296 | 5/5 | 5/5 | 5/5 | 1/5 | 0/5 | 5/5 | 5/5 | n/a | 3/5 | 5/9 (55.6%) | 8 | fails |
+| 2 | OpenCode 1.19.0 | 5/5 | 5/5 | 5/5 | 5/5 | 4/5 | 5/5 | 5/5 | 5/5 | 2/5 | 7/9 (77.8%) | 14 | fails |
+
+Each set took about 16 minutes (15m33s and 17m17s).
+
+- **Pi meets the bar.** Constrained to `required`, it passed all 90 of its capability runs
+  across the two sets with no invalid request, as on b11529 and b11565.
+- **Claude Code fails it.** Its `tool`, `skill` and `audio-tool` failures are the ones
+  OpenCode on `auto` shows: Claude Code sends no `tool_choice`, and gpt-oss answered in text
+  instead of calling the `respond` tool ("the exchange ended without a structured response"),
+  or, in `skill`, called `respond` with a motto it made up, without loading the skill
+  ("Keep the gear moving."). `dropped-image` is n/a on all five trials: Claude Code drops no
+  image, since every model it knows takes one, so it sends gpt-oss the image as it is. The
+  cell isn't runnable over the router without changing clutch's profile, so it counts against
+  the 9 of 9. The 8 invalid requests in set 2 were one `audio-tool` request in trial 4: its
+  stream ended in the parse error, and Claude Code resent the same request seven times over 40
+  seconds, each answered 500 at once.
+- **OpenCode fails it.** With reasoning round-tripped, `tool`, `skill` and `audio-tool` still
+  failed in about the proportion they did without it (11 of 30 runs failing on b11529 and b11565,
+  10 of 30 here). Every invalid request was the parse error in a stream that began with 200,
+  each after a tool result. OpenCode resends the same request with growing waits (about 4, 6,
+  10, 17 and 31 seconds), and the exchange passes when a resend gets through; two `audio-tool`
+  failures in set 2 were the resends running out. The parse 5xx reaches a client on `auto`
+  even with its reasoning sent back.
+- **Comparing with align's and profile's rates.** Those sets ran Pi 0.99.2 and OpenCode
+  1.18.34 under clutch at `37fa153`; these run Pi 1.1.0 and OpenCode 1.19.0, so a comparison
+  of Pi's rates crosses Pi's major version, 0.99 to 1.x, as well as a build (b11529 and b11565
+  to b11572). Pi held every cell on all three.
 
 ## Which task answers which layer
 
@@ -140,8 +210,8 @@ file in a scratch directory, and then answer with the code the file held. The `w
   the template, and the `profile` package renders both into llama.cpp's presets
   ([`model-cards.md`](model-cards.md)).
 - `consumers`: pass^k per model, engine, and consumer against 0 invalid and 90%, and each
-  consumer's reasoning round-trip on tool turns (Pi sends `reasoning_content`; OpenCode
-  doesn't).
+  consumer's reasoning round-trip on tool turns (Pi, Claude Code and OpenCode all send it
+  back, seen on the wire).
 - `gateway`: the bounded resample and fallback on a parse 5xx, per gateway.
 - `validate`: the convention per platform: whether each engine constrains `required`, named
   calls, and strict `json_schema`, and parses its models' native tool format.
