@@ -106,8 +106,21 @@ time unpinned, against 0.4 pinned; the warm requests don't show it.
 
 ## Cold load
 
-Pending: the architect's restarts. `go run ./cmd/coldload` times them from the laptop: started
-with every model loaded, it polls `/models` every 250 ms, takes the restart's start as the first
-poll that doesn't see every model loaded, and records when the router answers again and when
-each model is listed as loaded after it was gone. Two runs fill this section: after a warm
-restart, and after a restart with the page cache dropped.
+`go run ./cmd/coldload` timed both restarts from the laptop on 2026-10-12. It starts with every
+model loaded and polls `/models` every 250 ms. It takes the restart's start as the first poll
+that doesn't see every model loaded, so each time is late by up to one poll. A model counts as
+loaded only when it is listed as loaded after it was seen gone. The architect ran each restart
+on the Framework: `sudo systemctl restart llama-router` for warm, and the same after
+`sync && echo 3 | sudo tee /proc/sys/vm/drop_caches` for cold.
+
+| Restart | Router up | EmbeddingGemma 2 | gemma-4-E4B | 26B-A4B | gpt-oss-120b | All four |
+|---|---|---|---|---|---|---|
+| warm | 0.8 s | 2.5 s | 8.2 s | 11.7 s | 21.5 s | 21.5 s |
+| cold (page cache dropped) | 0.6 s | 2.3 s | 7.5 s | 11.5 s | 21.0 s | 21.0 s |
+
+Warm and cold are the same within a poll, because the page cache can't hold set A. The
+Framework has 128 GB of RAM, and set A's 96 GiB GTT pool takes most of it. After the cold run,
+`free -m` showed 25520 MiB of buffers and cache and 103610 MiB used. Set A's files are far
+larger than 25 GiB (gpt-oss-120b alone is about 60 GiB), on an ext4 NVMe drive. So even a
+"warm" restart reads most of set A from disk again. On this host class, a router restart costs
+about 21 s, set by gpt-oss-120b's read from NVMe, whatever the cache held before.
