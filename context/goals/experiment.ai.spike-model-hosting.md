@@ -7,7 +7,7 @@
 ## Tasks
 
 1. [x] align
-2. [ ] profile
+2. [x] profile
 3. [ ] consumers
 4. [ ] rocm
 5. [ ] engines-strix
@@ -17,89 +17,97 @@
 9. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
 10. [ ] validate
 
-## Task brief · align
+## Task brief · profile
 
 ```
-Problem       The spike's starting pool is settled (decisions 1–3), but nothing runs or
-              documents it. The Framework's router runs Arch's llama.cpp b10809, which predates
-              EmbeddingGemma 2, with Qwen models. personal-agents' tracked profile, tier
-              recipes, and Pi docs name Qwen. spike-harness-driver's defaults and tests name Qwen.
-              The "clutch driving Pi" artifact shows runs on those models. profile renders from
-              an aligned starting point, so align runs first.
-Behaviors     1. The Framework's router runs llama.cpp's upstream Vulkan x64 release: the newest
-                 b-number build at BUILD time, b11529 or newer, in a versioned directory. Arch's
-                 llama-cpp and ggml-vulkan packages and the pacman restart hook are gone. The
-                 build the server reports matches the one personal-agents' setup names.
-              2. personal-agents' tracked 96 GiB profile holds exactly four model sections, each
-                 with its recipe comment: gpt-oss-120b (ggml-org MXFP4, c 131072), Gemma 4
-                 26B-A4B (ggml-org Q4_0 with its mmproj, c 65536), gemma-4-E4B (ggml-org Q8_0
-                 with its mmproj, c 32768), and EmbeddingGemma 2 (ggml-org Q8_0, embeddings, no
-                 mmproj). Each runs 4 slots on a unified KV cache, and no Qwen section remains.
-              3. In personal-agents:
-                 - Every tier recipe names a model of non-Chinese origin.
-                 - Pi's setup and the host's preparation name gpt-oss-120b.
-                 - The setup doc, unit template, and hooks describe the upstream install.
-                 - The worked examples use set A.
-                 - The slot-persistence task targets a Pi session on gpt-oss-120b.
-                 - No committed file names the Framework's tailnet address.
-                 - Every cross-reference resolves to the file and section it cites.
-              4. Installed with outpost (preset install, service restart), the router passes these
-                 checks from the laptop over HTTP:
-                 - /health is ok, and /models lists the four.
-                 - gpt-oss-120b answers a chat and a /v1/messages tool call.
-                 - Gemma 4 26B-A4B describes an image.
-                 - gemma-4-E4B transcribes an audio clip.
-                 - EmbeddingGemma 2 returns 768-dimension embeddings.
-              5. With all four loaded and four concurrent requests per model, `outpost amd
-                 usage` shows at least 3 GiB of the 96 GiB pool free. If it shows less,
-                 26B-A4B's c drops to 32768 and the check runs again. The presets hold the final
-                 c values. The footprint doesn't grow with the slot count, which confirms
-                 --kv-unified for each model. personal-agents' usable-memory rule names this
-                 measured test as the binding one.
-              6. personal-agents and the spike document the same memory-budget table:
-                 - each model's weights, buffers, and KV at its c
-                 - the estimated and measured totals
-                 - the llama.cpp build measured
-                 - the Mistral Small 4 swap (gpt-oss-120b and 26B-A4B out)
-              7. spike-harness-driver's defaults are gpt-oss-120b ggml-org MXFP4 (the Pi and
-                 OpenCode harness model), Gemma 4 26B-A4B (vision), EmbeddingGemma 2 (embed),
-                 and gemma-4-E4B (audio). Its embed scenario uses EmbeddingGemma 2's query form
-                 and its document form. No live default, test, or setup document names a Qwen
-                 model; historical findings and fixtures stay. `mise run check` passes, and
-                 `clutch conform` runs against the router.
-              8. clutch, run on the Framework against the aligned router, completes the
-                 artifact's ten router scenarios. The artifact shows those runs with their model
-                 IDs and llama.cpp build; the Azure runs stay as they were.
-Test seams    The router's HTTP API, probed from the laptop (1, 4), with `outpost amd usage` on
-              the Framework (5). In spike-harness-driver, clutch's default-resolution tests
-              behind `mise run check` (7).
-Slices        1. Build (1): the upstream Vulkan build serves the current presets unchanged, so
-                 the build move lands separately from the model change. personal-agents'
-                 setup, unit template, and hook removal land here.
-              2. Set A served (2, 3, 4, 5): personal-agents' profile and docs, installed with
-                 outpost, probed, and measured; contexts adjusted if the margin falls short.
-              3. Memory-budget docs (6): the measured table in both repositories.
-              4. spike-harness-driver (7): defaults, tests, the embed prompt forms, and the setup
-                 doc.
-              5. Artifact (8): clutch and Pi at clutch's pins on the Framework; the ten router
-                 runs re-captured and republished.
-Out of scope  The profile schema and renderer; the consumer suite and measurements; Mistral
-              Small 4's promotion probes (consumers); the CUDA candidate list; the laptop's Pi
-              configuration; personal-agents' research history apart from the tailnet address;
-              outpost's code apart from what the build move needs; any roadmap entry apart from
-              slot-persistence.
-Door          two-way for the repositories (each reverts by PR). On the Framework, decision 8
-              accepts the change; the earlier configuration survives in personal-agents' git
-              history.
+Problem       Every later task renders its serving setup from a host-class profile, and none
+              exists. The Framework's router runs personal-agents' presets and a unit file
+              written from its docs, on llama.cpp b11529, which trails upstream (b11565 at
+              PLAN). The schema must carry each model's sampling and reasoning settings from
+              its card. The spike also needs a note on reading a model card. There is no
+              restore point. Evidence 1.
+Behaviors     1. A profile missing a required field fails validation and names the field.
+                 Required: host class, engine with backend and minimum build, bind mode,
+                 slots, KV mode, the memory-budget record, models. Each model records ID,
+                 publisher, origin, card URL, c, and its reason for c. Validation doesn't judge
+                 origin; STANDARDS.md's convention governs it at review.
+              2. A key the schema doesn't define fails validation and names the key, so host
+                 state has nowhere to go. The service user, HF_HOME, and models directory are
+                 inputs given at render time, and rendering fails without them.
+              3. Each generative model has typed fields for temperature, top-p, top-k, min-p
+                 and reasoning, each traced to its card URL. A value out of range fails
+                 validation. The embedding model has none. Keys that only llama.cpp has
+                 (pooling, b/ub, no-mmproj, embeddings) go in a raw per-model args map.
+              4. Rendering the Strix Halo profile yields presets with shared defaults and four
+                 sections: gpt-oss-120b, Gemma 4 26B-A4B, gemma-4-E4B, EmbeddingGemma 2. Their
+                 sections, keys and values equal a pinned copy of personal-agents' tracked
+                 96 GiB preset, apart from load-on-startup on each of the four. Each model's
+                 reasons render as a comment above its section.
+              5. Rendering yields the router's systemd unit:
+                 - it runs the engine through the build's `current` link, in router mode, with
+                   the rendered presets;
+                 - it binds to the tailnet IPv4 the host resolves when the unit starts;
+                 - it takes the render-time host values;
+                 - it starts after tailscaled and restarts on failure.
+              6. The profile tool lists each engine with its upstream repository and minimum
+                 build. The profile pins no llama.cpp build, and `mise run currency` reports
+                 no llama.cpp line.
+              7. Installed on the Framework from exact commands the architect runs, the
+                 rendered unit and presets serve set A. These checks run from the laptop over
+                 HTTP:
+                 - /health is ok;
+                 - after a restart, /models lists the four as loaded with no manual load;
+                 - gpt-oss-120b answers a chat and a /v1/messages tool call;
+                 - 26B-A4B describes an image, and E4B transcribes an audio clip;
+                 - EmbeddingGemma 2 returns 768-dimension embeddings;
+                 - /props build_info is at or above the profile's minimum build, and the
+                   probe reports it;
+                 - each model's default sampling in /props equals the profile's.
+              8. The Framework moves to the newest b-tag at BUILD time. The spike records its
+                 review of the release notes after b11529: chat parser and /v1/messages,
+                 Vulkan MoE, Gemma 4 input and embeddings, flags and preset keys, sampling
+                 defaults. Presets change only where the notes require it, and the checks in
+                 7 pass on that build.
+              9. On that build, with all four loaded and 4 requests in flight on each, at
+                 least 3 GiB of the 96 GiB pool is free. The spike's memory-budget table is
+                 re-measured and names the build it ran on.
+              10. `clutch conform --provider llama.cpp`, run 5 times on the Framework, has its
+                 per-cell rates in the spike's tool-reliability note, beside align's b11529
+                 rates, each set naming its build and where it ran. Any cell that falls is
+                 named.
+              11. A spike note explains how to read a model card and what each value means:
+                 temperature, top-p, top-k, min-p, reasoning effort, chat template, context
+                 length. It says why a model runs at its card's values, and lists the values
+                 set A takes from each card, with sources.
+              12. The spike's standards and README say: the profile and renderer carry no host
+                 name or address (the unit resolves its tailnet address at start; host-local
+                 values come at render time); llama.cpp is held to a minimum build, and every
+                 document and measurement names the build it ran on.
+Test seams    The profile package's load, validate and render API: golden renders, plus the
+              pinned preset copy as test data. The profile tool's engine listing. One
+              integration-tagged HTTP probe at SPIKE_ROUTER_URL (7, 8). Measured evidence on
+              the Framework (9, 10).
+Slices        1. Walking skeleton (1, 4 for one model): load, validate, render one section,
+                 golden test.
+              2. Strix Halo profile (2, 3, 4): set A, typed sampling, the closed schema,
+                 equality with the pinned copy.
+              3. Unit and engines (5, 6, 12): the rendered unit; the engine listing;
+                 currency without a llama.cpp pin scan; the standards and README lines.
+              4. Rendered setup live on the running b11529 (7): the architect installs it,
+                 and the probe passes. The render change lands apart from the build change.
+              5. Build move (8, 9, 10): release-note review, newest build installed, probe,
+                 footprint, conform rates, memory-budget table.
+              6. Model-card note (11), and the pending coordinator edits in the goal record.
+Out of scope  Changes to personal-agents, spike-harness-driver or outpost. An install command
+              (admin). The consumer suite and pass^k (consumers). ROCm, vLLM, SGLang,
+              llama-swap, gateways. Rendering a CUDA profile (the schema allows the class).
+              Computing a memory estimate. Mistral Small 4. Writing the architecture-layer
+              page itself.
+Door          two-way. The repository reverts by PR. On the Framework, b11529 stays in its
+              versioned directory and `current` points back to it. personal-agents' tracked
+              preset and documented unit restore the earlier setup through outpost. Decision 8
+              accepts that there is no restore point.
 ```
-
-Amendment (round 6): behavior 9 — the spike note context/tool-reliability.md holds the
-convention with sources; personal-agents' presets use each model's official embedded template
-and its card's sampling, with no patched template and no non-default reasoning effort; clutch
-sets tool_choice "required" on Pi requests that offer `respond`, and the skill fixture no longer
-contradicts it; `clutch conform --provider llama.cpp`, run 5 times, has its per-cell rates
-recorded in spike-harness-driver's findings. Behavior 8's bar is a clean capture of each of the
-ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice 5.
 
 ## Decisions
 
@@ -205,7 +213,74 @@ ten scenarios (a re-run is allowed and recorded). Slice 4b (9) runs before slice
   spike-harness-driver pins stay for conformance.
 - align (accepted): the coordinator edits land at align's closeout through a plan pull request,
   so `profile` starts next session.
+- profile (r1): the Framework moves to the newest b-tag at BUILD time (b11565 at PLAN); BUILD
+  reviews release notes for chat parser, Vulkan MoE, Gemma 4 input/embeddings, flags; rejected
+  holding b11529.
+- profile (r3): llama.cpp is held to a minimum build (b11452, EmbeddingGemma 2's floor), and
+  each measurement records /props build_info; rejected an exact b-number pin (never rendered,
+  stale within hours at ~10 builds a day). Supersedes setup's exact-pin and b-tag currency
+  decisions for llama.cpp.
+- profile (r3): origin is recorded per model and judged by STANDARDS.md's convention at review;
+  rejected a validator rule, which can only echo the declared origin.
+- profile (r3): the schema is closed (unknown keys fail) and host values are render-time
+  inputs; rejected a pattern scan for tailnet names and addresses.
+- profile (r1): rendered presets equal personal-agents' unified-96gb.ini by sections, keys and
+  values against a pinned test-data copy; rejected byte-identical text.
+- profile (r1/r2): bind resolves `$(tailscale ip -4)` at unit start; rejected a render-time
+  tailnet name (a host's own MagicDNS name may resolve to LAN addresses on that host, and no
+  host name is committed). Clients still use the MagicDNS name.
+- profile (r1): service user, HF_HOME, models dir are render-time inputs, not profile fields.
+- profile (r1): presets render load-on-startup for set A.
+- profile (r1): install by exact commands the architect runs; install verbs belong to admin.
+- profile (r1): memory budget recorded, not validated; rejected an estimate check.
+- profile (r1): typed sampling/reasoning fields + card URL, plus a raw llama.cpp args map.
+- profile (r1): text/template; BurntSushi/toml the only new dependency; rejected gopkg.in/ini.v1
+  and go-systemd's unit package.
+- profile (r2): re-verify after the bump: align's probes, fresh footprint, 5-run conform rates
+  in tool-reliability.md.
+- profile (r2): personal-agents stays as align left it; the workspace's home for hosting
+  configuration is ai-hosting (v1.ai.hosting) plus architecture-layer methods.
+- profile (r2): the model-card note is written in the spike in profile; a pending edit carries
+  it to intake.
+- profile: the `[defaults]` table is required, with `c`, `gpu_layers`, and
+  `checkpoint_min_step`.
+- profile: the presets always render `jinja` and `metrics` on; the profile has no field for them.
+- profile: `host_class`, `bind`, `kv`, and `engine.name` are closed sets, and validation refuses
+  any other value.
+- profile: each model declares its kind, generative or embedding; sampling is required on a
+  generative model and refused on an embedding model.
+- profile: `sampling.source` names the page the values come from, beside `card_url`, since
+  gpt-oss's sampling comes from its GitHub README, not its card.
+- profile: a non-empty `reasoning` renders as `chat-template-kwargs` `reasoning_effort`; set A
+  sets none.
+- profile: raw `args` refuse the keys the profile renders and a fixed list of keys the unit or
+  host owns (`host`, `port`, `models-*`, path-valued flags): a list of keys, not a scan of
+  values.
+- profile: Host.Validate refuses shell and systemd metacharacters in host values, and a relative
+  HF_HOME or models directory.
+- profile: the unit keeps `Requires=tailscaled.service`, and keeps `--no-models-autoload`
+  whether or not the presets set `load-on-startup`.
+- profile: `cmd/profile` takes host values from `-user`, `-hf-home`, and `-models-dir`, or else
+  from SPIKE_SERVICE_USER, SPIKE_HF_HOME, and SPIKE_MODELS_DIR.
+- profile: the probe never loads a model (`?autoload=false`) and checks the content of the chat,
+  image, and audio answers.
+- profile: clutch conform on b11565 ran the Framework's existing clutch build from 5afeac3, whose
+  code is 37fa153's, with OpenCode 1.18.34 installed with mise as the Framework's unprivileged account.
+- profile: EmbeddingGemma 2's `card_url` is Google's card; its ID stays the ggml-org GGUF
+  repository.
+- profile (accepted): the presets installed on the Framework equal the committed render;
+  tool-reliability.md records three untested levers for OpenCode (force the shape, send
+  reasoning back, retry the parse 5xx) for consumers and gateway.
 
 ## Pending edits
 
-(none)
+- coordinator · ai-hosting.md, "Where personal-agents' parts go": add "how to read a
+  model card (spike-model-hosting's model-card note)" to the methods proposed for the
+  architecture layer, and say that ai-hosting's per-model presets cite the card values that
+  method reads.
+- coordinator · roadmap, the spike's profile summary: replace "pinned exactly in the profile"
+  and "Currency compares the profile's pins against the newest `b<N>` tag" with a minimum
+  build (b11452), with each measurement naming the build it ran on.
+- coordinator · ai-hosting.md, "The existing setup: personal-agents", the Serving line: it
+  names release build b11529; the Framework's router now runs b11565 from the spike's rendered
+  presets and unit, which hold llama.cpp to a minimum build (b11452).

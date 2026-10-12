@@ -14,8 +14,12 @@ The architecture pages that apply, in the architecture repository:
 
 ## Profiles and hosts
 
-- A profile holds no host state: no tailnet name or address and no hostname. A host's name and
-  address are given at render time.
+- A profile holds no host state, and neither it nor its renderer carries a host's tailnet name,
+  tailnet address, or hostname. The rendered unit resolves the host's tailnet address when it
+  starts, and the host-local values (the service user, HF_HOME, and the models directory) are
+  given at render time.
+- llama.cpp is held to a minimum build, not pinned, and every document and measurement names the
+  build it ran on.
 - A model of Chinese origin is chosen only when no alternative serves, and its entry records why
   (`standards-lab/context/ai-strategy.md`, "Constraint: model origin").
 - Every document names the exact version of each engine, gateway, and model it describes, as

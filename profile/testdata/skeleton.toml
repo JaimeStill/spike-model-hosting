@@ -1,0 +1,45 @@
+# The walking skeleton: the Strix Halo profile with gpt-oss-120b alone.
+host_class = "strix-halo"
+bind = "tailnet"
+slots = 4
+kv = "unified"
+
+[engine]
+name = "llama.cpp"
+backend = "vulkan"
+min_build = "b11452"
+
+[defaults]
+c = 32768
+gpu_layers = 999
+checkpoint_min_step = 4096
+
+[memory_budget]
+pool_mib = 98304
+measured_mib = 94926
+build = "b11529"
+source = "context/memory-budget.md"
+
+[[models]]
+id = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+publisher = "OpenAI"
+origin = "United States"
+card_url = "https://huggingface.co/openai/gpt-oss-120b"
+kind = "generative"
+c = 131072
+c_reason = """
+The harness model. c = 131072 is its trained context_length, the ceiling: its KV cache costs
+36,864 bytes/token (18 of 36 layers hold a full-attention cache; the rest are 128-token sliding
+windows), 4.5GiB at this c, beside ~59GiB of MXFP4 weights.
+"""
+
+[models.sampling]
+source = "https://github.com/openai/gpt-oss"
+temperature = 1.0
+top_p = 1.0
+top_k = 0
+min_p = 0.0
+reason = """
+Sampling from openai/gpt-oss's README, "Recommended Sampling Parameters": temperature 1.0,
+top_p 1.0; top-k = 0 and min-p = 0 turn off the truncations the card doesn't name.
+"""

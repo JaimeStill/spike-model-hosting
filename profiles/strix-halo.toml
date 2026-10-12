@@ -1,0 +1,143 @@
+# The Strix Halo profile: set A, four models loaded side by side and sized together against the
+# 96GiB GTT pool of a ~90-96GB unified-memory host. Its settings are personal-agents' 96GiB
+# preset (profiles/unified-96gb.ini) and the recipes it copies (reference/model-tiers.md,
+# "~90-96GB (unified memory)"); each model's reasons say why it takes its values.
+#
+# Each model runs its official embedded chat template at its card's sampling, with no reasoning
+# effort set (the template's default). A shape a client must get, such as a mandatory tool call,
+# is the client's to constrain per request (tool_choice, response_format), not the profile's.
+host_class = "strix-halo"
+bind = "tailnet"
+slots = 4
+kv = "unified"
+
+# min_build is a floor, not a pin: a host runs any build at or above it, and each measurement
+# names the build it ran on (memory_budget.build, and /props build_info). b11452 is the first
+# build that runs EmbeddingGemma 2, the newest of set A's models, so it is the oldest build set A
+# can serve on.
+[engine]
+name = "llama.cpp"
+backend = "vulkan"
+min_build = "b11452"
+
+# c = 32768 is the default for a model without its own section, one pulled ad hoc; every set-A
+# model sets its own c. checkpoint_min_step = 4096, down from llama.cpp's 8192, makes the
+# 32-checkpoint budget's reach (32 x 4096 = 131072) match gpt-oss-120b's c exactly, while a
+# stable prefix shorter than 8192 tokens still gets a checkpoint past it.
+[defaults]
+c = 32768
+gpu_layers = 999
+checkpoint_min_step = 4096
+
+# The binding test: with all four loaded and four requests in flight on each, at least 3GiB of
+# the pool stays free.
+[memory_budget]
+pool_mib = 98304
+measured_mib = 94926
+build = "b11565"
+source = "context/memory-budget.md"
+
+[[models]]
+id = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+publisher = "OpenAI"
+origin = "United States"
+card_url = "https://huggingface.co/openai/gpt-oss-120b"
+kind = "generative"
+c = 131072
+c_reason = """
+The harness model. c = 131072 is its trained context_length, the ceiling: its KV cache costs
+36,864 bytes/token (18 of 36 layers hold a full-attention cache; the rest are 128-token sliding
+windows), 4.5GiB at this c, beside ~59GiB of MXFP4 weights.
+"""
+
+[models.sampling]
+source = "https://github.com/openai/gpt-oss"
+temperature = 1.0
+top_p = 1.0
+top_k = 0
+min_p = 0.0
+reason = """
+Sampling from openai/gpt-oss's README, "Recommended Sampling Parameters": temperature 1.0,
+top_p 1.0. This GGUF carries no general.sampling.* keys, so without these the server serves its
+own defaults (temp 0.8, top-k 40, top-p 0.95, min-p 0.05 on b11529). top-k = 0 and min-p = 0
+turn off the two truncations the card doesn't name.
+"""
+
+[[models]]
+id = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+publisher = "Google"
+origin = "United States"
+card_url = "https://huggingface.co/google/gemma-4-26B-A4B-it"
+kind = "generative"
+c = 32768
+c_reason = """
+The vision model; the router loads its Q8_0 mmproj alongside. 5 of its 30 layers hold a
+full-attention cache (20,480 bytes/token, 0.625GiB at this c); the rest are 1024-token sliding
+windows. The shared budget binds here, not its trained 262144: at c = 65536, all four loaded
+with four requests in flight on each left 2.61GiB of the pool free, under the 3GiB bar, so this
+c, the first to drop, is 32768.
+"""
+
+[models.sampling]
+source = "https://huggingface.co/google/gemma-4-26B-A4B-it"
+temperature = 1.0
+top_p = 0.95
+top_k = 64
+min_p = 0.0
+reason = """
+Sampling from the google/gemma-4-26B-A4B-it model card, "1. Sampling Parameters": temperature
+1.0, top_p 0.95, top_k 64. b11529 already applies the GGUF's general.sampling.* keys, which carry
+the same three values; the preset states them so the card, not the conversion, is the source,
+and sets min-p = 0 because the card names no min_p (llama.cpp's default is 0.05).
+"""
+
+[[models]]
+id = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+publisher = "Google"
+origin = "United States"
+card_url = "https://huggingface.co/google/gemma-4-E4B-it"
+kind = "generative"
+c = 32768
+c_reason = """
+The audio model; the router loads its Q8_0 mmproj alongside. 4 of its 42 layers hold their own
+full-attention cache (the last 18 reuse earlier layers' KV), 16,384 bytes/token, 0.5GiB at this
+c; c = 32768 is a quarter of its trained 131072.
+"""
+
+[models.sampling]
+source = "https://huggingface.co/google/gemma-4-E4B-it"
+temperature = 1.0
+top_p = 0.95
+top_k = 64
+min_p = 0.0
+reason = """
+Sampling from the google/gemma-4-E4B-it model card, "1. Sampling Parameters": temperature 1.0,
+top_p 0.95, top_k 64. b11529 already applies the GGUF's general.sampling.* keys, which carry the
+same three values; the preset states them so the card, not the conversion, is the source, and
+sets min-p = 0 because the card names no min_p (llama.cpp's default is 0.05).
+"""
+
+[[models]]
+id = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+publisher = "Google"
+origin = "United States"
+card_url = "https://huggingface.co/google/embeddinggemma-2"
+kind = "embedding"
+c = 8192
+c_reason = """
+Text embeddings only, 768-dimension output. c = 8192 is the context window its card states (the
+GGUF's context_length key reads 262144). No sampling: an embedding model doesn't sample.
+"""
+args_reason = """
+embeddings serves it as an embedding model. Mean pooling, per its model card and its GGUF's
+pooling_type. The repository also ships an mmproj (its image and audio encoders), which
+no-mmproj keeps out. b and ub match c, since an embedding input has to fit in one physical
+batch.
+"""
+
+[models.args]
+embeddings = true
+pooling = "mean"
+no-mmproj = true
+b = 8192
+ub = 8192

@@ -47,5 +47,5 @@ done
 '''
 
 [tasks.currency]
-description = "Report every requirement, Go version, tool, and profile pin behind its latest; writes nothing"
+description = "Report every requirement, Go version, and tool behind its latest; writes nothing"
 run = "scripts/currency.sh"
