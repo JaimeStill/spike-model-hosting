@@ -108,7 +108,7 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
 
 ## Progress
 
-slices 3/7 committed · standards — · spec — · editor —
+slices 4/7 committed · standards — · spec — · editor —
 
 ## Decisions
 
@@ -300,6 +300,13 @@ slices 3/7 committed · standards — · spec — · editor —
 - consumers: the run's prompt frames the nonce as a request ID to repeat, after gpt-oss-120b
   refused "reply with exactly this token"; the embedding tolerance is cosine 1e-3 (batching moved
   EmbeddingGemma 2 by at most 1.4e-4; distinct inputs sit below 0.67).
+- consumers: Claude Code 2.1.296 on the subscription login reaches the router with no API key or
+  token; it sends `thinking: {type: adaptive}` with `output_config.effort: high`, which b11572
+  accepts, and carries thinking blocks back after tool calls. The wire recorder strips
+  credentials before forwarding and redacts them in its record.
+- consumers: the four-stream run on b11572 (pi 2, claude 1, model-chat 1 slots, 3 rounds, embeddings
+  until the chats finish) passed 12/12 chats and 328 embeddings in 17.21s; the live tools run with
+  the session's inherited CLAUDE_* variables unset.
 
 ## Pending edits
 
