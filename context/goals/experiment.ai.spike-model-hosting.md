@@ -108,7 +108,7 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
 
 ## Progress
 
-slices 1/7 committed · standards — · spec — · editor —
+slices 2/7 committed · standards — · spec — · editor —
 
 ## Decisions
 
@@ -288,6 +288,11 @@ slices 1/7 committed · standards — · spec — · editor —
 - consumers (r3): a dedicated CLAUDE_CONFIG_DIR in untracked spike state, logged in once with the subscription.
 - consumers (r3): the GuideLLM grid is short 512/256 and agentic 8192/512 at concurrency 1 and 4 on three models, plus a shared-prefix run per model.
 - consumers (r3): "thinking intact" means thinking blocks stream back and return on tool turns. The exact form is observed at BUILD.
+- consumers: the laptop's consumer and instrument tools live in `mise.consumers.toml`, loaded
+  only with `MISE_ENV=consumers` and run through `mise exec`, and mise.toml excludes their shims,
+  so the architect's own `claude`, `pi`, and system Python still resolve in the repo root.
+- consumers: Python is held at 3.14.8, because GuideLLM needs torch, which ships no Python 3.15
+  wheels; currency keeps reporting the hold. OpenCode is pinned at 1.19.0, the latest.
 
 ## Pending edits
 
