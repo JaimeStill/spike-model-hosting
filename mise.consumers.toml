@@ -19,3 +19,10 @@ uv = "0.13.0"
 [tasks.gpt-oss-compat]
 description = "Run OpenAI's gpt-oss compatibility test (Chat Completions, -k 5) against SPIKE_ROUTER_URL"
 run = "scripts/gpt-oss-compat.sh"
+
+# The baseline's GuideLLM grid against SPIKE_ROUTER_URL, run from the laptop: three models, two
+# profiles, 1 and 4 streams, client figures beside the engine's. It reads the network, so `check`
+# never runs it.
+[tasks.baseline]
+description = "Run the GuideLLM baseline grid (client beside engine figures) against SPIKE_ROUTER_URL"
+run = "scripts/baseline.sh"
