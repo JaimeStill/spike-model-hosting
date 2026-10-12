@@ -18,6 +18,9 @@ The architecture pages that apply, in the architecture repository:
   tailnet address, or hostname. The rendered unit resolves the host's tailnet address when it
   starts, and the host-local values (the service user, HF_HOME, and the models directory) are
   given at render time.
+- Consumers and instruments run from the architect's laptop, pinned in `mise.consumers.toml`
+  and kept off the root PATH; nothing is served there. The Framework only hosts and serves
+  inference: the architect configures its hosting layer, and sessions observe it read-only.
 - llama.cpp is held to a minimum build, not pinned, and every document and measurement names the
   build it ran on.
 - A model of Chinese origin is chosen only when no alternative serves, and its entry records why

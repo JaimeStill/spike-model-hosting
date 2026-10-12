@@ -18,5 +18,7 @@ repository is managed with the marathon workflow; start from `context/README.md`
   `references.toml` and `references.local.toml`. The spike reads them and writes to none of them,
   except personal-agents and spike-harness-driver in its `align` task.
 - **Hosts:** the spike may change anything on the Framework desktop and the Dell NVIDIA
-  workstation. On the architect's laptop it runs only this repository, its check, read-only
-  probes, and HTTP: nothing is installed or served there.
+  workstation, which host and serve inference only. The consumers and instruments run from the
+  architect's laptop, where nothing is served.
+- **Consumers:** `mise.consumers.toml` pins the consumers and instruments, run as
+  `MISE_ENV=consumers mise exec -- <tool>`; their untracked state is under `.state/`.
