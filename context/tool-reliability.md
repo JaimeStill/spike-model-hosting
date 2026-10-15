@@ -245,6 +245,73 @@ case's tool with arguments the tool's schema accepts:
   axis label the prompt didn't ask for, a `limit` of 100 added or a `limit` of 10 left out.
   The suite counts them and, outside `--strict`, passes them.
 
+## The comparison row: pass^5 on b11669
+
+`main-model` judges each candidate main model against gpt-oss-120b on the same build and
+pins, so gpt-oss-120b's pass^5 ran again after the move to b11669. It ran as
+`go run ./cmd/conform -set a -k 5` with `SPIKE_ROUTER_URL=http://framework:8080`, from the
+laptop (host `terminal`) against the Framework's router, on 2026-10-15. The router reported
+`b11669-620d2225c` in `/props` `build_info`, with set A's four models loaded. The model was
+gpt-oss-120b (ggml-org `MXFP4`) and clutch was at `9981a3e`, as on b11572. The consumers ran at
+the consumers environment's pins. Pi 1.3.0 ran on its `llama.cpp` provider with `required` on
+`respond`. Claude Code 2.1.301 ran over `/v1/messages` from `.state/claude` on the
+subscription login. OpenCode 1.19.1 ran with `interleaved` set to `reasoning_content` and
+`tool_choice` left at `auto`. The run's `CLAUDE_*` variables were unset. One set ran, in
+16m20s, and no request met a transient router error, so no consumer's set was rerun:
+
+| Consumer | exchange | cancel | resume | tool | skill | structured | vision | dropped-image | audio-tool | pass^5 | invalid | Bar |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Pi 1.3.0 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 9/9 (100%) | 0 | meets |
+| Claude Code 2.1.301 | 5/5 | 5/5 | 5/5 | 0/5 | 0/5 | 5/5 | 5/5 | n/a | 5/5 | 6/9 (66.7%) | 0 | fails |
+| OpenCode 1.19.1 | 5/5 | 5/5 | 5/5 | 4/5 | 3/5 | 5/5 | 5/5 | 5/5 | 3/5 | 6/9 (66.7%) | 18 | fails |
+
+This row is the bar the candidates are judged against. For Claude Code, a candidate must meet
+or beat each cell's count, with no more than 0 invalid requests. Pi's bar stays 9/9 at 5/5
+with 0 invalid. OpenCode is measured, not judged.
+
+- **Pi.** It held every cell with no invalid request, as it has on every build since b11529.
+- **Claude Code's `tool` and `skill`.** Both are the text-for-a-call failure of
+  the b11572 rows. In `tool`, gpt-oss called `lookup_code` and then, on all five trials, answered
+  the code as JSON text (`{"code": "ZX-596F89"}`) instead of calling `respond`. That turn
+  streamed no thinking block, so after the tool result the model went straight to its final.
+  In `skill`, three trials called `respond` with a motto the model made up ("When it matters
+  most", "Unknown", "Stay ready, stay clutch") without loading the skill. One loaded the skill
+  and then asked in text what the motto was, and one asked without loading it. `dropped-image`
+  stays n/a: Claude Code sends the image as it is.
+- **Claude Code's `audio-tool` and invalid count.** `audio-tool` passed 5/5, up from 3/5 in
+  both b11572 sets. No parse error reached Claude Code. In b11572's set 2, one `audio-tool`
+  request had failed with the error and Claude Code resent it seven times, which made all 8
+  invalid requests. The only non-2xx responses it got here were its `HEAD /api/hello` probes
+  (404), which aren't model requests.
+- **OpenCode.** Every one of its 18 invalid requests was the parse error, HTTP 200 then
+  "does not match the expected peg-native format". Of the 18, 14 came
+  in `audio-tool` (3, 3, 3 and 5 in trials 1 to 4) and 4 in `skill` (1 in trial 3 and 3 in
+  trial 4). As on b11572, OpenCode resends with growing waits, and an exchange fails when the
+  resends run out or the model answers in text. The `tool`, `skill` and `audio-tool` cells failed
+  5 of 15 runs. On b11572 they failed 6 of 15 in set 1 and 4 of 15 in set 2, so this is
+  the same proportion.
+- **Against b11572.** Pi: 9/9 then and now. Claude Code: `tool` 0/5 against 0/5 and 1/5,
+  `skill` 0/5 against 0/5 and 0/5, `audio-tool` 5/5 against 3/5 and 3/5, so pass^5 rose from
+  5/9 to 6/9, and invalid was 0 against 0 and 8. OpenCode: `tool` 4/5 against 4/5 and 5/5,
+  `skill` 3/5 against 3/5 and 4/5, `audio-tool` 3/5 against 2/5 and 2/5, so pass^5 was 6/9
+  against 6/9 and 7/9, and invalid was 18 against 17 and 14. Only Claude Code's
+  `audio-tool` moved more than five runs move on chance, and its rise was the absent parse
+  error. It came on one set, so it may not hold.
+- **What changed and why.** Three things changed between the rows, and the record pins none of
+  them as a cause:
+  - *The build's template number formatting.* [#30362](https://github.com/ggml-org/llama.cpp/pull/30362)
+    ([`llama-cpp-builds.md`](llama-cpp-builds.md)) changes the prompt only where a tool's
+    schema or a call's arguments carry a float. clutch's conform tools carry none: the only
+    number they declare is `structured`'s integer `count`. The recordings keep responses
+    and headers, not request bodies, so they don't show whether a consumer's own tools carry a
+    float. The gpt-oss parser is unchanged at b11669, so the parse 5xx still reaches clients on
+    `auto`, and OpenCode's invalid count shows it does.
+  - *Pi, 1.1.0 to 1.3.0.* This is a minor bump. Pi's major move, 0.99 to 1.x, came
+    between align's rows and consumers'. Pi changed no cell.
+  - *Claude Code, 2.1.296 to 2.1.301.* Its `tool` and `skill` failures are the model's, the
+    same as on b11572. Its `audio-tool` gain can't be split between this bump, the build, and
+    chance.
+
 ## Which task answers which layer
 
 - `profile`: `profiles/strix-halo.toml` sets each model's card sampling and leaves reasoning to
