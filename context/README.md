@@ -99,7 +99,10 @@ of the admin tooling.
 
 - **Host-class profile:** the `profile` package loads, validates, and renders a TOML profile to
   llama.cpp's router presets and systemd unit, and the `profile` command (`cmd/profile`) lists,
-  validates, and renders the profiles in `profiles/`. `profiles/strix-halo.toml` serves set A on
+  validates, and renders the profiles in `profiles/`, and describes a set for the scripts. Each
+  set assigns the model each role's requests go to (`[sets.roles]`), and `Profile.Set` is the one
+  lookup the probe and every instrument share: each takes `-set` (or `SPIKE_SET`), the startup
+  set by default. `profiles/strix-halo.toml` serves set A on
   the Framework. Renderers for the other platforms' configuration are planned.
 - **Model cards:** how to read a model card, what each value means, and the values set A takes
   from each card, in [`model-cards.md`](model-cards.md).
@@ -111,7 +114,10 @@ of the admin tooling.
   the Claude Code login check, and state under the run's own directory.
 - **Router state:** the `router` package reads a router's models, their status, and its build
   over HTTP, so each tool refuses to start against an unloaded model and names the build it ran
-  on.
+  on, and loads and unloads a model.
+- **Set swap:** the `swap` package and the `swap` command (`cmd/swap`) swap the router from the
+  set it has loaded to another of the profile's sets over its API, unloads before loads, and
+  time each model's step and the total.
 - **Concurrent run:** the `concurrent` package and the `concurrent` command (`cmd/concurrent`)
   run Pi, Claude Code, and the model client's chat and embedding streams against the router at
   once. The run fails when an answer carries another request's nonce, or an embedding differs
