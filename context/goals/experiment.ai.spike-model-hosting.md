@@ -1,8 +1,8 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** idle
-- **Task:** none
-- **Branch:** none
+- **State:** building
+- **Task:** main-model
+- **Branch:** main-model
 
 ## Tasks
 
@@ -18,93 +18,132 @@
 10. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
 11. [ ] validate
 
-## Task brief · consumers
+## Task brief · main-model
 
 ```
-Problem       Evidence 4 and 5 need Pi, Claude Code and go-ai's model client to run against
-              the Framework's Vulkan router at once, with no response crossing between
-              requests. Evidence 5 needs that run measured, as the baseline every later
-              platform is measured against. Tool-call reliability has five-run rates for Pi
-              and OpenCode, but no pass^k against OpenAI's bar (0 invalid, >=90%). It has no
-              Claude Code row, because clutch runs Claude Code only on Anthropic, and no
-              reasoning round-trip check per consumer. The router runs b11565, and upstream
-              was at b11569 at PLAN. The architect moved every consumer and instrument to the
-              laptop: the Framework only hosts and serves inference. Mistral Small 4's probe
-              moved to `main-model`.
-Behaviors     1. The Framework moves to the newest b-tag at BUILD. The spike records its review
-                 of the release notes after b11565: chat parser, /v1/messages and thinking,
-                 Vulkan MoE, Gemma 4 input and embeddings, flags and preset keys, sampling
-                 defaults. Presets change only where the notes require it. The probe passes,
-                 and every measurement below names the build from /props build_info.
-              2. The repository pins Pi 1.1.0, Claude Code 2.1.296, Node, Python and GuideLLM
-                 0.8.1 exactly, and runs them from the laptop. `mise run currency` reports each
-                 one when it trails. The check stays hermetic, and the architect's global
-                 installs and ~/.claude stay untouched.
-              3. Claude Code runs from a dedicated config directory in the spike's untracked
-                 state, under the architect's subscription login. Its base URL is the router,
-                 and opus, sonnet and haiku all map to gpt-oss-120b. A turn with tool use
-                 succeeds over streamed /v1/messages, with thinking intact: thinking blocks
-                 stream back, and the next request after a tool call carries them back to the
-                 model, as seen on the wire. The run records the exact thinking request
-                 Claude Code sends.
-              4. One command runs four streams at once against the router: Pi over OpenAI chat,
-                 Claude Code over /v1/messages, and the model client over chat and over
-                 embeddings. It keeps every gpt-oss-120b slot busy, for a fixed number of
-                 rounds. Each chat request carries a unique nonce. The run passes only when
-                 every answer echoes its own nonce and no other. Each embedding must equal the
-                 same input's embedding requested alone, within a stated cosine tolerance. An
-                 injected swap makes the run fail and name the two requests.
-              5. For each consumer, the record says whether it sends reasoning back on a turn
-                 that called tools: Pi as reasoning_content, Claude Code as thinking blocks,
-                 OpenCode with `interleaved` set. Each answer is seen on the wire.
-              6. pass^5 per consumer on gpt-oss-120b (Vulkan): conform's 9 capabilities run 5
-                 times for Pi, Claude Code over the router, and OpenCode with `interleaved`.
-                 Each consumer is judged against 9 of 9 at 5 of 5, and every cell below is
-                 named. The engine row is OpenAI's gpt-oss compatibility-test (30 cases, -k 5,
-                 Chat Completions): invalid requests, pass@5 and pass^5. Every row names the
-                 consumer version, the build, and that it ran from the laptop. Comparisons with
-                 align's rates note that they cross a Pi major.
-              7. GuideLLM measures gpt-oss-120b, 26B-A4B and E4B. The profiles are short
-                 (512/256) and agentic (8192/512), each at concurrency 1 and 4. Each row gives
-                 client TTFT, ITL and throughput beside the engine's own figures (timings,
-                 /metrics), and names the network path (DERP relay, its RTT).
-              8. Prefix reuse per model: a shared 8192-token prefix with varied suffixes. The
-                 record shows cache_n and TTFT for the first request and for each later one.
-              9. Cold load, timed from the laptop by polling /models until all four models are
-                 loaded: after a warm restart, and after a restart with the page cache dropped.
-              10. Footprint is sampled during behavior 4's run, beside the memory budget's
-                 synthetic 4-in-flight figure, and at least 3 GiB of the pool stays free.
-              11. The spike's instructions, README hosts and boundaries, and standards say:
-                 consumers and instruments run from the laptop, and the Framework only hosts
-                 and serves. The README's main-model pool points the probe to `main-model`.
-Test seams    The concurrent-run command's API, tested hermetically against fake endpoints:
-              nonce routing, swap detection, the embedding comparison. Building the conform
-              cell for Claude Code over the router (its environment and model map). Integration
-              runs at SPIKE_ROUTER_URL (3, 4, 6). Measured evidence (7-10).
-Slices        1. Build move (1): the architect runs the root commands; release-note review;
-                 the probe passes on the new build.
-              2. Laptop toolchain (2): the exact pins, currency lines, the check unchanged.
-              3. At once, walking skeleton (4 for Pi and the model client): nonces, the
-                 embedding comparison, the fake-endpoint tests, one live run.
-              4. Claude Code over the router (3, 5, and Claude Code joins 4): the architect
-                 logs in once in the dedicated directory. The first request shows whether the
-                 subscription works with the base-URL override; if it doesn't, BUILD
-                 escalates.
-              5. Reliability (5, 6): the conform cells, 5 runs, the compatibility-test row.
-              6. Baseline (7-10): the GuideLLM grid, prefix reuse, cold load (the architect
-                 runs the root command that drops the page cache), footprint during the run.
-              7. Records and boundaries (11), and the pending coordinator edits.
-Out of scope  Mistral Small 4 (main-model). Forcing tool_choice for OpenCode or Claude Code,
-              and resample or fallback on a parse 5xx (gateway). Any change to
-              spike-harness-driver, personal-agents or clutch itself. ROCm, vLLM, SGLang,
-              llama-swap, gateways. Installing consumers on the Framework.
-Door          two-way. The repository reverts by PR. On the Framework, the earlier b-tag stays
-              in its versioned directory, and `current` points back to it. On the laptop,
-              removing the pinned tools and the dedicated Claude config directory reverses
-              everything; the subscription session ends at logout. One effect isn't undone by
-              revert: with the base URL overridden, Claude Code sends its subscription bearer
-              token to the router over the tailnet (plain HTTP inside WireGuard).
+Problem       gpt-oss-120b leads the Framework's main-model pool, and it can't see images.
+              Two vision MoEs may replace it and Gemma 4 26B-A4B: Mistral Small 4 (Mistral
+              AI, France, Apache 2.0) and Nemotron 3.5 Super VL (NVIDIA, US, OpenMDW-1.1).
+              The plan promotes one only if it matches gpt-oss-120b per consumer on Pi tool
+              calls and Claude Code over /v1/messages, and its vision works on Vulkan. The
+              profile describes one model set, all loaded at startup; the instruments are
+              fixed on gpt-oss-120b; the router runs b11572; four consumer pins trail. Vulkan
+              runs Mistral Small 4's expert down-projections on the CPU on every current
+              build (llama.cpp #30105, open). Sessions may only observe the Framework.
+Behaviors     1. The repository pins Pi 1.2.0, Claude Code 2.1.300, node 26.12.0 and uv
+                 0.13.1 exactly; Python stays held at 3.14.8 (no torch 3.15 wheels).
+                 Currency reports only that hold; the check stays hermetic.
+              2. The Framework moves to the newest b-tag at BUILD (b11669 at PLAN). The
+                 spike records its release-note review since b11572: chat output rewrite,
+                 template number formatting, embedding path, Vulkan KV on AMD, SWA reuse,
+                 the Ministral 3 and Qwen3-Coder handlers, Nemotron support, and whether
+                 Vulkan still refuses F32 MUL_MAT_ID. Presets change only where the notes
+                 require it. The probe passes on set A; every measurement names the build
+                 from /props build_info.
+              3. A profile holds named sets: each lists its models (at most 4) and its own
+                 memory budget; exactly one is the startup set. Each model declares roles
+                 (chat, vision, audio, embedding) and a licence beside its origin.
+                 Validation refuses no or several startup sets, a set over 4 models, a set
+                 naming an unlisted model, a set with no chat model, an unknown role, a
+                 missing licence. Only the startup set renders load-on-startup. Set A as
+                 the startup set renders the same sections, keys and values as before.
+              4. The Strix Halo profile holds three sets, each value traced to its card;
+                 every set includes gemma-4-E4B and EmbeddingGemma 2. Set A (startup)
+                 unchanged. Mistral Small 4: unsloth UD-Q4_K_XL, the projector the router
+                 picks, c 131072, reasoning high, temp 0.7, top_p 1.0, top_k 0, min_p 0.
+                 Nemotron 3.5 Super: ggml-org NVFP4, c 131072, the template's reasoning
+                 (thinking on), temp 1.0, top_p 0.95, top_k 0, min_p 0, 8 context
+                 checkpoints per slot.
+              5. One command swaps the router between named sets over its HTTP API:
+                 unloads the outgoing set's models the incoming set doesn't share, then
+                 loads the rest, timing each step, ending with exactly the incoming set
+                 loaded. It refuses an unknown set and never loads before the unloads
+                 finish. Models download through the router's own Hugging Face fetch.
+              6. The probe and every instrument take a set name (conform, concurrent,
+                 wire, GuideLLM grid, prefix, cold load, footprint), find their chat,
+                 vision, audio and embedding models from its roles, and refuse a set that
+                 isn't loaded. Set A is the default, so consumers' runs reproduce.
+              7. Each consumer runs each candidate with a reasoning setting its card
+                 accepts (e.g. Pi "high" for Mistral Small 4); Claude Code unchanged. The
+                 wire record shows, per candidate and consumer, the reasoning request sent
+                 and the reasoning returned on a tool turn.
+              8. gpt-oss-120b's pass^5 runs again on the new build and pins (Pi, Claude
+                 Code over the router; OpenCode measured beside): the comparison row,
+                 every cell named.
+              9. Each candidate is judged against that row: Pi 9/9 at 5/5, 0 invalid;
+                 Claude Code over streamed /v1/messages, every cell at or above
+                 gpt-oss-120b's same-build count, no more invalid, thinking streamed and
+                 returned on tool turns; vision cells 5/5 for Pi and Claude Code and the
+                 probe's image answer correct; engine generation ≥ 24 tok/s one stream,
+                 short profile. OpenCode measured, not judged. Every candidate gets the
+                 full bar and measurement set whatever its speed.
+              10. A candidate that misses only the speed floor re-runs once at
+                 the next-smaller native-kernel quant: Nemotron at ggml-org Q4_0; none for
+                 Mistral Small 4 (no quant avoids its CPU fallback). Nothing below ~4 bits;
+                 gpt-oss-120b stays MXFP4. Judged against the full bar; the record gives
+                 each candidate's estimated decode ceiling.
+              11. Each candidate set is measured: the concurrent run; footprint at 4 in
+                 flight with ≥ 3 GiB of the pool free, plus a system-RAM column for
+                 Nemotron; the GuideLLM grid (short and agentic, 1 and 4 streams); prefix
+                 reuse; the set's cold load. For Mistral Small 4 the record shows the CPU
+                 fallback from the router log. No engine row.
+              12. Verdict: a failing candidate is "not promoted on Vulkan, Strix Halo,
+                 b<N>", with its failing cells and re-probe triggers (#30105, #30260 for
+                 Mistral Small 4). If both pass, more Claude Code cells at 5/5 leads,
+                 single-stream speed breaks a tie. The winner's set becomes the startup
+                 set (router restarted on it; README names it the lead). With no pass,
+                 set A stays. The task closes either way.
+              13. The model-card note catalogs, for set A and both candidates: trained or
+                 maximum context, KV bytes per token, recurrent state per sequence, and the
+                 c the profile sets, with its reason.
+              14. The spike's instructions, README and standards say sessions may do on
+                 the Framework whatever needs no sudo (router HTTP incl. load, unload and
+                 downloads; user-level SSH reads; logs). Root stays the architect's, by
+                 exact commands.
+              15. Decisions records that the workstations stay on DGX OS 7. Pending edits
+                 add the roadmap's main-model entry and consumers summary, and a note for
+                 the next plan session with the workstation facts (aarch64 GB10, sm_121,
+                 273 GB/s unified; DGX OS 7.5, driver 580, CUDA 13.0; two units over
+                 200GbE; nvidia-smi can't report memory; dense candidates' decode ceiling;
+                 start dates and needs markers; admin's go-cli-sdk need met).
+Test seams    The profile package's load, validate and render (sets, roles, licence,
+              startup flag, per-set budgets). The swap command against a fake router. Set
+              resolution in the instruments against fake endpoints. Integration probes per
+              set at SPIKE_ROUTER_URL (2, 4, 5). Measured evidence (8-12).
+Slices        1. Upgrade (1): consumer pins; currency shows only the Python hold; check.
+              2. Build move (2): the architect's root commands; release-note review; probe
+                 on set A.
+              3. Sets and roles (3), set A only: validation tests; set A's render equals
+                 the installed presets.
+              4. Swap and set-aware instruments, walking skeleton (5, 6): swap set A out
+                 and back, timed; every instrument by set name against set A.
+              5. Candidates in the profile (4): both sets render and download; each loads
+                 by swap; probe and footprint pass per set.
+              6. Comparison row (8): gpt-oss-120b pass^5 on the new build.
+              7. Mistral Small 4 (7, 9, 11, 10's record): settings, bar, measurements,
+                 CPU fallback.
+              8. Nemotron 3.5 Super (7, 9, 11), and 10's Q4_0 re-run if it applies.
+              9. Verdict (12): tie-break; startup set changes (architect's restart) or
+                 stays set A.
+              10. Records (13, 14, 15): context catalog, boundary text, Decisions, pending
+                 edits and note.
+Out of scope  The workstations (cuda and engines-cuda re-planned after this task). ROCm,
+              vLLM, SGLang, llama-swap, gateways. Forcing tool_choice; parse-5xx resample
+              or fallback. Building llama.cpp from source or patching #30105. Speculative
+              decoding with an MTP head. Quants below ~4 bits; Mistral Small 4 NVFP4.
+              Dense models. A template-arguments field (Nemotron's medium effort);
+              separate sampling for vision. Any change to spike-harness-driver,
+              personal-agents or clutch.
+Door          two-way. The repository reverts by PR. On the Framework the earlier b-tag
+              stays in its versioned directory and `current` points back; the startup set
+              reverts by rendering set A's presets and restarting; the candidates (~150 GB
+              of 657 GB free) move to the retired directory beside the cache. Swaps and
+              loads undo on restart. On the laptop, removing the new pins restores the old.
 ```
+
+## Progress
+
+- PLAN approved 2026-10-15; BUILD starts at slice 1.
 
 ## Decisions
 
@@ -355,6 +394,65 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
 - consumers (accepted): the boundary wording names the Framework only; the workstation's is set
   when its tasks start.
 
+- main-model (r1): the candidate is judged per consumer against gpt-oss-120b, not OpenAI's
+  absolute bar: Pi 9/9 at 5/5 with 0 invalid; Claude Code over streamed /v1/messages each cell at
+  or above gpt-oss-120b's count, no more invalid, thinking streamed and returned on tool turns;
+  vision cells 5/5 and the probe's image answer correct; OpenCode measured, not judged.
+- main-model (r1): promotion also needs engine generation of at least 24 tok/s, one stream, short
+  profile (half of gpt-oss-120b's 48.8).
+- main-model (r1): probe now, not held for llama.cpp #30105; Vulkan runs Mistral Small 4's expert
+  down-projections on the CPU on every build through b11669, recorded from the router log.
+- main-model (r1): the Framework moves to the newest b-tag at BUILD start (b11669 at PLAN).
+- main-model (r1): Mistral Small 4 is unsloth UD-Q4_K_XL; rejected bartowski Q4_0 and unsloth
+  MXFP4_MOE; no ggml-org or mistralai GGUF exists.
+- main-model (r1): Mistral Small 4's preset is reasoning_effort high at temperature 0.7, top_p
+  1.0, top_k 0, min_p 0; its template accepts only none or high.
+- main-model (r1): candidates run at c 131072; rejected Mistral's 262144 (under the 3 GiB bar).
+- main-model (r1): one Strix Halo profile holds named sets swapped through the router's unload
+  and load; rejected a second profile with a restart.
+- main-model (r1): gpt-oss-120b's pass^5 runs again on the candidates' build and pins.
+- main-model (r1): every candidate gets the full measurement set (concurrent run, footprint,
+  GuideLLM grid, prefix, cold load) whatever its verdict; no engine row.
+- main-model (r1): a failing candidate closes as "not promoted on Vulkan, Strix Halo, b<N>"; a
+  re-probe is a new task.
+- main-model (r1): a passing candidate's set becomes the startup set in this task.
+- main-model (r1): Nemotron 3.5 Super VL 120B-A12B (NVIDIA, US) is probed beside Mistral Small 4.
+- main-model (r1): the workstation re-plan runs as a `plan` session after main-model ships and
+  before cuda.
+- main-model (architect): the Dell workstations are two Dell Pro Max FCM1253 (NVIDIA GB10,
+  ConnectX-7, 128 GB LPDDR5x unified, joined by QSFP) and stay on DGX OS 7; rejected
+  reinstalling them with Omarchy.
+- main-model (r2, architect): sessions may do on the Framework whatever needs no sudo (router
+  HTTP including load, unload and downloads, user-level SSH reads, logs); root stays the
+  architect's, by exact commands. Supersedes consumers (r1)'s read-only observation.
+- main-model (r2): a profile holds named sets (at most 4 models, one startup set, a budget per
+  set); rejected one candidate set whose model is replaced between probes.
+- main-model (r2): models declare typed roles (chat, vision, audio, embedding) and the tools take
+  a set name; rejected model IDs as flags.
+- main-model (r2): Nemotron is ggml-org NVFP4, the publisher's evaluated precision; rejected Q4_0
+  as the first run.
+- main-model (r2): Nemotron uses its template's reasoning default (thinking on); rejected a
+  template-arguments field for medium effort.
+- main-model (r2): Nemotron samples at the card's text values (1.0, 0.95, top_k 0, min_p 0) for
+  every request; rejected the vision values.
+- main-model (r2): Nemotron runs at c 131072; rejected 262144 and 1M for the comparison.
+- main-model (r2): Nemotron's context checkpoints are capped at 8 per slot (default 32 would need
+  ~20.6 GiB of system RAM outside the pool, est.); footprint gains a system-RAM column.
+- main-model (r2): when both pass, more Claude Code cells at 5/5 leads, and single-stream speed
+  breaks a tie.
+- main-model (r2): OpenMDW-1.1 is acceptable beside Apache 2.0; each model records its licence
+  beside its origin.
+- main-model (r2): each consumer runs each candidate with a reasoning setting its card accepts,
+  recorded on the wire; Claude Code is left unchanged.
+- main-model (r2, architect): model-cards.md catalogs each model's trained or maximum context and
+  its KV and recurrent-state cost, in case a larger context becomes a desired capability.
+- main-model (r3): a candidate missing only the speed floor re-runs once at the next-smaller
+  native-kernel quant (Nemotron at ggml-org Q4_0); Mistral Small 4 gets none, since no weight
+  type avoids its CPU fallback; nothing below ~4 bits; gpt-oss-120b stays MXFP4 (its smaller
+  GGUFs are at most 1.3% smaller).
+- main-model (r3): Nemotron gets the full bar and measurement set even if its estimated decode
+  ceiling (~18-20 tok/s) misses the floor, since the workstation re-plan needs its cells.
+
 ## Pending edits
 
 - coordinator · ai-hosting.md, "Where personal-agents' parts go": add "how to read a
@@ -377,3 +475,9 @@ Door          two-way. The repository reverts by PR. On the Framework, the earli
   instrument runs from the laptop, and the Framework only hosts and serves inference.
 - coordinator · ai-hosting.md, "Experiment: spike-model-hosting": the Hosts boundary change;
   point the main-model probe to `main-model`.
+- coordinator · roadmap: the spike's workstation tasks need re-planning (a `plan` session after
+  main-model): the hosts are two GB10 units (aarch64, sm_121, 128 GB unified at 273 GB/s, DGX OS
+  7.5 with driver 580 and CUDA 13.0, joined by 200GbE QSFP), not a discrete-VRAM box; evidence 7,
+  the cuda summary ("sized to its VRAM", nvidia-smi footprint), ai-hosting.md's "discrete VRAM"
+  passages, the "from 2026-10-14" dates and needs markers, two-unit serving scope, the dense
+  candidates (decode ceiling ~15 tok/s at 30B, ~4 at 128B), and admin's go-cli-sdk need (met).
