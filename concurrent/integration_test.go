@@ -15,9 +15,11 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/concurrent"
 	"github.com/JaimeStill/spike-model-hosting/consumers"
 	"github.com/JaimeStill/spike-model-hosting/profile"
+	"github.com/JaimeStill/spike-model-hosting/router"
 )
 
-// TestLiveRun runs the streams at once, on consumers.ChatModel and the profile's embedding kind, against the router SPIKE_ROUTER_URL names, keeping the
+// TestLiveRun runs the streams at once against the router SPIKE_ROUTER_URL names, on the chat and
+// embedding models of the profile's set SPIKE_SET names, or else of its startup set, keeping the
 // profile's slots busy for two rounds. Pi joins when SPIKE_PI names its executable (such as
 // `MISE_ENV=consumers mise which pi`); without it the model client's chat stream takes every
 // slot. The models must be loaded already: the model client's requests carry autoload=false,
@@ -31,12 +33,19 @@ func TestLiveRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var embedModel string
-	for _, m := range p.Models {
-		if m.Kind == profile.KindEmbedding {
-			embedModel = m.ID
-		}
+	set, err := p.Set(os.Getenv("SPIKE_SET"))
+	if err != nil {
+		t.Fatal(err)
 	}
+	if err := router.CheckLoaded(t.Context(), http.DefaultClient, base, set.Models...); err != nil {
+		t.Fatal(err)
+	}
+	build, err := router.Build(t.Context(), http.DefaultClient, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("build %s, set %s", build, set.Name)
+	chatModel, embedModel := set.Roles.Chat, set.Roles.Embedding
 	client, err := model.New(model.Config{
 		BaseURL: base + "/v1", Query: url.Values{"autoload": {"false"}}, HTTP: &http.Client{},
 	})
@@ -44,7 +53,7 @@ func TestLiveRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	modelChat := concurrent.ChatStream{
-		Name: "model-chat", Chatter: concurrent.ModelChat{Client: client, Model: consumers.ChatModel, MaxTokens: 4096},
+		Name: "model-chat", Chatter: concurrent.ModelChat{Client: client, Model: chatModel, MaxTokens: 4096},
 	}
 	var chats []concurrent.ChatStream
 	if command := os.Getenv("SPIKE_PI"); command != "" {
@@ -53,7 +62,7 @@ func TestLiveRun(t *testing.T) {
 		modelChat.Workers = workers[1]
 		chats = append(chats, concurrent.ChatStream{Name: "pi", Workers: workers[0], Chatter: concurrent.HarnessChat{
 			Driver:  consumers.Pi(command, base, state),
-			Options: harness.Options{Provider: consumers.Provider, Model: consumers.ChatModel, Dir: state, HarnessTools: []string{}},
+			Options: harness.Options{Provider: consumers.Provider, Model: chatModel, Dir: state, HarnessTools: []string{}},
 		}})
 	} else {
 		modelChat.Workers = p.Slots

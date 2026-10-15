@@ -3,22 +3,24 @@
 //
 // Usage:
 //
-//	conform [-router url] [-k n] [-consumers list] [-pi path] [-claude path] [-opencode path] [-state dir] [-timeout d]
+//	conform [-router url] [-profile path] [-set name] [-k n] [-consumers list] [-pi path] [-claude path] [-opencode path] [-state dir] [-timeout d]
 //
 // The consumers are Pi on its llama.cpp provider, Claude Code over the router's Anthropic
-// messages, and OpenCode with gpt-oss-120b's interleaved setting on; the passk package says how
-// each cell is built. Each trial runs every consumer's nine capabilities once, consumer after
+// messages, and OpenCode with the chat model's interleaved setting on; the passk package says
+// how each cell is built. Every model they run on is one of the profile's set -set names, or
+// SPIKE_SET, by its roles: the chat model for every session, the vision model for images, the
+// audio model for the audio tool. With neither, the set is the profile's startup set. Each trial runs every consumer's nine capabilities once, consumer after
 // consumer, and the run makes -k trials. Every consumer's model requests go through a recording
 // proxy (wire.Recorder) in front of the router, one per consumer and trial, whose recording is
 // saved under the state directory's conform/wire/; a model request the router answers with an
 // error counts as invalid.
 //
-// The output is a Markdown table, a row per consumer and a column per capability, each cell the
+// The output names the build and the set it ran on, then a Markdown table, a row per consumer and a column per capability, each cell the
 // trials that passed out of k, then each consumer's pass^k, invalid requests and verdict against
 // the bar, and the reason for every trial that didn't pass.
 //
-// The router comes from -router or SPIKE_ROUTER_URL. Every model the suite sends to must be
-// loaded already: the tool checks GET /models first and never loads one. Each consumer is its
+// The router comes from -router or SPIKE_ROUTER_URL. Every model of the set must be loaded
+// already: the tool checks GET /models first and never loads one. Each consumer is its
 // flag, or SPIKE_PI, SPIKE_CLAUDE or SPIKE_OPENCODE, defaulting to the one the consumers mise
 // environment pins. Their state lives under -state, or SPIKE_STATE_DIR, which defaults to the
 // repository's untracked .state/: the suite's under conform/, and Claude Code's configuration
@@ -53,6 +55,7 @@ import (
 
 	"github.com/JaimeStill/spike-model-hosting/consumers"
 	"github.com/JaimeStill/spike-model-hosting/passk"
+	"github.com/JaimeStill/spike-model-hosting/profile"
 	"github.com/JaimeStill/spike-model-hosting/router"
 	"github.com/JaimeStill/spike-model-hosting/wire"
 )
@@ -72,16 +75,16 @@ func main() {
 
 // usage is the tool's usage, printed on -h and after a usage error.
 const usage = `usage:
-  conform [-router url] [-k n] [-consumers list] [-pi path] [-claude path] [-opencode path] [-state dir] [-timeout d]
+  conform [-router url] [-profile path] [-set name] [-k n] [-consumers list] [-pi path] [-claude path] [-opencode path] [-state dir] [-timeout d]
 `
 
 // options are the tool's flags, after the environment's fallbacks.
 type options struct {
-	router, state string
-	k             int
-	consumers     []string
-	commands      map[string]string
-	timeout       time.Duration
+	router, profile, set, state string
+	k                           int
+	consumers                   []string
+	commands                    map[string]string
+	timeout                     time.Duration
 }
 
 // run runs the tool with args, reading the environment through getenv, and returns its exit
@@ -124,6 +127,8 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	o := options{commands: map[string]string{}}
 	var consumers string
 	fs.StringVar(&o.router, "router", getenv("SPIKE_ROUTER_URL"), "the router's root URL (SPIKE_ROUTER_URL)")
+	fs.StringVar(&o.profile, "profile", "profiles/strix-halo.toml", "the profile the router serves")
+	fs.StringVar(&o.set, "set", getenv("SPIKE_SET"), "the profile's set to run on (SPIKE_SET); empty is the startup set")
 	fs.IntVar(&o.k, "k", 5, "the trials each consumer runs")
 	fs.StringVar(&consumers, "consumers", strings.Join(consumerNames, ","), "the consumers to run, comma-separated")
 	cmds := map[string]*string{}
@@ -176,10 +181,18 @@ func parse(args []string, getenv func(string) string) (options, error) {
 
 // runAll checks the router, runs the trials, and writes the report.
 func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.Row, error) {
+	p, err := profile.Load(o.profile)
+	if err != nil {
+		return nil, err
+	}
+	set, err := p.Set(o.set)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", errUsage, err)
+	}
 	hc := &http.Client{}
 	// The consumers' providers can't carry autoload=false, so the run never starts against a model
 	// a request would load.
-	if err := router.CheckLoaded(ctx, hc, o.router, passk.Models...); err != nil {
+	if err := router.CheckLoaded(ctx, hc, o.router, set.Models...); err != nil {
 		return nil, err
 	}
 	build, err := router.Build(ctx, hc, o.router)
@@ -209,7 +222,7 @@ func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.R
 	for k := 1; k <= o.k; k++ {
 		for _, name := range o.consumers {
 			_, _ = fmt.Fprintf(stderr, "== trial %d/%d: %s\n", k, o.k, name)
-			t, err := trial(ctx, o, root, name, k, opts)
+			t, err := trial(ctx, o, set.Roles, root, name, k, opts)
 			if err != nil {
 				return nil, err
 			}
@@ -223,11 +236,11 @@ func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.R
 	for i, name := range o.consumers {
 		rows[i] = passk.Tally(name, trials[name])
 	}
-	return rows, write(stdout, rows, trials, o, build, time.Since(start))
+	return rows, write(stdout, rows, trials, o, build, set.Name, time.Since(start))
 }
 
 // trial runs one consumer's cell once, through a Recorder of its own, and saves the recording.
-func trial(ctx context.Context, o options, root, name string, k int, opts conform.Options) (passk.Trial, error) {
+func trial(ctx context.Context, o options, roles profile.SetRoles, root, name string, k int, opts conform.Options) (passk.Trial, error) {
 	target, err := url.Parse(o.router)
 	if err != nil {
 		return passk.Trial{}, err
@@ -247,6 +260,7 @@ func trial(ctx context.Context, o options, root, name string, k int, opts confor
 		Direct:       o.router,
 		State:        root,
 		ClaudeConfig: filepath.Join(o.state, "claude"),
+		Roles:        roles,
 	}
 	var cell conform.Cell
 	switch name {
@@ -278,10 +292,10 @@ func save(rec *wire.Recorder, path string) error {
 
 // write writes the report: the table, each consumer's verdict, and the reason for every trial
 // that didn't pass and every invalid request.
-func write(w io.Writer, rows []passk.Row, trials map[string][]passk.Trial, o options, build string, elapsed time.Duration) error {
+func write(w io.Writer, rows []passk.Row, trials map[string][]passk.Trial, o options, build, set string, elapsed time.Duration) error {
 	host, _ := os.Hostname()
 	var b strings.Builder
-	fmt.Fprintf(&b, "build %s, router %s, ran from %s, %d trials, %s\n\n", build, o.router, host, o.k, elapsed.Round(time.Second))
+	fmt.Fprintf(&b, "build %s, set %s, router %s, ran from %s, %d trials, %s\n\n", build, set, o.router, host, o.k, elapsed.Round(time.Second))
 	b.WriteString("| Consumer | Version |")
 	for _, c := range conform.Capabilities {
 		b.WriteString(" " + c.Name + " |")

@@ -1,7 +1,7 @@
 # profile testdata
 
-- `skeleton.toml`, `skeleton.ini`: a one-model profile, its one set the startup set, and its
-  golden presets render.
+- `skeleton.toml`, `skeleton.ini`: a two-model profile, the chat and embedding models every set
+  assigns, its one set the startup set, and its golden presets render.
 - `strix-halo.ini`: the golden presets render of `../../profiles/strix-halo.toml`.
 - `strix-halo.service`: the golden unit render of `../../profiles/strix-halo.toml`, with made-up
   host values (user `svc`, HF_HOME `/srv/hf`, models directory `/srv/models`), never a real

@@ -83,6 +83,41 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+// TestSet shows the tool describes a set for the scripts: its name, the model each role goes to,
+// and each of its models with its kind and card, the startup set when none is named, and refuses
+// a set the profile doesn't name.
+func TestSet(t *testing.T) {
+	want := `set a
+chat ggml-org/gpt-oss-120b-GGUF:MXFP4
+vision ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0
+audio ggml-org/gemma-4-E4B-it-GGUF:Q8_0
+embedding ggml-org/embeddinggemma-2-GGUF:Q8_0
+model ggml-org/gpt-oss-120b-GGUF:MXFP4 generative https://huggingface.co/openai/gpt-oss-120b
+model ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0 generative https://huggingface.co/google/gemma-4-26B-A4B-it
+model ggml-org/gemma-4-E4B-it-GGUF:Q8_0 generative https://huggingface.co/google/gemma-4-E4B-it
+model ggml-org/embeddinggemma-2-GGUF:Q8_0 embedding https://huggingface.co/google/embeddinggemma-2
+`
+	for name, tc := range map[string]struct {
+		env  []string
+		args []string
+	}{
+		"startup":     {nil, []string{"set", "strix-halo"}},
+		"flag":        {nil, []string{"set", "-set", "a", "strix-halo"}},
+		"environment": {[]string{"SPIKE_SET=a"}, []string{"set", "strix-halo"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			out, errOut, code := run(t, tc.env, tc.args...)
+			if code != 0 || out != want {
+				t.Errorf("exit %d (%s), output:\n%s\nwant:\n%s", code, errOut, out, want)
+			}
+		})
+	}
+	_, errOut, code := run(t, nil, "set", "-set", "z", "strix-halo")
+	if code != 2 || !strings.Contains(errOut, `no set "z"`) {
+		t.Errorf("set -set z: exit %d, %q; want 2, naming the unknown set", code, errOut)
+	}
+}
+
 // TestRenderPresets shows the tool writes the profile's presets.
 func TestRenderPresets(t *testing.T) {
 	out, errOut, code := run(t, nil, "render", "presets", "strix-halo")

@@ -109,6 +109,24 @@ func TestRefusesUnloadedModel(t *testing.T) {
 	}
 }
 
+// TestRefusesUnknownSet shows the tool refuses a set the profile doesn't name, naming the sets
+// it does, before it sends the router anything.
+func TestRefusesUnknownSet(t *testing.T) {
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		http.Error(w, "unexpected", http.StatusTeapot)
+	}))
+	defer srv.Close()
+	_, errOut, code := run(t, []string{"SPIKE_ROUTER_URL=" + srv.URL}, "-set", "z")
+	if code != 2 || !strings.Contains(errOut, `no set "z"`) || !strings.Contains(errOut, `["a"]`) {
+		t.Errorf("exit %d, stderr %q; want 2, naming the unknown set and set a", code, errOut)
+	}
+	if n := requests.Load(); n != 0 {
+		t.Errorf("the router got %d requests, want 0", n)
+	}
+}
+
 // TestRefusesClaudeWithoutLogin shows the tool sends no request when Claude Code's configuration
 // directory holds no login, and names the command that signs in there.
 func TestRefusesClaudeWithoutLogin(t *testing.T) {
@@ -123,6 +141,8 @@ func TestRefusesClaudeWithoutLogin(t *testing.T) {
 		default:
 			_, _ = w.Write([]byte(`{"data":[
 				{"id":"ggml-org/gpt-oss-120b-GGUF:MXFP4","status":{"value":"loaded"}},
+				{"id":"ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0","status":{"value":"loaded"}},
+				{"id":"ggml-org/gemma-4-E4B-it-GGUF:Q8_0","status":{"value":"loaded"}},
 				{"id":"ggml-org/embeddinggemma-2-GGUF:Q8_0","status":{"value":"loaded"}}]}`))
 		}
 	}))

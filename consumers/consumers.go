@@ -15,10 +15,6 @@ import (
 	"github.com/JaimeStill/spike-harness-driver/pi"
 )
 
-// ChatModel is the router ID of gpt-oss-120b, the harness model every consumer's sessions run
-// on. It must be loaded already: no consumer's provider can carry autoload=false.
-const ChatModel = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
-
 // Provider is Pi's built-in provider for a llama.cpp server, which speaks OpenAI chat to
 // LLAMA_BASE_URL; OpenCode's driver writes its OpenAI-compatible provider under the same name.
 const Provider = "llama.cpp"
@@ -106,18 +102,19 @@ func CheckClaudeLogin(configDir string) error {
 }
 
 // OpenCode returns OpenCode's driver: command on an OpenAI-compatible provider named Provider
-// at router/v1, its configuration, data and sessions under dir, with ChatModel's interleaved
-// setting naming reasoning_content (InterleavedConfig). The provider lists ChatModel as text
-// only, which the driver does on its own, and each of imageModels as taking images. The driver
-// writes its own configuration into OPENCODE_CONFIG_CONTENT; the interleaved setting goes in the
-// explicit configuration file OPENCODE_CONFIG names, dir/interleaved.json, which OpenCode merges
-// beneath it, model by model. It fails when dir or that file can't be written.
-func OpenCode(command, router, dir string, imageModels ...string) (opencode.Driver, error) {
+// at router/v1, its configuration, data and sessions under dir, with the chat model's
+// interleaved setting naming reasoning_content (InterleavedConfig). The provider lists each of
+// imageModels as taking images, and chat, unless it is one of them, as text only, which the
+// driver does on its own. The driver writes its own configuration into
+// OPENCODE_CONFIG_CONTENT; the interleaved setting goes in the explicit configuration file
+// OPENCODE_CONFIG names, dir/interleaved.json, which OpenCode merges beneath it, model by model.
+// It fails when dir or that file can't be written.
+func OpenCode(command, router, dir, chat string, imageModels ...string) (opencode.Driver, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return opencode.Driver{}, err
 	}
 	interleaved := filepath.Join(dir, "interleaved.json")
-	if err := os.WriteFile(interleaved, InterleavedConfig(), 0o600); err != nil {
+	if err := os.WriteFile(interleaved, InterleavedConfig(chat), 0o600); err != nil {
 		return opencode.Driver{}, err
 	}
 	models := map[string]opencode.Model{}
@@ -136,14 +133,15 @@ func OpenCode(command, router, dir string, imageModels ...string) (opencode.Driv
 	}, nil
 }
 
-// InterleavedConfig is the OpenCode configuration that sets ChatModel's interleaved field to
-// reasoning_content: OpenCode then moves each assistant message's reasoning into that field of
-// the request, which llama.cpp reads back into gpt-oss's prompt.
-func InterleavedConfig() []byte {
+// InterleavedConfig is the OpenCode configuration that sets the chat model's interleaved field
+// to reasoning_content: OpenCode then moves each assistant message's reasoning into that field
+// of the request, which llama.cpp reads back into the model's prompt through its chat template.
+// The model's entry is where any other per-model OpenCode setting would go.
+func InterleavedConfig(chat string) []byte {
 	b, _ := json.Marshal(map[string]any{
 		"$schema": "https://opencode.ai/config.json",
 		"provider": map[string]any{Provider: map[string]any{
-			"models": map[string]any{ChatModel: map[string]any{
+			"models": map[string]any{chat: map[string]any{
 				"interleaved": map[string]string{"field": "reasoning_content"},
 			}},
 		}},

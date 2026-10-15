@@ -21,22 +21,8 @@ import (
 	"github.com/JaimeStill/spike-harness-driver/model"
 
 	"github.com/JaimeStill/spike-model-hosting/consumers"
+	"github.com/JaimeStill/spike-model-hosting/profile"
 )
-
-// The router's models the cells run on beside consumers.ChatModel, every consumer's session
-// model, by router ID, which clutch's llama.cpp target names too. Each must be loaded already: a
-// run never loads one.
-const (
-	// VisionModel is the model a session sent an image runs on, Gemma 4 26B-A4B.
-	VisionModel = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
-	// AudioModel is the model the audio-tool capability's tool transcribes with, Gemma 4 E4B.
-	AudioModel = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
-	// EmbedModel is the embedding model the direct client names; no capability embeds.
-	EmbedModel = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
-)
-
-// Models lists the models a run needs loaded.
-var Models = []string{consumers.ChatModel, VisionModel, AudioModel, EmbedModel}
 
 // modelTimeout bounds one direct model request, from sending it to reading its response: it
 // catches a router that has hung, not one that is slow.
@@ -62,6 +48,12 @@ type Config struct {
 	// ClaudeConfig is Claude Code's configuration directory, which holds its subscription
 	// login. Only the Claude cell reads it.
 	ClaudeConfig string
+	// Roles are the models of the profile's set the run is on, by router ID, which clutch's
+	// llama.cpp target names too: every session runs on the chat model, a session sent an image
+	// on the vision model, the audio-tool capability's tool transcribes with the audio model,
+	// and the direct client names the embedding model, though no capability embeds. Each must
+	// be loaded already: a run never loads one.
+	Roles profile.SetRoles
 }
 
 // Pi returns Pi's cell: Pi on its llama.cpp provider pointed at cfg.Router (consumers.Pi), its
@@ -73,11 +65,15 @@ func Pi(cfg Config) conform.Cell {
 }
 
 // OpenCode returns OpenCode's cell: OpenCode on an OpenAI-compatible provider at cfg.Router/v1
-// with gpt-oss-120b's interleaved setting naming reasoning_content (consumers.OpenCode), its
-// state under cfg.State/opencode, VisionModel listed as taking images. It fails when the driver's
-// configuration file can't be written.
+// with the chat model's interleaved setting naming reasoning_content (consumers.OpenCode), its
+// state under cfg.State/opencode, the vision model, when the set has one, listed as taking
+// images. It fails when the driver's configuration file can't be written.
 func OpenCode(cfg Config) (conform.Cell, error) {
-	d, err := consumers.OpenCode(cfg.Command, cfg.Router, filepath.Join(cfg.State, "opencode"), VisionModel)
+	var images []string
+	if cfg.Roles.Vision != "" {
+		images = append(images, cfg.Roles.Vision)
+	}
+	d, err := consumers.OpenCode(cfg.Command, cfg.Router, filepath.Join(cfg.State, "opencode"), cfg.Roles.Chat, images...)
 	if err != nil {
 		return conform.Cell{}, err
 	}
@@ -97,16 +93,17 @@ func Claude(cfg Config) conform.Cell {
 
 // ClaudeDriver returns Claude Code's driver over the router: Claude Code from cfg.ClaudeConfig,
 // on its subscription login with no API key or token, its model requests sent to cfg.Router as
-// gpt-oss-120b (consumers.ClaudeCode), its skill plugin cached under cfg.State/claude.
+// the chat model (consumers.ClaudeCode), its skill plugin cached under cfg.State/claude.
 func ClaudeDriver(cfg Config) claude.Driver {
-	d := consumers.ClaudeCode(cfg.Command, cfg.ClaudeConfig, cfg.Router, consumers.ChatModel)
+	d := consumers.ClaudeCode(cfg.Command, cfg.ClaudeConfig, cfg.Router, cfg.Roles.Chat)
 	d.CacheDir = filepath.Join(cfg.State, "claude", "cache")
 	return d
 }
 
-// cell builds a consumer's cell on driver d. Every session opens on consumers.ChatModel, in a working
+// cell builds a consumer's cell on driver d. Every session opens on the chat model, in a working
 // directory of the consumer's own under cfg.State, with its exchanges kept under
-// cfg.State/exchanges; needs run after the check that the executable exists.
+// cfg.State/exchanges; needs run after the check that the executable exists. A set whose chat
+// model is its vision model too leaves no text-only model to drop an image.
 func cell(cfg Config, name, pinned string, profile scenario.Profile, provider string, d harness.Driver, needs []scenario.Need) conform.Cell {
 	work := filepath.Join(cfg.State, "work", name)
 	executable := scenario.Need{
@@ -124,18 +121,19 @@ func cell(cfg Config, name, pinned string, profile scenario.Profile, provider st
 			func() (harness.Driver, error) { return d, nil },
 			func() harness.Options { return SessionOptions(cfg, name, provider) },
 		),
-		VisionModel: VisionModel,
-		Models:      func() (scenario.Models, error) { return directModels(cfg.Direct) },
+		VisionModel:        cfg.Roles.Vision,
+		DefaultTakesImages: takesImages(cfg.Roles),
+		Models:             func() (scenario.Models, error) { return directModels(cfg.Direct, cfg.Roles) },
 	}
 }
 
 // SessionOptions are the options every session of the consumer name opens with: provider and
-// consumers.ChatModel, in the consumer's own working directory under cfg.State, its exchanges kept under
-// cfg.State/exchanges. They name no tools or skills, which the capabilities add.
+// the chat model, in the consumer's own working directory under cfg.State, its exchanges kept
+// under cfg.State/exchanges. They name no tools or skills, which the capabilities add.
 func SessionOptions(cfg Config, name, provider string) harness.Options {
 	return harness.Options{
 		Provider: provider,
-		Model:    consumers.ChatModel,
+		Model:    cfg.Roles.Chat,
 		Dir:      filepath.Join(cfg.State, "work", name),
 		Store:    filestore.New(filepath.Join(cfg.State, "exchanges")),
 	}
@@ -150,10 +148,13 @@ func privateDir(dir string) scenario.Need {
 	}
 }
 
+// takesImages reports whether the set's chat model is its vision model too.
+func takesImages(r profile.SetRoles) bool { return r.Vision != "" && r.Vision == r.Chat }
+
 // directModels returns the direct model client on the router at direct, as clutch's llama.cpp
-// target sets it up, with autoload=false on every request, so the router refuses rather than
-// loads a model that isn't loaded.
-func directModels(direct string) (scenario.Models, error) {
+// target sets it up, naming the set's role models, with autoload=false on every request, so the
+// router refuses rather than loads a model that isn't loaded.
+func directModels(direct string, r profile.SetRoles) (scenario.Models, error) {
 	if direct == "" {
 		return scenario.Models{}, errors.New("no router for the direct model client")
 	}
@@ -166,14 +167,15 @@ func directModels(direct string) (scenario.Models, error) {
 		return scenario.Models{}, err
 	}
 	return scenario.Models{
-		Target:        consumers.Provider,
-		Chat:          c,
-		Audio:         c,
-		VisionModel:   VisionModel,
-		EmbedModel:    EmbedModel,
-		AudioModel:    AudioModel,
-		AudioInChat:   true,
-		HarnessVision: VisionModel,
+		Target:             consumers.Provider,
+		Chat:               c,
+		Audio:              c,
+		VisionModel:        r.Vision,
+		EmbedModel:         r.Embedding,
+		AudioModel:         r.Audio,
+		AudioInChat:        true,
+		HarnessVision:      r.Vision,
+		DefaultTakesImages: takesImages(r),
 	}, nil
 }
 

@@ -124,6 +124,17 @@ func TestRefusesUnloadedModel(t *testing.T) {
 	}
 }
 
+// TestRefusesUnknownSet shows the tool refuses a set the profile doesn't name, before it reads
+// the router.
+func TestRefusesUnknownSet(t *testing.T) {
+	var others atomic.Int32
+	srv := router(t, "loaded", &others)
+	_, errOut, code := run(t, []string{"SPIKE_ROUTER_URL=" + srv.URL, "SPIKE_SET=z"})
+	if code != 2 || !strings.Contains(errOut, `no set "z"`) {
+		t.Errorf("exit %d, stderr %q; want 2, naming the unknown set", code, errOut)
+	}
+}
+
 // TestReportsSkippedConsumers shows a consumer whose cell can't run is reported, not dropped:
 // every trial skipped, every cell 0 of k, pass^k 0 and the bar failed, with the reason, and the
 // build named.
@@ -137,7 +148,7 @@ func TestReportsSkippedConsumers(t *testing.T) {
 		t.Errorf("exit %d, want 1: no consumer meets the bar\nstderr: %s", code, errOut)
 	}
 	for _, want := range []string{
-		"build b0-test",
+		"build b0-test, set a,",
 		"| pi | - | 0/2 skip | 0/2 skip |",
 		"| opencode | - |",
 		"pi: pass^2 0/9 (0.0%), 0 invalid: FAILS the bar",

@@ -1,17 +1,20 @@
-// Command coldload times a router restart from the outside: how long until every model it served
+// Command coldload times a router restart from the outside: how long until every model of a set
 // is loaded again.
 //
 // Usage:
 //
-//	coldload [-router url] [-interval d] [-timeout d]
+//	coldload [-router url] [-profile path] [-set name] [-interval d] [-timeout d]
 //
-// Start it before the restart. It polls GET /models every -interval and waits through the
+// The set is the profile's set -set names, or SPIKE_SET, or else its startup set, the one the
+// router loads when it starts. Start the tool before the restart, with the set's models loaded:
+// it refuses to start otherwise. It polls GET /models every -interval and waits through the
 // restart, as the coldload package's Watch describes, then prints when the router answered again
-// and when each model was listed as loaded again, each from the restart's start, and the last
-// poll that saw them all loaded before it, which bounds the start from below.
+// and when each of the set's models was listed as loaded again, each from the restart's start,
+// and the last poll that saw them all loaded before it, which bounds the start from below. It
+// names the set, and the build before the restart and after it.
 //
-// The router comes from -router or SPIKE_ROUTER_URL. The tool only reads /models; it never loads
-// a model or starts a restart.
+// The router comes from -router or SPIKE_ROUTER_URL. The tool only reads /models and /props; it
+// never loads a model or starts a restart.
 //
 // It exits 0 when every model loaded, 1 when -timeout passed first or the tool can't run, and 2
 // on a usage error.
@@ -23,12 +26,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
 
 	"github.com/JaimeStill/spike-model-hosting/coldload"
+	"github.com/JaimeStill/spike-model-hosting/profile"
+	"github.com/JaimeStill/spike-model-hosting/router"
 )
 
 // errUsage marks an error in how the tool was called, which exits 2 rather than 1.
@@ -43,13 +49,13 @@ func main() {
 
 // usage is the tool's usage, printed on -h and after a usage error.
 const usage = `usage:
-  coldload [-router url] [-interval d] [-timeout d]
+  coldload [-router url] [-profile path] [-set name] [-interval d] [-timeout d]
 `
 
 // options are the tool's flags, after the environment's fallbacks.
 type options struct {
-	router            string
-	interval, timeout time.Duration
+	router, profile, set string
+	interval, timeout    time.Duration
 }
 
 // run runs the tool with args, reading the environment through getenv, and returns its exit
@@ -57,7 +63,7 @@ type options struct {
 func run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
 	opts, err := parse(args, getenv)
 	if err == nil {
-		err = coldload.Watch(ctx, opts.router, opts.interval, opts.timeout, stdout)
+		err = watch(ctx, opts, stdout)
 		if err == nil {
 			return 0
 		}
@@ -78,13 +84,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 }
 
-// parse reads the flags in args, the router falling back to SPIKE_ROUTER_URL.
+// parse reads the flags in args, the router and the set falling back to SPIKE_ROUTER_URL and
+// SPIKE_SET.
 func parse(args []string, getenv func(string) string) (options, error) {
 	fs := flag.NewFlagSet("coldload", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 	var o options
 	fs.StringVar(&o.router, "router", getenv("SPIKE_ROUTER_URL"), "the router's root URL (SPIKE_ROUTER_URL)")
+	fs.StringVar(&o.profile, "profile", "profiles/strix-halo.toml", "the profile the router serves")
+	fs.StringVar(&o.set, "set", getenv("SPIKE_SET"), "the profile's set to time (SPIKE_SET); empty is the startup set")
 	fs.DurationVar(&o.interval, "interval", 250*time.Millisecond, "the time between polls")
 	fs.DurationVar(&o.timeout, "timeout", 30*time.Minute, "the bound on the whole wait, restart included")
 	if err := fs.Parse(args); err != nil {
@@ -105,4 +114,37 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	}
 	o.router = strings.TrimSuffix(o.router, "/")
 	return o, nil
+}
+
+// watch times one restart of the router, waiting for the set's models, and names the set and the
+// build before and after it.
+func watch(ctx context.Context, o options, stdout io.Writer) error {
+	p, err := profile.Load(o.profile)
+	if err != nil {
+		return err
+	}
+	set, err := p.Set(o.set)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errUsage, err)
+	}
+	hc := &http.Client{}
+	if err := router.CheckLoaded(ctx, hc, o.router, set.Models...); err != nil {
+		return err
+	}
+	build, err := router.Build(ctx, hc, o.router)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(stdout, "router %s, build %s, set %s\n", o.router, build, set.Name); err != nil {
+		return err
+	}
+	if err := coldload.Watch(ctx, o.router, set.Models, o.interval, o.timeout, stdout); err != nil {
+		return err
+	}
+	after, err := router.Build(ctx, hc, o.router)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(stdout, "build after the restart %s, set %s\n", after, set.Name)
+	return err
 }

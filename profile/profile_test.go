@@ -29,13 +29,14 @@ func TestLoadAcceptsComplete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load(%s): %v", skeleton, err)
 	}
-	if p.HostClass != profile.HostStrixHalo || len(p.Models) != 1 {
-		t.Errorf("Load(%s) = host class %q, %d models; want %q, 1", skeleton, p.HostClass, len(p.Models), profile.HostStrixHalo)
+	if p.HostClass != profile.HostStrixHalo || len(p.Models) != 2 {
+		t.Errorf("Load(%s) = host class %q, %d models; want %q, 2", skeleton, p.HostClass, len(p.Models), profile.HostStrixHalo)
 	}
 }
 
 // TestLoadNamesMissingField removes one required key at a time from the complete profile, and
-// expects the error to name it by its TOML key path.
+// expects the error to name it by its TOML key path. A model's key is removed from the first
+// model, models[0].
 func TestLoadNamesMissingField(t *testing.T) {
 	base, err := os.ReadFile(skeleton)
 	if err != nil {
@@ -58,6 +59,8 @@ func TestLoadNamesMissingField(t *testing.T) {
 		{"measured_mib =", "sets[0].memory_budget.measured_mib"},
 		{"build =", "sets[0].memory_budget.build"},
 		{"name = \"a\"", "sets[0].name"},
+		{"chat = ", "sets[0].roles.chat"},
+		{"embedding = ", "sets[0].roles.embedding"},
 		{"id =", "models[0].id"},
 		{"publisher =", "models[0].publisher"},
 		{"origin =", "models[0].origin"},
@@ -88,7 +91,8 @@ func TestLoadNamesMissingField(t *testing.T) {
 		assertFails(t, path, "sets[0].memory_budget.pool_mib: required", "sets[0].memory_budget.build: required")
 	})
 	t.Run("sets", func(t *testing.T) {
-		path := writeProfile(t, dropTable(t, dropTable(t, string(base), "[sets.memory_budget]"), "[[sets]]"))
+		text := dropTable(t, dropTable(t, string(base), "[sets.memory_budget]"), "[sets.roles]")
+		path := writeProfile(t, dropTable(t, text, "[[sets]]"))
 		assertFails(t, path, "sets: required", `models[0].id: "ggml-org/gpt-oss-120b-GGUF:MXFP4" is in no set`)
 	})
 	t.Run("models", func(t *testing.T) {
@@ -295,6 +299,41 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 			"models[0].roles: a generative model can't take the embedding role",
 		},
 		{
+			"a set assigning no chat model",
+			replace(t, text, "chat = \"ggml-org/gpt-oss-120b-GGUF:MXFP4\"\n", ""),
+			"sets[0].roles.chat: required",
+		},
+		{
+			"a set assigning no embedding model",
+			replace(t, text, "embedding = \"ggml-org/embeddinggemma-2-GGUF:Q8_0\"\n", ""),
+			"sets[0].roles.embedding: required",
+		},
+		{
+			"a role assigned to a model outside the set",
+			replace(t, text, "vision = \"ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0\"", "vision = \"example/unlisted-GGUF:Q4_0\""),
+			`sets[0].roles.vision: "example/unlisted-GGUF:Q4_0" is not one of the set's models`,
+		},
+		{
+			"a role assigned to a model that doesn't declare it",
+			replace(t, text, "audio = \"ggml-org/gemma-4-E4B-it-GGUF:Q8_0\"", "audio = \"ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0\""),
+			`sets[0].roles.audio: "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0" doesn't declare the audio role`,
+		},
+		{
+			"the chat role assigned to the embedding model",
+			replace(t, text, "chat = \"ggml-org/gpt-oss-120b-GGUF:MXFP4\"", "chat = \"ggml-org/embeddinggemma-2-GGUF:Q8_0\""),
+			`sets[0].roles.chat: "ggml-org/embeddinggemma-2-GGUF:Q8_0" doesn't declare the chat role`,
+		},
+		{
+			"an embedding model without its width",
+			replace(t, text, "dims = 768\n", ""),
+			"models[3].dims: required, a positive integer",
+		},
+		{
+			"a generative model with a width",
+			replace(t, text, "kind = \"generative\"\nc = 131072", "kind = \"generative\"\ndims = 768\nc = 131072"),
+			"models[0].dims: only an embedding model has an output width",
+		},
+		{
 			"an embedding model taking another role",
 			replace(t, text, `roles = ["embedding"]`, `roles = ["embedding", "chat"]`),
 			"models[3].roles: an embedding model takes the embedding role alone",
@@ -307,6 +346,66 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 	}
 }
 
+// TestLoadAcceptsOptionalRoles shows a set may leave vision and audio unassigned, and may
+// assign one model several roles, as a candidate set whose main model takes images does.
+func TestLoadAcceptsOptionalRoles(t *testing.T) {
+	base, err := os.ReadFile(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(base)
+	text = replace(t, text, "vision = \"ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0\"\n", "")
+	text = replace(t, text, "audio = \"ggml-org/gemma-4-E4B-it-GGUF:Q8_0\"\n", "")
+	p, err := profile.Load(writeProfile(t, text))
+	if err != nil {
+		t.Fatalf("Load(no vision or audio model): %v", err)
+	}
+	if got, want := p.Sets[0].Roles.Models(), []string{"ggml-org/gpt-oss-120b-GGUF:MXFP4", "ggml-org/embeddinggemma-2-GGUF:Q8_0"}; !slices.Equal(got, want) {
+		t.Errorf("Roles.Models() = %q; want %q", got, want)
+	}
+
+	const gemma = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+	text = replace(t, string(base), "chat = \"ggml-org/gpt-oss-120b-GGUF:MXFP4\"", fmt.Sprintf("chat = %q", gemma))
+	p, err = profile.Load(writeProfile(t, text))
+	if err != nil {
+		t.Fatalf("Load(chat and vision on one model): %v", err)
+	}
+	want := []string{gemma, "ggml-org/gemma-4-E4B-it-GGUF:Q8_0", "ggml-org/embeddinggemma-2-GGUF:Q8_0"}
+	if got := p.Sets[0].Roles.Models(); !slices.Equal(got, want) {
+		t.Errorf("Roles.Models() = %q; want %q, each model once", got, want)
+	}
+}
+
+// TestSet shows the lookup the instruments share: no name is the startup set, a name is that
+// set, and an unknown name fails naming the profile's sets.
+func TestSet(t *testing.T) {
+	base, err := os.ReadFile(skeleton)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const (
+		other     = "example/other-GGUF:Q4_0"
+		embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+	)
+	p, err := profile.Load(writeProfile(t, extraModel(t, string(base), other)+extraSet("b", false, other, embedding)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{"": "a", "a": "a", "b": "b"} {
+		s, err := p.Set(name)
+		if err != nil || s.Name != want {
+			t.Errorf("Set(%q) = %+v, %v; want set %s", name, s, err, want)
+		}
+	}
+	if s, _ := p.Set("b"); s.Roles.Chat != other || s.Roles.Embedding != embedding {
+		t.Errorf("Set(b).Roles = %+v; want chat %s, embedding %s", s.Roles, other, embedding)
+	}
+	_, err = p.Set("z")
+	if err == nil || !strings.Contains(err.Error(), `no set "z"`) || !strings.Contains(err.Error(), `["a" "b"]`) {
+		t.Errorf("Set(z) = %v; want an error naming z and the sets a and b", err)
+	}
+}
+
 // TestRenderPresetsStartupSetOnly adds a second set, not the startup set, and shows its model
 // renders without load-on-startup while the startup set's model keeps it.
 func TestRenderPresetsStartupSetOnly(t *testing.T) {
@@ -315,7 +414,7 @@ func TestRenderPresetsStartupSetOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	const other = "example/other-GGUF:Q4_0"
-	text := extraModel(t, string(base), other) + extraSet("b", false, other)
+	text := extraModel(t, string(base), other) + extraSet("b", false, other, "ggml-org/embeddinggemma-2-GGUF:Q8_0")
 	p, err := profile.Load(writeProfile(t, text))
 	if err != nil {
 		t.Fatal(err)
@@ -496,7 +595,8 @@ func TestLoadNamesInvalidArgs(t *testing.T) {
 }
 
 // extraSet returns a set's TOML, to append to a profile: its name, whether it is the startup
-// set, its models and a memory budget.
+// set, its models, its roles and a memory budget. Its first model takes the chat role and, when
+// it holds more than one, its last model the embedding role.
 func extraSet(name string, startup bool, models ...string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\n[[sets]]\nname = %q\nstartup = %t\nmodels = [", name, startup)
@@ -506,7 +606,14 @@ func extraSet(name string, startup bool, models ...string) string {
 		}
 		fmt.Fprintf(&b, "%q", id)
 	}
-	b.WriteString("]\n\n[sets.memory_budget]\npool_mib = 98304\nmeasured_mib = 70000\nbuild = \"b11565\"\n")
+	b.WriteString("]\n\n[sets.roles]\n")
+	if len(models) > 0 {
+		fmt.Fprintf(&b, "chat = %q\n", models[0])
+	}
+	if len(models) > 1 {
+		fmt.Fprintf(&b, "embedding = %q\n", models[len(models)-1])
+	}
+	b.WriteString("\n[sets.memory_budget]\npool_mib = 98304\nmeasured_mib = 70000\nbuild = \"b11565\"\n")
 	return b.String()
 }
 
@@ -627,20 +734,17 @@ func writeProfile(t *testing.T, text string) string {
 	return path
 }
 
-// dropLine removes the one line of text that starts with prefix.
+// dropLine removes the first line of text that starts with prefix.
 func dropLine(t *testing.T, text, prefix string) string {
 	t.Helper()
 	lines := strings.Split(text, "\n")
-	var kept []string
-	for _, l := range lines {
-		if !strings.HasPrefix(l, prefix) {
-			kept = append(kept, l)
+	for i, l := range lines {
+		if strings.HasPrefix(l, prefix) {
+			return strings.Join(slices.Delete(lines, i, i+1), "\n")
 		}
 	}
-	if len(kept) != len(lines)-1 {
-		t.Fatalf("dropLine(%q) removed %d lines; want 1", prefix, len(lines)-len(kept))
-	}
-	return strings.Join(kept, "\n")
+	t.Fatalf("dropLine: no line starts with %q", prefix)
+	return ""
 }
 
 // dropTable removes a table header and its keys, up to the next blank line.

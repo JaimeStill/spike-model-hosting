@@ -41,6 +41,15 @@ models = [
   "ggml-org/embeddinggemma-2-GGUF:Q8_0",
 ]
 
+# The model each role's requests go to, for the probe and every instrument. Roles alone can't
+# pick them: three of set A's models declare chat and two declare vision. gpt-oss-120b is the
+# harness model, Gemma 4 26B-A4B takes the images and gemma-4-E4B the audio.
+[sets.roles]
+chat = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+vision = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+audio = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+
 # The binding test: with all four loaded and four requests in flight on each, at least 3GiB of
 # the pool stays free.
 [sets.memory_budget]
@@ -155,6 +164,8 @@ licence = "Apache-2.0"
 roles = ["embedding"]
 card_url = "https://huggingface.co/google/embeddinggemma-2"
 kind = "embedding"
+# dims: the 768-dimension output its card states.
+dims = 768
 c = 8192
 c_reason = """
 Text embeddings only, 768-dimension output. c = 8192 is the context window its card states (the

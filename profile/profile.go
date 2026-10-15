@@ -71,8 +71,40 @@ type Set struct {
 	// Models are the set's models by router ID, each one the profile lists: at most
 	// MaxSetModels, at least one of them a chat model.
 	Models []string `toml:"models"`
+	// Roles names the model of the set's that each role's requests go to: the model the
+	// spike's probe and instruments send chat, images, audio and embeddings to.
+	Roles SetRoles `toml:"roles"`
 	// MemoryBudget is the set's measured footprint, all its models loaded.
 	MemoryBudget MemoryBudget `toml:"memory_budget"`
+}
+
+// SetRoles assigns each role to one of a set's models, by router ID. A model's Roles say what
+// it can serve; a set may hold several models that serve a role, and SetRoles picks the one the
+// probe and the instruments send it to. Chat and Embedding are required; Vision and Audio are
+// optional, empty for a set that serves neither. Each model named is in the set and declares
+// the role it fills. One model may fill several roles, such as a candidate main model that
+// takes chat and images both.
+type SetRoles struct {
+	// Chat is the model every consumer's session runs on, and the model client's chat model.
+	Chat string `toml:"chat"`
+	// Vision is the model a request with an image goes to.
+	Vision string `toml:"vision"`
+	// Audio is the model a request with audio goes to.
+	Audio string `toml:"audio"`
+	// Embedding is the model embeddings are requested from.
+	Embedding string `toml:"embedding"`
+}
+
+// Models returns the set's role models, chat, vision, audio and embedding in that order, each
+// once, the empty ones left out: the models a run on the set needs loaded.
+func (r SetRoles) Models() []string {
+	var ids []string
+	for _, id := range []string{r.Chat, r.Vision, r.Audio, r.Embedding} {
+		if id != "" && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	return ids
 }
 
 // StartupSet returns the profile's startup set, or nil when no set is marked startup. A valid
@@ -84,6 +116,26 @@ func (p *Profile) StartupSet() *Set {
 		}
 	}
 	return nil
+}
+
+// Set returns the set named name, or the startup set when name is empty: the one lookup the
+// probe and every instrument share, so a run on no named set runs on the set the router loads
+// when it starts. It fails naming the profile's sets when none is named name.
+func (p *Profile) Set(name string) (*Set, error) {
+	if name == "" {
+		if s := p.StartupSet(); s != nil {
+			return s, nil
+		}
+		return nil, errors.New("profile: no startup set")
+	}
+	names := make([]string, len(p.Sets))
+	for i := range p.Sets {
+		if p.Sets[i].Name == name {
+			return &p.Sets[i], nil
+		}
+		names[i] = p.Sets[i].Name
+	}
+	return nil, fmt.Errorf("profile: no set %q; the profile's sets are %q", name, names)
 }
 
 // Engine is the serving engine and the oldest build the profile runs on. MinBuild is a floor,
@@ -207,6 +259,10 @@ type Model struct {
 	CReason string `toml:"c_reason"`
 	// Kind is KindGenerative or KindEmbedding.
 	Kind string `toml:"kind"`
+	// Dims is an embedding model's output width, as its card states it: required for an
+	// embedding model and refused for a generative one. The probe checks an embedding's width
+	// against it.
+	Dims int `toml:"dims"`
 	// Sampling is a generative model's sampling, required for one and refused for an embedding
 	// model.
 	Sampling *Sampling `toml:"sampling"`
@@ -373,6 +429,12 @@ func (p *Profile) Validate() error {
 		case m.Kind == KindEmbedding && m.Sampling != nil:
 			errs = append(errs, fmt.Errorf("%s: an embedding model doesn't sample", field("sampling")))
 		}
+		switch {
+		case m.Kind == KindEmbedding:
+			positive(field("dims"), m.Dims)
+		case m.Dims != 0:
+			errs = append(errs, fmt.Errorf("%s: only an embedding model has an output width", field("dims")))
+		}
 		for _, key := range slices.Sorted(maps.Keys(m.Args)) {
 			name := field("args." + key)
 			if slices.Contains(reservedArgs, key) {
@@ -432,6 +494,7 @@ func (p *Profile) Validate() error {
 		if !chat {
 			errs = append(errs, fmt.Errorf("%s: required, at least one %s model", field("models"), RoleChat))
 		}
+		errs = append(errs, s.validateRoles(field("roles"), models)...)
 		budget := field("memory_budget")
 		positive(budget+".pool_mib", s.MemoryBudget.PoolMiB)
 		positive(budget+".measured_mib", s.MemoryBudget.MeasuredMiB)
@@ -452,6 +515,34 @@ func (p *Profile) Validate() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// validateRoles reports a required role the set leaves unassigned, and each role assigned to a
+// model the set doesn't hold or that doesn't declare the role, under the key path prefix.
+// models are the profile's models by router ID.
+func (s Set) validateRoles(prefix string, models map[string]Model) []error {
+	var errs []error
+	for _, r := range []struct {
+		role, id string
+		required bool
+	}{
+		{RoleChat, s.Roles.Chat, true},
+		{RoleVision, s.Roles.Vision, false},
+		{RoleAudio, s.Roles.Audio, false},
+		{RoleEmbedding, s.Roles.Embedding, true},
+	} {
+		field := prefix + "." + r.role
+		switch {
+		case r.id == "" && r.required:
+			errs = append(errs, fmt.Errorf("%s: required", field))
+		case r.id == "":
+		case !slices.Contains(s.Models, r.id):
+			errs = append(errs, fmt.Errorf("%s: %q is not one of the set's models", field, r.id))
+		case !slices.Contains(models[r.id].Roles, r.role):
+			errs = append(errs, fmt.Errorf("%s: %q doesn't declare the %s role", field, r.id, r.role))
+		}
+	}
+	return errs
 }
 
 // validateRoles reports each of the model's roles outside the closed set, a role listed twice,

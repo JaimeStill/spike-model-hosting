@@ -23,8 +23,7 @@ var bin string
 // root is the repository root, the working directory the tool runs in.
 const root = "../.."
 
-// The profile's generative models, which the fake router lists as loaded beside the embedding
-// model.
+// Set A's generative models, which the fake router lists as loaded beside the embedding model.
 var generative = []string{
 	"ggml-org/gpt-oss-120b-GGUF:MXFP4",
 	"ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0",
@@ -218,6 +217,9 @@ func TestMeasure(t *testing.T) {
 			if code != 0 {
 				t.Fatalf("exit %d, stderr %q", code, errOut)
 			}
+			if !strings.Contains(out, "build b1-test, set a\n") {
+				t.Errorf("the output doesn't name the build and the set:\n%s", out)
+			}
 			rows := rowRE.FindAllStringSubmatch(out, -1)
 			if len(rows) != 3*len(generative) {
 				t.Fatalf("%d rows, want %d:\n%s", len(rows), 3*len(generative), out)
@@ -261,5 +263,20 @@ func TestRefusesUnloaded(t *testing.T) {
 	}
 	if len(f.slots) != 0 {
 		t.Errorf("%d chat requests sent, want none", len(f.slots))
+	}
+}
+
+// TestRefusesUnknownSet shows the tool refuses a set the profile doesn't name, before it sends
+// the router anything.
+func TestRefusesUnknownSet(t *testing.T) {
+	f := &fakeRouter{}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	_, errOut, code := run(t, []string{"SPIKE_SET=z"}, "-router", srv.URL)
+	if code != 2 || !strings.Contains(errOut, `no set "z"`) {
+		t.Errorf("exit %d, stderr %q; want 2, naming the unknown set", code, errOut)
+	}
+	if len(f.slots) != 0 || len(f.prompts) != 0 {
+		t.Errorf("requests sent: %d chats, %d prompts; want none", len(f.slots), len(f.prompts))
 	}
 }

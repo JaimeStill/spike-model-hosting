@@ -3,19 +3,22 @@
 //
 // Usage:
 //
-//	concurrent [-router url] [-profile path] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
+//	concurrent [-router url] [-profile path] [-set name] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
 //
 // It runs four streams at once: Pi over OpenAI chat, Claude Code over Anthropic messages, the
-// model client over chat, and the model client over embeddings. The chat streams share the chat
-// model's slots, from the profile, so every slot carries a request; each chat worker sends
+// model client over chat, and the model client over embeddings. The chat streams send to the
+// chat model, and the embedding stream to the embedding model, of the profile's set -set names,
+// or SPIKE_SET, or else of its startup set. The chat streams share the chat model's slots, from
+// the profile, so every slot carries a request; each chat worker sends
 // -rounds requests, each with its own nonce. The embedding stream sends batch after batch until
 // the last chat request returns. The run passes when every answer carries its own nonce and no
 // other, and every batched embedding matches its input's lone embedding within the concurrent
 // package's EmbedTolerance. -inject-swap swaps two answers before the check, which must then
 // fail and name both.
 //
-// The router comes from -router or SPIKE_ROUTER_URL. Every model the run sends to must be loaded
-// already: the tool checks GET /models first and never loads one. Pi is -pi, or SPIKE_PI, and
+// The router comes from -router or SPIKE_ROUTER_URL. Every model of the set must be loaded
+// already: the tool checks GET /models first and never loads one. The report names the build and
+// the set it ran on. Pi is -pi, or SPIKE_PI, and
 // Claude Code is -claude, or SPIKE_CLAUDE; each defaults to the one the consumers mise
 // environment pins (MISE_ENV=consumers mise which pi, or claude). Their state lives under
 // -state, or SPIKE_STATE_DIR, which defaults to the repository's untracked .state/: Pi's agent
@@ -57,8 +60,8 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/router"
 )
 
-// maxTokens caps a model-client chat completion, reasoning included: room for gpt-oss-120b's
-// reasoning before a one-token answer.
+// maxTokens caps a model-client chat completion, reasoning included: room for a reasoning
+// model's reasoning, such as gpt-oss-120b's, before a one-token answer.
 const maxTokens = 4096
 
 // inputs are the embedding stream's texts: distinct sentences, so each input's vector is told
@@ -86,15 +89,15 @@ func main() {
 
 // usage is the tool's usage, printed on -h and after a usage error.
 const usage = `usage:
-  concurrent [-router url] [-profile path] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
+  concurrent [-router url] [-profile path] [-set name] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
 `
 
 // options are the tool's flags, after the environment's fallbacks.
 type options struct {
-	router, profile, pi, claude, state string
-	rounds                             int
-	timeout                            time.Duration
-	injectSwap                         bool
+	router, profile, set, pi, claude, state string
+	rounds                                  int
+	timeout                                 time.Duration
+	injectSwap                              bool
 }
 
 // run runs the tool with args, reading the environment through getenv, and returns its exit
@@ -135,6 +138,7 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	var o options
 	fs.StringVar(&o.router, "router", getenv("SPIKE_ROUTER_URL"), "the router's root URL (SPIKE_ROUTER_URL)")
 	fs.StringVar(&o.profile, "profile", "profiles/strix-halo.toml", "the profile the router serves")
+	fs.StringVar(&o.set, "set", getenv("SPIKE_SET"), "the profile's set to run on (SPIKE_SET); empty is the startup set")
 	fs.IntVar(&o.rounds, "rounds", 3, "the requests each chat worker sends")
 	fs.StringVar(&o.pi, "pi", getenv("SPIKE_PI"), "the Pi executable (SPIKE_PI); empty asks mise for the pinned one")
 	fs.StringVar(&o.claude, "claude", getenv("SPIKE_CLAUDE"), "the Claude Code executable (SPIKE_CLAUDE); empty asks mise for the pinned one")
@@ -172,14 +176,15 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 	if err != nil {
 		return concurrent.Report{}, err
 	}
-	embedModel, err := checkProfile(p)
+	set, err := p.Set(o.set)
 	if err != nil {
-		return concurrent.Report{}, err
+		return concurrent.Report{}, fmt.Errorf("%w: %v", errUsage, err)
 	}
+	chatModel, embedModel := set.Roles.Chat, set.Roles.Embedding
 	hc := &http.Client{}
 	// Pi's provider can't carry autoload=false, so the run never starts against a model a request
 	// would load.
-	if err := router.CheckLoaded(ctx, hc, o.router, consumers.ChatModel, embedModel); err != nil {
+	if err := router.CheckLoaded(ctx, hc, o.router, set.Models...); err != nil {
 		return concurrent.Report{}, err
 	}
 	build, err := router.Build(ctx, hc, o.router)
@@ -198,7 +203,7 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 	if err != nil {
 		return concurrent.Report{}, err
 	}
-	claudeDriver, err := newClaudeDriver(o, claudeCmd)
+	claudeDriver, err := newClaudeDriver(o, claudeCmd, chatModel)
 	if err != nil {
 		return concurrent.Report{}, err
 	}
@@ -221,7 +226,7 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 			{Name: "pi", Workers: workers[0], Chatter: concurrent.HarnessChat{
 				Driver: piDriver,
 				Options: harness.Options{
-					Provider: consumers.Provider, Model: consumers.ChatModel,
+					Provider: consumers.Provider, Model: chatModel,
 					Dir:          filepath.Join(o.state, "pi", "work"),
 					HarnessTools: []string{},
 				},
@@ -229,49 +234,28 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 			{Name: "claude", Workers: workers[1], Chatter: concurrent.HarnessChat{
 				Driver: claudeDriver,
 				Options: harness.Options{
-					Provider: claude.Provider, Model: consumers.ChatModel,
+					Provider: claude.Provider, Model: chatModel,
 					Dir:          filepath.Join(o.state, "claude-work"),
 					HarnessTools: []string{},
 				},
 			}},
 			{Name: "model-chat", Workers: workers[2], Chatter: concurrent.ModelChat{
-				Client: client, Model: consumers.ChatModel, MaxTokens: maxTokens,
+				Client: client, Model: chatModel, MaxTokens: maxTokens,
 			}},
 		},
 		Embed: []concurrent.EmbedStream{
 			{Name: "model-embed", Embedder: concurrent.ModelEmbed{Client: client, Model: embedModel}, Inputs: inputs},
 		},
 	}
-	if _, err := fmt.Fprintf(stdout, "router %s, build %s\nchat %s on %d slots: pi %d, claude %d, model-chat %d workers, %d rounds\nembed %s: %d inputs, batch after batch until the chats finish, at least %d rounds\n\n",
-		o.router, build, consumers.ChatModel, p.Slots, workers[0], workers[1], workers[2], o.rounds, embedModel, len(inputs), o.rounds); err != nil {
+	if _, err := fmt.Fprintf(stdout, "router %s, build %s, set %s\nchat %s on %d slots: pi %d, claude %d, model-chat %d workers, %d rounds\nembed %s: %d inputs, batch after batch until the chats finish, at least %d rounds\n\n",
+		o.router, build, set.Name, chatModel, p.Slots, workers[0], workers[1], workers[2], o.rounds, embedModel, len(inputs), o.rounds); err != nil {
 		return concurrent.Report{}, err
 	}
 	rep, err := concurrent.Run(ctx, cfg)
 	if err != nil {
 		return rep, err
 	}
-	return rep, write(stdout, rep, build)
-}
-
-// checkProfile checks the profile lists the chat model, consumers.ChatModel, and returns its
-// embedding model. The profile types no role, so the tool names the chat model, and fails if the
-// profile doesn't list it.
-func checkProfile(p *profile.Profile) (string, error) {
-	var embed string
-	listed := false
-	for _, m := range p.Models {
-		listed = listed || m.ID == consumers.ChatModel
-		if m.Kind == profile.KindEmbedding {
-			embed = m.ID
-		}
-	}
-	switch {
-	case !listed:
-		return "", fmt.Errorf("the profile doesn't list %s, which the chat streams send to", consumers.ChatModel)
-	case embed == "":
-		return "", errors.New("the profile lists no embedding model")
-	}
-	return embed, nil
+	return rep, write(stdout, rep, build, set.Name)
 }
 
 // newPiDriver returns Pi's driver, its agent directory, sessions and cache under the state
@@ -289,10 +273,10 @@ func newPiDriver(o options, command string) (pi.Driver, error) {
 }
 
 // newClaudeDriver returns Claude Code's driver, its configuration directory under the state
-// directory, its model requests sent to the router as the chat model (consumers.ClaudeCode). It
+// directory, its model requests sent to the router as chatModel (consumers.ClaudeCode). It
 // fails, naming the command that signs in, when that directory holds no login
 // (consumers.CheckClaudeLogin), rather than start a run in which every Claude Code request fails.
-func newClaudeDriver(o options, command string) (claude.Driver, error) {
+func newClaudeDriver(o options, command, chatModel string) (claude.Driver, error) {
 	dir := filepath.Join(o.state, "claude")
 	for _, d := range []string{dir, filepath.Join(o.state, "claude-work")} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
@@ -302,11 +286,12 @@ func newClaudeDriver(o options, command string) (claude.Driver, error) {
 	if err := consumers.CheckClaudeLogin(dir); err != nil {
 		return claude.Driver{}, fmt.Errorf("claude code has no login in %s: %w", dir, err)
 	}
-	return consumers.ClaudeCode(command, dir, o.router, consumers.ChatModel), nil
+	return consumers.ClaudeCode(command, dir, o.router, chatModel), nil
 }
 
-// write writes the report: one line per request, then the failures and the verdict.
-func write(w io.Writer, rep concurrent.Report, build string) error {
+// write writes the report: one line per request, then the failures and the verdict, with the
+// build and the set it ran on.
+func write(w io.Writer, rep concurrent.Report, build, set string) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(tw, "REQUEST\tSTART\tTOOK\tRESULT\tDETAIL")
 	for _, c := range rep.Chats {
@@ -339,8 +324,8 @@ func write(w io.Writer, rep concurrent.Report, build string) error {
 	if !rep.Passed() {
 		result = "FAIL"
 	}
-	_, err := fmt.Fprintf(w, "\n%s: %d chat requests, %d embeddings in %s, min embedding cosine %.6f, build %s\n",
-		result, len(rep.Chats), len(rep.Embeds), round(rep.Elapsed), minCosine(rep), build)
+	_, err := fmt.Fprintf(w, "\n%s: %d chat requests, %d embeddings in %s, min embedding cosine %.6f, build %s, set %s\n",
+		result, len(rep.Chats), len(rep.Embeds), round(rep.Elapsed), minCosine(rep), build, set)
 	return err
 }
 

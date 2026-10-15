@@ -14,7 +14,12 @@
 //   - A Set names up to MaxSetModels of the profile's models, at least one a chat model, with
 //     its own MemoryBudget. Exactly one set is the startup set, which Profile.StartupSet
 //     returns, and every model is in at least one set.
-//   - Each Model declares its roles and its licence beside its origin.
+//   - A Set's SetRoles assign the model each role's requests go to, chat and embedding
+//     required, vision and audio optional, each one of the set's models that declares the role;
+//     SetRoles.Models lists them once each. Profile.Set looks a set up by name, the startup set
+//     for none: the one lookup the probe and every instrument share.
+//   - Each Model declares its roles and its licence beside its origin, and an embedding model
+//     its output width, Dims.
 //   - HostStrixHalo and HostNvidiaCUDA, EngineLlamaCPP, BindTailnet and BindLoopback, KVUnified
 //     and KVPerSlot, KindGenerative and KindEmbedding, RoleChat, RoleVision, RoleAudio and
 //     RoleEmbedding, and ReasoningLow, ReasoningMedium and ReasoningHigh are the values its
