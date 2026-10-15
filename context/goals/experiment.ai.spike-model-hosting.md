@@ -150,7 +150,10 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
 - Slice 2: root commands for b11669 handed to the architect; awaiting the install.
 - Slice 3 committed (bed1dac): named sets with per-set budgets, roles, licences; non-startup
   models render no load-on-startup key; a model in no set is refused.
-- Slice 4: in progress.
+- Slice 4 committed (f4077c9, a4158b2): sets name a model per role ([sets.roles]); `swap`
+  command and package; every instrument takes -set (SPIKE_SET fallback, default the startup
+  set); embedding models record dims. Live swap of set A not yet run (router still b11572).
+- Slice 5: profile half in progress (hermetic); live half waits on b11669.
 
 ## Decisions
 
