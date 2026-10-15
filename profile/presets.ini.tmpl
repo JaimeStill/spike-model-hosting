@@ -3,9 +3,12 @@
   argument names without their leading dashes. Every model runs its GGUF's embedded chat
   template (jinja) and exposes /metrics, so those two are not profile fields. Setting parallel
   turns kv-unified's auto default off, so a unified KV pool is stated explicitly, and a per-slot
-  one is the absence of the key. Every model loads when the router starts (load-on-startup), so
-  the set's memory is committed up front, not on a model's first request. A model's typed
-  sampling renders as llama.cpp's keys; its raw args render after them, in key order, as given.
+  one is the absence of the key. The startup set's models load when the router starts
+  (load-on-startup), so the set's memory is committed up front, not on a model's first request.
+  Every other model renders without the key, which the router reads as false (it loads a model
+  at startup only when the key is present and truthy), so it stays unloaded until a load
+  request over the router's API. A model's typed sampling renders as llama.cpp's keys; its raw
+  args render after them, in key order, as given.
 */ -}}
 ; llama.cpp router presets for the {{.HostClass}} host class, rendered from its profile.
 ; Engine: {{.Engine.Name}} ({{.Engine.Backend}}), build {{.Engine.MinBuild}} or later.
@@ -22,6 +25,7 @@ kv-unified = true
 {{- end}}
 {{range .Models}}
 ; {{.Publisher}} ({{.Origin}}). Card: {{.CardURL}}
+; Licence: {{.Licence}}. Roles: {{join .Roles ", "}}.
 {{- with .Sampling}}
 ; Sampling: {{.Source}}
 {{- end}}
@@ -32,7 +36,9 @@ kv-unified = true
 {{- if .ArgsReason}};
 {{comment .ArgsReason}}{{end -}}
 [{{.ID}}]
+{{- if index $.Startup .ID}}
 load-on-startup = true
+{{- end}}
 c = {{.C}}
 {{- with .Sampling}}
 temp = {{.Temperature}}

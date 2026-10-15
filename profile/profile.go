@@ -46,10 +46,44 @@ type Profile struct {
 	// Slots is the number of requests each model serves at once (llama.cpp's parallel).
 	Slots int `toml:"slots"`
 	// KV is KVUnified or KVPerSlot.
-	KV           string       `toml:"kv"`
-	Defaults     Defaults     `toml:"defaults"`
+	KV       string   `toml:"kv"`
+	Defaults Defaults `toml:"defaults"`
+	// Models are every model the profile serves, in any of its sets.
+	Models []Model `toml:"models"`
+	// Sets are the named groups of models the router loads together; exactly one is the
+	// startup set.
+	Sets []Set `toml:"sets"`
+}
+
+// MaxSetModels is the most models a set may hold: the router's default --models-max, the most
+// it keeps loaded at once. The router refuses to start when more presets load on startup.
+const MaxSetModels = 4
+
+// Set is a named group of the profile's models, loaded side by side and sized together against
+// the pool. The startup set's models render with load-on-startup, so the router loads them when
+// it starts; every other set's models render without it and stay unloaded until they are
+// loaded over the router's API.
+type Set struct {
+	// Name names the set, such as a; it is unique within the profile.
+	Name string `toml:"name"`
+	// Startup marks the set the router loads when it starts; exactly one set sets it.
+	Startup bool `toml:"startup"`
+	// Models are the set's models by router ID, each one the profile lists: at most
+	// MaxSetModels, at least one of them a chat model.
+	Models []string `toml:"models"`
+	// MemoryBudget is the set's measured footprint, all its models loaded.
 	MemoryBudget MemoryBudget `toml:"memory_budget"`
-	Models       []Model      `toml:"models"`
+}
+
+// StartupSet returns the profile's startup set, or nil when no set is marked startup. A valid
+// profile has exactly one.
+func (p *Profile) StartupSet() *Set {
+	for i := range p.Sets {
+		if p.Sets[i].Startup {
+			return &p.Sets[i]
+		}
+	}
+	return nil
 }
 
 // Engine is the serving engine and the oldest build the profile runs on. MinBuild is a floor,
@@ -83,13 +117,14 @@ type Defaults struct {
 	CheckpointMinStep int `toml:"checkpoint_min_step"`
 }
 
-// MemoryBudget records the measured memory footprint of the profile's models, all loaded. Its
+// MemoryBudget records the measured memory footprint of a set's models, all loaded. Its
 // figures are recorded, never computed or checked against the pool: the binding test is a
 // measurement on the host, and this is where its result is kept.
 type MemoryBudget struct {
 	// PoolMiB is the memory pool the models load into.
 	PoolMiB int `toml:"pool_mib"`
-	// MeasuredMiB is the pool used with every model loaded and Slots requests in flight on each.
+	// MeasuredMiB is the pool used with every model in the set loaded and Slots requests in
+	// flight on each.
 	MeasuredMiB int `toml:"measured_mib"`
 	// Build is the engine build the measurement ran on.
 	Build string `toml:"build"`
@@ -103,6 +138,18 @@ const (
 	KindGenerative = "generative"
 	KindEmbedding  = "embedding"
 )
+
+// The roles a model may declare: what a client may send it. A model's roles are a subset of
+// these, and every set holds at least one RoleChat model.
+const (
+	RoleChat      = "chat"
+	RoleVision    = "vision"
+	RoleAudio     = "audio"
+	RoleEmbedding = "embedding"
+)
+
+// roles are the values a model's Roles may hold.
+var roles = []string{RoleChat, RoleVision, RoleAudio, RoleEmbedding}
 
 // The reasoning efforts a model's Sampling may set. Empty, the default, leaves the effort to the
 // chat template.
@@ -145,6 +192,13 @@ type Model struct {
 	Publisher string `toml:"publisher"`
 	// Origin is the publisher's country of origin. Validation records it and never judges it.
 	Origin string `toml:"origin"`
+	// Licence is the licence the model's weights are released under, as its card states it,
+	// such as Apache-2.0. Like Origin, validation requires it and never judges it.
+	Licence string `toml:"licence"`
+	// Roles are what the model serves: RoleChat, RoleVision, RoleAudio or RoleEmbedding. A
+	// generative model takes any but RoleEmbedding; an embedding model takes RoleEmbedding
+	// alone.
+	Roles []string `toml:"roles"`
 	// CardURL is the model card the model's settings are traced to.
 	CardURL string `toml:"card_url"`
 	// C is the model's context size.
@@ -292,10 +346,6 @@ func (p *Profile) Validate() error {
 	positive("defaults.gpu_layers", p.Defaults.GPULayers)
 	positive("defaults.checkpoint_min_step", p.Defaults.CheckpointMinStep)
 
-	positive("memory_budget.pool_mib", p.MemoryBudget.PoolMiB)
-	positive("memory_budget.measured_mib", p.MemoryBudget.MeasuredMiB)
-	build("memory_budget.build", p.MemoryBudget.Build)
-
 	if len(p.Models) == 0 {
 		errs = append(errs, errors.New("models: required, at least one model"))
 	}
@@ -309,6 +359,8 @@ func (p *Profile) Validate() error {
 		seen[m.ID] = true
 		required(field("publisher"), m.Publisher)
 		required(field("origin"), m.Origin)
+		required(field("licence"), m.Licence)
+		errs = append(errs, m.validateRoles(field("roles"))...)
 		required(field("card_url"), m.CardURL)
 		positive(field("c"), m.C)
 		required(field("c_reason"), m.CReason)
@@ -339,7 +391,92 @@ func (p *Profile) Validate() error {
 			required(field("args_reason"), m.ArgsReason)
 		}
 	}
+
+	if len(p.Sets) == 0 {
+		errs = append(errs, errors.New("sets: required, at least one set"))
+	}
+	models := make(map[string]Model, len(p.Models))
+	for _, m := range p.Models {
+		models[m.ID] = m
+	}
+	names := make(map[string]bool, len(p.Sets))
+	inSet := make(map[string]bool, len(p.Models))
+	var startup []string
+	for i, s := range p.Sets {
+		field := func(name string) string { return fmt.Sprintf("sets[%d].%s", i, name) }
+		required(field("name"), s.Name)
+		if s.Name != "" && names[s.Name] {
+			errs = append(errs, fmt.Errorf("%s: %q is listed twice", field("name"), s.Name))
+		}
+		names[s.Name] = true
+		if s.Startup {
+			startup = append(startup, s.Name)
+		}
+		if len(s.Models) > MaxSetModels {
+			errs = append(errs, fmt.Errorf("%s: %d models, over the router's %d", field("models"), len(s.Models), MaxSetModels))
+		}
+		chat := false
+		listed := make(map[string]bool, len(s.Models))
+		for _, id := range s.Models {
+			m, ok := models[id]
+			switch {
+			case !ok:
+				errs = append(errs, fmt.Errorf("%s: %q is not a model the profile lists", field("models"), id))
+			case listed[id]:
+				errs = append(errs, fmt.Errorf("%s: %q is listed twice", field("models"), id))
+			}
+			listed[id] = true
+			inSet[id] = true
+			chat = chat || slices.Contains(m.Roles, RoleChat)
+		}
+		if !chat {
+			errs = append(errs, fmt.Errorf("%s: required, at least one %s model", field("models"), RoleChat))
+		}
+		budget := field("memory_budget")
+		positive(budget+".pool_mib", s.MemoryBudget.PoolMiB)
+		positive(budget+".measured_mib", s.MemoryBudget.MeasuredMiB)
+		build(budget+".build", s.MemoryBudget.Build)
+	}
+	switch {
+	case len(p.Sets) > 0 && len(startup) == 0:
+		errs = append(errs, errors.New("sets: required, one set with startup = true"))
+	case len(startup) > 1:
+		errs = append(errs, fmt.Errorf("sets: %q are all startup sets; want exactly one", startup))
+	}
+	// A model in no set is refused: the router loads only the startup set, and the profile
+	// names no other way a model joins the pool, so a model in no set is configuration nothing
+	// loads. A model staged for later is listed with the set it joins.
+	for i, m := range p.Models {
+		if m.ID != "" && !inSet[m.ID] {
+			errs = append(errs, fmt.Errorf("models[%d].id: %q is in no set", i, m.ID))
+		}
+	}
 	return errors.Join(errs...)
+}
+
+// validateRoles reports each of the model's roles outside the closed set, a role listed twice,
+// no role at all, and a role its kind can't take, under the key path prefix.
+func (m Model) validateRoles(prefix string) []error {
+	if len(m.Roles) == 0 {
+		return []error{fmt.Errorf("%s: required, at least one of %q", prefix, roles)}
+	}
+	var errs []error
+	for _, r := range m.Roles {
+		if !slices.Contains(roles, r) {
+			errs = append(errs, fmt.Errorf("%s: %q is not one of %q", prefix, r, roles))
+		}
+	}
+	if len(m.Roles) != len(slices.Compact(slices.Sorted(slices.Values(m.Roles)))) {
+		errs = append(errs, fmt.Errorf("%s: %q lists a role twice", prefix, m.Roles))
+	}
+	embedding := slices.Contains(m.Roles, RoleEmbedding)
+	switch {
+	case m.Kind == KindEmbedding && (!embedding || len(m.Roles) > 1):
+		errs = append(errs, fmt.Errorf("%s: an embedding model takes the %s role alone", prefix, RoleEmbedding))
+	case m.Kind == KindGenerative && embedding:
+		errs = append(errs, fmt.Errorf("%s: a generative model can't take the %s role", prefix, RoleEmbedding))
+	}
+	return errs
 }
 
 // validate reports each Sampling value that is missing or out of range, under the key path

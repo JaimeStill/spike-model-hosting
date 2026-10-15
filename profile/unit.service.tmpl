@@ -4,8 +4,8 @@
   "Run it as a service"). The engine runs through the build's current link, so moving to
   another build never edits the unit. llama-server runs in router mode (no model on its
   command line), with the presets at their installed path; --no-models-autoload keeps a request
-  from loading a model, while load-on-startup in the presets loads each of the profile's models
-  when the router starts. The command line carries only what can't differ per model.
+  from loading a model, while load-on-startup in the presets loads each of the startup set's
+  models when the router starts. The command line carries only what can't differ per model.
 
   A tailnet bind resolves the host's tailnet IPv4 when the unit starts, through a shell
   wrapper, so no address or name is ever rendered; it needs tailscaled up first. systemd

@@ -3,6 +3,7 @@ package profile_test
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -48,17 +49,19 @@ func TestLoadNamesMissingField(t *testing.T) {
 		{"bind =", "bind"},
 		{"slots =", "slots"},
 		{"kv =", "kv"},
-		{"name =", "engine.name"},
+		{"name = \"llama.cpp\"", "engine.name"},
 		{"backend =", "engine.backend"},
 		{"min_build =", "engine.min_build"},
 		{"gpu_layers =", "defaults.gpu_layers"},
 		{"checkpoint_min_step =", "defaults.checkpoint_min_step"},
-		{"pool_mib =", "memory_budget.pool_mib"},
-		{"measured_mib =", "memory_budget.measured_mib"},
-		{"build =", "memory_budget.build"},
+		{"pool_mib =", "sets[0].memory_budget.pool_mib"},
+		{"measured_mib =", "sets[0].memory_budget.measured_mib"},
+		{"build =", "sets[0].memory_budget.build"},
+		{"name = \"a\"", "sets[0].name"},
 		{"id =", "models[0].id"},
 		{"publisher =", "models[0].publisher"},
 		{"origin =", "models[0].origin"},
+		{"licence =", "models[0].licence"},
 		{"card_url =", "models[0].card_url"},
 		{"c = 131072", "models[0].c"},
 		{"c = 32768", "defaults.c"},
@@ -80,9 +83,13 @@ func TestLoadNamesMissingField(t *testing.T) {
 		path := writeProfile(t, dropTable(t, string(base), "[engine]"))
 		assertFails(t, path, "engine.name: required", "engine.backend: required", "engine.min_build: required")
 	})
-	t.Run("memory_budget", func(t *testing.T) {
-		path := writeProfile(t, dropTable(t, string(base), "[memory_budget]"))
-		assertFails(t, path, "memory_budget.pool_mib: required", "memory_budget.build: required")
+	t.Run("sets[0].memory_budget", func(t *testing.T) {
+		path := writeProfile(t, dropTable(t, string(base), "[sets.memory_budget]"))
+		assertFails(t, path, "sets[0].memory_budget.pool_mib: required", "sets[0].memory_budget.build: required")
+	})
+	t.Run("sets", func(t *testing.T) {
+		path := writeProfile(t, dropTable(t, dropTable(t, string(base), "[sets.memory_budget]"), "[[sets]]"))
+		assertFails(t, path, "sets: required", `models[0].id: "ggml-org/gpt-oss-120b-GGUF:MXFP4" is in no set`)
 	})
 	t.Run("models", func(t *testing.T) {
 		text := string(base)
@@ -205,6 +212,133 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 	}
 }
 
+// TestLoadRefusesSetsAndRoles changes the Strix Halo profile so it breaks one rule of its sets,
+// roles or licences, and expects the error that names it.
+func TestLoadRefusesSetsAndRoles(t *testing.T) {
+	base, err := os.ReadFile(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const (
+		gptOSS    = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+		embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+	)
+	text := string(base)
+	tests := []struct {
+		name string
+		text string
+		want string
+	}{
+		{
+			"no startup set",
+			replace(t, text, "startup = true", "startup = false"),
+			"sets: required, one set with startup = true",
+		},
+		{
+			"two startup sets",
+			text + extraSet("b", true, gptOSS),
+			`sets: ["a" "b"] are all startup sets; want exactly one`,
+		},
+		{
+			"a set over four models",
+			replace(t, extraModel(t, text, "example/fifth-GGUF:Q4_0"), "models = [\n", "models = [\n  \"example/fifth-GGUF:Q4_0\",\n"),
+			"sets[0].models: 5 models, over the router's 4",
+		},
+		{
+			"a set naming a model the profile doesn't list",
+			text + extraSet("b", false, gptOSS, "example/unlisted-GGUF:Q4_0"),
+			`sets[1].models: "example/unlisted-GGUF:Q4_0" is not a model the profile lists`,
+		},
+		{
+			"a set with no chat model",
+			text + extraSet("b", false, embedding),
+			"sets[1].models: required, at least one chat model",
+		},
+		{
+			"an unknown role",
+			replace(t, text, `roles = ["chat"]`, `roles = ["chat", "reasoning"]`),
+			`models[0].roles: "reasoning" is not one of`,
+		},
+		{
+			"a missing licence",
+			replace(t, text, "licence = \"Apache-2.0\"\nroles = [\"chat\"]", `roles = ["chat"]`),
+			"models[0].licence: required",
+		},
+		{
+			"a model in no set",
+			extraModel(t, text, "example/fifth-GGUF:Q4_0"),
+			`models[4].id: "example/fifth-GGUF:Q4_0" is in no set`,
+		},
+		{
+			"a set named twice",
+			text + extraSet("a", false, gptOSS),
+			`sets[1].name: "a" is listed twice`,
+		},
+		{
+			"a set listing a model twice",
+			text + extraSet("b", false, gptOSS, gptOSS),
+			`sets[1].models: "ggml-org/gpt-oss-120b-GGUF:MXFP4" is listed twice`,
+		},
+		{
+			"no role",
+			replace(t, text, `roles = ["chat"]`, `roles = []`),
+			"models[0].roles: required",
+		},
+		{
+			"a role listed twice",
+			replace(t, text, `roles = ["chat"]`, `roles = ["chat", "chat"]`),
+			"models[0].roles: [\"chat\" \"chat\"] lists a role twice",
+		},
+		{
+			"a generative model taking the embedding role",
+			replace(t, text, `roles = ["chat"]`, `roles = ["chat", "embedding"]`),
+			"models[0].roles: a generative model can't take the embedding role",
+		},
+		{
+			"an embedding model taking another role",
+			replace(t, text, `roles = ["embedding"]`, `roles = ["embedding", "chat"]`),
+			"models[3].roles: an embedding model takes the embedding role alone",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertFails(t, writeProfile(t, tt.text), tt.want)
+		})
+	}
+}
+
+// TestRenderPresetsStartupSetOnly adds a second set, not the startup set, and shows its model
+// renders without load-on-startup while the startup set's model keeps it.
+func TestRenderPresetsStartupSetOnly(t *testing.T) {
+	base, err := os.ReadFile(skeleton)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const other = "example/other-GGUF:Q4_0"
+	text := extraModel(t, string(base), other) + extraSet("b", false, other)
+	p, err := profile.Load(writeProfile(t, text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := p.StartupSet(); s == nil || s.Name != "a" {
+		t.Errorf("StartupSet() = %+v; want set a", s)
+	}
+	var b bytes.Buffer
+	if err := p.RenderPresets(&b); err != nil {
+		t.Fatal(err)
+	}
+	got := parseINI(t, b.String())
+	if v := got["ggml-org/gpt-oss-120b-GGUF:MXFP4"]["load-on-startup"]; v != "true" {
+		t.Errorf("startup set's model: load-on-startup = %q; want true", v)
+	}
+	if v, ok := got[other]["load-on-startup"]; ok {
+		t.Errorf("other set's model: load-on-startup = %q; want the key absent", v)
+	}
+	if _, ok := got[other]; !ok {
+		t.Errorf("other set's model [%s] not rendered:\n%s", other, b.String())
+	}
+}
+
 // TestRenderPresetsCommentsReasons shows each model's reasons render as a comment above its
 // section.
 func TestRenderPresetsCommentsReasons(t *testing.T) {
@@ -256,6 +390,7 @@ func TestLoadNamesUndefinedKey(t *testing.T) {
 		{"backend =", `hf_home = "/srv/hf"`, "engine.hf_home"},
 		{"gpu_layers =", "models_dir = 1", "defaults.models_dir"},
 		{"card_url =", "temperature = 0.7", "models.temperature"},
+		{"startup =", "budget_mib = 1", "sets.budget_mib"},
 		{"min_p =", "typical_p = 0.9", "models.sampling.typical_p"},
 	}
 	for _, tt := range tests {
@@ -358,6 +493,47 @@ func TestLoadNamesInvalidArgs(t *testing.T) {
 	if err := p.Validate(); err == nil || !strings.Contains(err.Error(), "models[3].args_reason: required") {
 		t.Errorf("Validate(args without a reason) = %v; want models[3].args_reason: required", err)
 	}
+}
+
+// extraSet returns a set's TOML, to append to a profile: its name, whether it is the startup
+// set, its models and a memory budget.
+func extraSet(name string, startup bool, models ...string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "\n[[sets]]\nname = %q\nstartup = %t\nmodels = [", name, startup)
+	for i, id := range models {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%q", id)
+	}
+	b.WriteString("]\n\n[sets.memory_budget]\npool_mib = 98304\nmeasured_mib = 70000\nbuild = \"b11565\"\n")
+	return b.String()
+}
+
+// extraModel returns text with a copy of its first model appended under the router ID id: a
+// chat model in no set.
+func extraModel(t *testing.T, text, id string) string {
+	t.Helper()
+	start := strings.Index(text, "[[models]]")
+	if start < 0 {
+		t.Fatal("extraModel: no [[models]]")
+	}
+	model := text[start:]
+	if end := strings.Index(model[1:], "[[models]]"); end >= 0 {
+		model = model[:end+1]
+	}
+	idLine := model[strings.Index(model, "id = "):]
+	idLine = idLine[:strings.Index(idLine, "\n")]
+	return text + "\n" + strings.Replace(model, idLine, fmt.Sprintf("id = %q", id), 1)
+}
+
+// replace returns text with its one occurrence of old replaced by new.
+func replace(t *testing.T, text, old, new string) string {
+	t.Helper()
+	if strings.Count(text, old) != 1 {
+		t.Fatalf("replace: %q occurs %d times; want once", old, strings.Count(text, old))
+	}
+	return strings.Replace(text, old, new, 1)
 }
 
 func render(t *testing.T, path string) string {

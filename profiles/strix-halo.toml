@@ -1,5 +1,5 @@
-# The Strix Halo profile: set A, four models loaded side by side and sized together against the
-# 96GiB GTT pool of a ~90-96GB unified-memory host. Its settings are personal-agents' 96GiB
+# The Strix Halo profile: set A, the startup set, four models loaded side by side and sized
+# together against the 96GiB GTT pool of a ~90-96GB unified-memory host. Its settings are personal-agents' 96GiB
 # preset (profiles/unified-96gb.ini) and the recipes it copies (reference/model-tiers.md,
 # "~90-96GB (unified memory)"); each model's reasons say why it takes its values.
 #
@@ -29,9 +29,21 @@ c = 32768
 gpu_layers = 999
 checkpoint_min_step = 4096
 
+# Set A loads when the router starts: the harness model, a vision model, an audio model and
+# the embedding model, four, the router's default --models-max.
+[[sets]]
+name = "a"
+startup = true
+models = [
+  "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+  "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0",
+  "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+  "ggml-org/embeddinggemma-2-GGUF:Q8_0",
+]
+
 # The binding test: with all four loaded and four requests in flight on each, at least 3GiB of
 # the pool stays free.
-[memory_budget]
+[sets.memory_budget]
 pool_mib = 98304
 measured_mib = 94926
 build = "b11565"
@@ -41,6 +53,10 @@ source = "context/memory-budget.md"
 id = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
 publisher = "OpenAI"
 origin = "United States"
+# Licence: the card's license metadata (apache-2.0) and the LICENSE file in
+# https://huggingface.co/openai/gpt-oss-120b.
+licence = "Apache-2.0"
+roles = ["chat"]
 card_url = "https://huggingface.co/openai/gpt-oss-120b"
 kind = "generative"
 c = 131072
@@ -67,6 +83,11 @@ turn off the two truncations the card doesn't name.
 id = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
 publisher = "Google"
 origin = "United States"
+# Licence: the card's license metadata (apache-2.0), linking Google's Gemma 4 licence page,
+# https://ai.google.dev/gemma/docs/gemma_4_license.
+licence = "Apache-2.0"
+# Vision through its mmproj, which the router loads beside the weights.
+roles = ["chat", "vision"]
 card_url = "https://huggingface.co/google/gemma-4-26B-A4B-it"
 kind = "generative"
 c = 32768
@@ -95,6 +116,13 @@ and sets min-p = 0 because the card names no min_p (llama.cpp's default is 0.05)
 id = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
 publisher = "Google"
 origin = "United States"
+# Licence: the card's license metadata (apache-2.0), linking Google's Gemma 4 licence page,
+# https://ai.google.dev/gemma/docs/gemma_4_license.
+licence = "Apache-2.0"
+# Audio and vision through its mmproj: mmproj-gemma-4-E4B-it-Q8_0.gguf sets both
+# clip.has_audio_encoder and clip.has_vision_encoder. Set A sends it audio; its images go to
+# Gemma 4 26B-A4B.
+roles = ["chat", "vision", "audio"]
 card_url = "https://huggingface.co/google/gemma-4-E4B-it"
 kind = "generative"
 c = 32768
@@ -121,6 +149,10 @@ sets min-p = 0 because the card names no min_p (llama.cpp's default is 0.05).
 id = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
 publisher = "Google"
 origin = "United States"
+# Licence: the card's license metadata (apache-2.0), at
+# https://huggingface.co/google/embeddinggemma-2.
+licence = "Apache-2.0"
+roles = ["embedding"]
 card_url = "https://huggingface.co/google/embeddinggemma-2"
 kind = "embedding"
 c = 8192
