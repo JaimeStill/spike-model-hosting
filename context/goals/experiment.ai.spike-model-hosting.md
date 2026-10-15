@@ -143,7 +143,12 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
 
 ## Progress
 
-- PLAN approved 2026-10-15; BUILD starts at slice 1.
+- PLAN approved 2026-10-15.
+- Slice 1 committed (ff8238d): Pi 1.3.0, Claude Code 2.1.301, OpenCode 1.19.1, node 26.12.0,
+  uv 0.13.1 (newer than the brief's PLAN versions; nothing to adapt); currency shows only the
+  Python hold.
+- Slice 2: root commands for b11669 handed to the architect; awaiting the install.
+- Slice 3: in progress.
 
 ## Decisions
 
