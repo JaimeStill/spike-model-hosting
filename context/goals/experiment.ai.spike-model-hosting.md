@@ -148,7 +148,9 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   uv 0.13.1 (newer than the brief's PLAN versions; nothing to adapt); currency shows only the
   Python hold.
 - Slice 2: root commands for b11669 handed to the architect; awaiting the install.
-- Slice 3: in progress.
+- Slice 3 committed (bed1dac): named sets with per-set budgets, roles, licences; non-startup
+  models render no load-on-startup key; a model in no set is refused.
+- Slice 4: in progress.
 
 ## Decisions
 
