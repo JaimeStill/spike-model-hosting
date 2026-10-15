@@ -147,8 +147,11 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
 - Slice 1 committed (ff8238d): Pi 1.3.0, Claude Code 2.1.301, OpenCode 1.19.1, node 26.12.0,
   uv 0.13.1 (newer than the brief's PLAN versions; nothing to adapt); currency shows only the
   Python hold.
-- Slice 2: the architect installed b11669 (router reports b11669-620d2225c, set A loaded);
-  release-note review and probe in progress.
+- Slice 2 committed (5ae4b65): b11669 reviewed (no preset change), probe passes on set A,
+  `swap a` a no-op on the live router. The router can't load candidates until the rendered
+  presets (sha256 f98d9faf…) are installed: root step handed to the architect, then
+  GET /models?reload=1 (no restart).
+- Slice 6: gpt-oss-120b pass^5 on b11669 in progress.
 - Slice 3 committed (bed1dac): named sets with per-set budgets, roles, licences; non-startup
   models render no load-on-startup key; a model in no set is refused.
 - Slice 4 committed (f4077c9, a4158b2): sets name a model per role ([sets.roles]); `swap`
