@@ -147,13 +147,17 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
 - Slice 1 committed (ff8238d): Pi 1.3.0, Claude Code 2.1.301, OpenCode 1.19.1, node 26.12.0,
   uv 0.13.1 (newer than the brief's PLAN versions; nothing to adapt); currency shows only the
   Python hold.
-- Slice 2: root commands for b11669 handed to the architect; awaiting the install.
+- Slice 2: the architect installed b11669 (router reports b11669-620d2225c, set A loaded);
+  release-note review and probe in progress.
 - Slice 3 committed (bed1dac): named sets with per-set budgets, roles, licences; non-startup
   models render no load-on-startup key; a model in no set is refused.
 - Slice 4 committed (f4077c9, a4158b2): sets name a model per role ([sets.roles]); `swap`
   command and package; every instrument takes -set (SPIKE_SET fallback, default the startup
   set); embedding models record dims. Live swap of set A not yet run (router still b11572).
-- Slice 5: profile half in progress (hermetic); live half waits on b11669.
+- Slice 5 hermetic half committed (63e28aa): mistral and nemotron sets (estimated budgets),
+  per-model consumer reasoning ([models.consumers]); Pi can't send reasoning_effort to Mistral
+  without a driver change (out of scope), so Mistral's effort comes from its preset. Live half
+  (download, swap, probe, footprint) next after slice 2.
 
 ## Decisions
 
