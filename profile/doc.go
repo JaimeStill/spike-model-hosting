@@ -20,7 +20,8 @@
 //     SetRoles.Models lists them once each. Profile.Set looks a set up by name, the startup set
 //     for none: the one lookup the probe and every instrument share.
 //   - Each Model declares its roles and its licence beside its origin, and an embedding model
-//     its output width, Dims; Profile.Model looks one up by router ID.
+//     its output width, Dims; Profile.Model looks one up by router ID. RouterTag is the tag the
+//     router lists a model by, the one a Model's ID must end with.
 //   - A chat Model's ConsumerReasoning is the reasoning setting the coding agents send with its
 //     requests, Pi's thinking level and OpenCode's options, each one its template accepts. It
 //     configures the consumers, not the router, and renders into no preset.
@@ -31,7 +32,7 @@
 //
 // The renders:
 //   - Profile.RenderPresets writes the router's --models-preset INI file, every model's section
-//     with load-on-startup only for the startup set's models.
+//     with hf-repo = its ID, and load-on-startup only for the startup set's models.
 //   - Profile.RenderUnit writes the router's systemd unit, with a Host's values; Host.Validate
 //     reports a Host value that is missing or that the unit can't carry.
 //   - EngineBinary, PresetsPath and RouterPort are the install layout every unit renders.

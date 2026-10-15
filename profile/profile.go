@@ -235,10 +235,11 @@ const (
 var piThinkingLevels = []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 
 // reservedArgs are the presets keys the profile renders from its typed fields, which a model's
-// raw Args may not set.
+// raw Args may not set. hf-repo renders from the model's ID; hf and hfr are its short aliases.
 var reservedArgs = []string{
 	"jinja", "n-gpu-layers", "metrics", "checkpoint-min-step", "parallel", "kv-unified",
-	"load-on-startup", "c", "temp", "top-p", "top-k", "min-p", "chat-template-kwargs",
+	"load-on-startup", "hf-repo", "hf", "hfr", "c", "temp", "top-p", "top-k", "min-p",
+	"chat-template-kwargs",
 }
 
 // hostArgs are the keys the unit or the host owns, which a model's raw Args may not set either:
@@ -261,7 +262,9 @@ var hostArgs = []string{
 // Model is one model the router serves, with the provenance its settings come from.
 type Model struct {
 	// ID is the model's router ID, such as ggml-org/gpt-oss-120b-GGUF:MXFP4; it names the
-	// model's presets section.
+	// model's presets section and is its hf-repo, the Hugging Face repository and quant tag the
+	// router fetches its weights by. Its tag must be the one the router lists it by
+	// (RouterTag), or the router lists the model under another ID.
 	ID string `toml:"id"`
 	// Publisher is the organization that trained and released the model.
 	Publisher string `toml:"publisher"`
@@ -393,6 +396,23 @@ var freeForm = []string{"models", "consumers", "opencode"}
 // minBuild matches a llama.cpp build tag.
 var minBuild = regexp.MustCompile(`^b[0-9]+$`)
 
+// quantTag matches the quant type at the end of a tag, after its last '-' or '.', as llama.cpp
+// reads it (common/preset.cpp, canonical_tag, at b11669).
+var quantTag = regexp.MustCompile(`(?i)[-.]([A-Z0-9_]+)$`)
+
+// RouterTag returns the tag the llama.cpp router lists a presets section's model by: the quant
+// type at the end of tag, upper-cased. The router renames a section whose tag differs, so
+// unsloth's UD-Q4_K_XL lists as Q4_K_XL, and Q8_0 as Q8_0. The tag still selects the weights:
+// the fetch picks the repository's first model file whose name holds the tag followed by '.' or
+// '-' (common/download.cpp, find_best_model), so a canonical tag fetches the same file where
+// the repository holds no other file it matches.
+func RouterTag(tag string) string {
+	if m := quantTag.FindStringSubmatch(tag); m != nil {
+		return strings.ToUpper(m[1])
+	}
+	return strings.ToUpper(tag)
+}
+
 // Load reads the profile at path and validates it. A profile that fails validation returns its
 // errors, each naming the field at fault by its TOML key path; a key the schema doesn't define
 // is one of them.
@@ -472,6 +492,13 @@ func (p *Profile) Validate() error {
 			errs = append(errs, fmt.Errorf("%s: %q is listed twice", field("id"), m.ID))
 		}
 		seen[m.ID] = true
+		// The router splits a section's name at its last ':' (common/preset.cpp).
+		if colon := strings.LastIndex(m.ID, ":"); colon >= 0 {
+			if repo, tag := m.ID[:colon+1], m.ID[colon+1:]; tag != RouterTag(tag) {
+				errs = append(errs, fmt.Errorf("%s: %q lists on the router as %q; name it so",
+					field("id"), m.ID, repo+RouterTag(tag)))
+			}
+		}
 		required(field("publisher"), m.Publisher)
 		required(field("origin"), m.Origin)
 		required(field("licence"), m.Licence)

@@ -7,8 +7,12 @@
   (load-on-startup), so the set's memory is committed up front, not on a model's first request.
   Every other model renders without the key, which the router reads as false (it loads a model
   at startup only when the key is present and truthy), so it stays unloaded until a load
-  request over the router's API. A model's typed sampling renders as llama.cpp's keys; its raw
-  args render after them, in key order, as given.
+  request over the router's API. Each section names its own weights, hf-repo = its router ID:
+  the router passes a section's hf-repo to the model's process, and a section without one gets
+  it only by merging with the router's entry for a model already in its Hugging Face cache, so a
+  model not yet downloaded would start with no model at all (llama-server then runs as a second
+  router). A model's typed sampling renders as llama.cpp's keys; its raw args render after them,
+  in key order, as given.
 */ -}}
 ; llama.cpp router presets for the {{.HostClass}} host class, rendered from its profile.
 ; Engine: {{.Engine.Name}} ({{.Engine.Backend}}), build {{.Engine.MinBuild}} or later.
@@ -39,6 +43,7 @@ kv-unified = true
 {{- if index $.Startup .ID}}
 load-on-startup = true
 {{- end}}
+hf-repo = {{.ID}}
 c = {{.C}}
 {{- with .Sampling}}
 temp = {{.Temperature}}

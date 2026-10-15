@@ -164,8 +164,8 @@ func TestRenderPresets(t *testing.T) {
 
 // TestStrixHaloMatchesPinnedPreset renders the Strix Halo profile and compares the sections,
 // keys and values of set A, its startup set, with the pinned copy of personal-agents' 96GiB
-// preset. The one difference allowed is load-on-startup = true on each of set A's sections,
-// which the profile renders and the pinned copy lacks. Every other set's model renders without
+// preset. The differences allowed are load-on-startup = true and hf-repo = the section's name on
+// each of set A's sections, which the profile renders and the pinned copy lacks. Every other set's model renders without
 // load-on-startup and is left out of the comparison: the pinned copy predates the candidates.
 func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 	p, err := profile.Load(strixHalo)
@@ -199,7 +199,11 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 		if keys["load-on-startup"] != "true" {
 			t.Errorf("[%s] load-on-startup = %q; want true", name, keys["load-on-startup"])
 		}
+		if keys["hf-repo"] != name {
+			t.Errorf("[%s] hf-repo = %q; want the section's name", name, keys["hf-repo"])
+		}
 		delete(keys, "load-on-startup")
+		delete(keys, "hf-repo")
 	}
 	if models != 4 {
 		t.Errorf("rendered %d of set A's model sections; want 4", models)
@@ -581,6 +585,8 @@ func TestLoadNamesInvalidArgs(t *testing.T) {
 		{"c = 4096", "models[3].args.c: rendered from the profile's typed fields"},
 		{"temp = 0.5", "models[3].args.temp: rendered from the profile's typed fields"},
 		{"load-on-startup = false", "models[3].args.load-on-startup: rendered from the profile's typed fields"},
+		{`hf-repo = "x/y:Q8_0"`, "models[3].args.hf-repo: rendered from the profile's typed fields"},
+		{`hf = "x/y:Q8_0"`, "models[3].args.hf: rendered from the profile's typed fields"},
 		{"lora = [1, 2]", "models[3].args.lora: a []interface {}, not a string, integer, float or boolean"},
 	}
 	for _, key := range []string{
@@ -775,7 +781,7 @@ func dropTable(t *testing.T, text, header string) string {
 
 // The candidate sets' main models, as the Strix Halo profile names them.
 const (
-	mistral  = "unsloth/Mistral-Small-4-119B-2603-GGUF:UD-Q4_K_XL"
+	mistral  = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
 	nemotron = "ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF:NVFP4"
 )
 
@@ -822,6 +828,8 @@ func TestStrixHaloCandidateSets(t *testing.T) {
 		absent     string // a key the section doesn't set
 	}{
 		{mistral, "chat-template-kwargs", `{"reasoning_effort":"high"}`, "load-on-startup"},
+		{mistral, "hf-repo", mistral, "mmproj"},
+		{nemotron, "hf-repo", nemotron, "mmproj"},
 		{mistral, "temp", "0.7", "ctx-checkpoints"},
 		{nemotron, "ctx-checkpoints", "8", "load-on-startup"},
 		{nemotron, "top-p", "0.95", "chat-template-kwargs"},
@@ -838,6 +846,35 @@ func TestStrixHaloCandidateSets(t *testing.T) {
 			t.Errorf("[%s] %s = %q; want the key absent", tt.section, tt.absent, v)
 		}
 	}
+}
+
+// TestRouterTag shows the tag the router lists a section by: the quant type at the end of the
+// section's tag, upper-cased.
+func TestRouterTag(t *testing.T) {
+	for _, tt := range []struct{ tag, want string }{
+		{"UD-Q4_K_XL", "Q4_K_XL"},
+		{"Q4_K_XL", "Q4_K_XL"},
+		{"q8_0", "Q8_0"},
+		{"MXFP4", "MXFP4"},
+		{"NVFP4", "NVFP4"},
+		{"model.Q4_0", "Q4_0"},
+	} {
+		if got := profile.RouterTag(tt.tag); got != tt.want {
+			t.Errorf("RouterTag(%q) = %q; want %q", tt.tag, got, tt.want)
+		}
+	}
+}
+
+// TestLoadNamesNonCanonicalID shows a model ID whose tag the router would list differently is
+// refused, with the ID the router would list it by.
+func TestLoadNamesNonCanonicalID(t *testing.T) {
+	base, err := os.ReadFile(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ud := "unsloth/Mistral-Small-4-119B-2603-GGUF:UD-Q4_K_XL"
+	path := writeProfile(t, strings.ReplaceAll(string(base), mistral, ud))
+	assertFails(t, path, fmt.Sprintf("%q lists on the router as %q", ud, mistral))
 }
 
 // TestStrixHaloConsumerReasoning shows the candidates' consumer reasoning settings decode as

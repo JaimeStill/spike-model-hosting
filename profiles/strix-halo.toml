@@ -70,14 +70,14 @@ source = "context/memory-budget.md"
 [[sets]]
 name = "mistral"
 models = [
-  "unsloth/Mistral-Small-4-119B-2603-GGUF:UD-Q4_K_XL",
+  "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL",
   "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
   "ggml-org/embeddinggemma-2-GGUF:Q8_0",
 ]
 
 [sets.roles]
-chat = "unsloth/Mistral-Small-4-119B-2603-GGUF:UD-Q4_K_XL"
-vision = "unsloth/Mistral-Small-4-119B-2603-GGUF:UD-Q4_K_XL"
+chat = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
+vision = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
 audio = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
 embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
 
@@ -247,8 +247,13 @@ no-mmproj = true
 b = 8192
 ub = 8192
 
+# The ID's tag is Q4_K_XL, not the UD-Q4_K_XL of unsloth's file names: the router lists a section
+# by the quant type at the end of its tag (profile.RouterTag), so a UD-Q4_K_XL section lists as
+# Q4_K_XL. The tag fetches the same files: of the repository's model files, only the three
+# UD-Q4_K_XL/Mistral-Small-4-119B-2603-UD-Q4_K_XL-0000N-of-00003.gguf splits hold "Q4_K_XL"
+# followed by '-' or '.', 74.16GB (69.07GiB) together.
 [[models]]
-id = "unsloth/Mistral-Small-4-119B-2603-GGUF:UD-Q4_K_XL"
+id = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
 publisher = "Mistral AI"
 origin = "France"
 # Licence: the card's license metadata (apache-2.0) and its "License" section, at
