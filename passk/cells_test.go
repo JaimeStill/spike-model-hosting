@@ -112,9 +112,9 @@ func TestClaudeWithoutLogin(t *testing.T) {
 // TestVersion shows a consumer's version is the first line its --version prints that isn't
 // blank.
 func TestVersion(t *testing.T) {
-	cmd := consumer(t, `printf '\n2.1.296 (Claude Code)\nmore\n'`)
+	cmd := consumer(t, `printf '\n2.1.301 (Claude Code)\nmore\n'`)
 	got, err := passk.Version(t.Context(), cmd)
-	if err != nil || got != "2.1.296 (Claude Code)" {
+	if err != nil || got != "2.1.301 (Claude Code)" {
 		t.Errorf("Version = %q, %v; want the first line that isn't blank", got, err)
 	}
 	if _, err := passk.Version(t.Context(), consumer(t, "true")); err == nil {

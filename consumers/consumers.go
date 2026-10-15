@@ -25,9 +25,9 @@ const Provider = "llama.cpp"
 
 // The consumer versions the consumers mise environment (mise.consumers.toml) pins.
 const (
-	PiVersion       = "1.1.0"
-	ClaudeVersion   = "2.1.296"
-	OpenCodeVersion = "1.19.0"
+	PiVersion       = "1.3.0"
+	ClaudeVersion   = "2.1.301"
+	OpenCodeVersion = "1.19.1"
 )
 
 // claudeLogin is the file Claude Code keeps its subscription login in, in its configuration

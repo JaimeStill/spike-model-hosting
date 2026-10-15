@@ -14,7 +14,7 @@ import (
 
 // report is a trial's report in which every capability passed except those in statuses.
 func report(statuses map[string]conform.Status) conform.Report {
-	rep := conform.Report{Harness: "pi", Provider: consumers.Provider, Version: "1.1.0"}
+	rep := conform.Report{Harness: "pi", Provider: consumers.Provider, Version: "1.3.0"}
 	for _, c := range conform.Capabilities {
 		s, ok := statuses[c.Name]
 		if !ok {
@@ -88,7 +88,7 @@ func TestTallyNotPasses(t *testing.T) {
 			t.Errorf("%s = %+v; want 4 passes and 1 skip with the trial's reason", c.Capability, c)
 		}
 	}
-	if skipped.Version != "1.1.0" {
+	if skipped.Version != "1.3.0" {
 		t.Errorf("Version = %q, want the first trial that ran's", skipped.Version)
 	}
 }
