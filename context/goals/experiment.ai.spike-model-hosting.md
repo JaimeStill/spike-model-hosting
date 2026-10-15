@@ -151,7 +151,9 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   `swap a` a no-op on the live router. The router can't load candidates until the rendered
   presets (sha256 f98d9faf…) are installed: root step handed to the architect, then
   GET /models?reload=1 (no restart).
-- Slice 6: gpt-oss-120b pass^5 on b11669 in progress.
+- Slice 6 committed (67c9197): gpt-oss-120b on b11669, one set: Pi 9/9 0 invalid; Claude Code
+  6/9 (tool 0/5, skill 0/5, dropped-image n/a, rest 5/5) 0 invalid; OpenCode 6/9, 18 invalid.
+  Candidates run one set each against this row.
 - Slice 3 committed (bed1dac): named sets with per-set budgets, roles, licences; non-startup
   models render no load-on-startup key; a model in no set is refused.
 - Slice 4 committed (f4077c9, a4158b2): sets name a model per role ([sets.roles]); `swap`
