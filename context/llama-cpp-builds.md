@@ -107,3 +107,143 @@ is read from the router's `/props` `build_info`.
   rendered unit and presets. The footprint, the conform rates, and the baseline on this build
   are in [`memory-budget.md`](memory-budget.md), [`tool-reliability.md`](tool-reliability.md),
   and [`baseline.md`](baseline.md).
+
+## b11572 to b11669, 2026-10-15
+
+- **From:** b11572 (`b11572-efe3626b1`), installed by `consumers`.
+- **To:** b11669 (`b11669-620d2225c`), the b-tag `main-model` planned on.
+- **Reviewed:** the 97 commits in `b11572...b11669` (`gh api
+  repos/ggml-org/llama.cpp/compare/b11572...b11669`) and the PRs they name, read for the chat
+  output and the parsers, template output, the embedding path and the prompt cache, Vulkan on
+  AMD, sliding-window reuse, slots, Nemotron support, flags and preset keys, sampling defaults,
+  and `/v1/messages` thinking. Where a question needed the source, the review read it at the
+  `b11669` tag.
+
+### What the notes change for set A
+
+- **Chat output.** [#30389](https://github.com/ggml-org/llama.cpp/pull/30389) (the chat
+  output rewrite) makes a rendered prompt a list of parts, each marked as template text or
+  user input, so a later PR can stop parsing special tokens inside user input. Nothing uses the
+  marks yet: the server joins the parts back into one string
+  (`tools/server/server-common.cpp`, `out_session.prompt().str()`), so every endpoint sends the
+  model the same text as on b11572. The gpt-oss and Gemma 4 parsers change only in how they
+  append to the prompt. The `<|constrain|>` final that `tool-reliability.md` describes still
+  fails the same way.
+- **Template number formatting.** [#30362](https://github.com/ggml-org/llama.cpp/pull/30362)
+  makes `tojson` write a float as Python's `json.dumps` does, with all its digits and its
+  `.0`: `12.0` was `12`, `48.858844` was `48.8588`, `1000000.0` was `1e+06`. `|string` and
+  `|safe` of a float change the same way. A float in a tool's schema or a tool call's
+  arguments now reaches the model as it would through transformers, which changes the prompt
+  whenever a consumer's tools carry one. [#30483](https://github.com/ggml-org/llama.cpp/pull/30483)
+  writes `NaN` and `Infinity` in `tojson` as `json.dumps` does.
+  [#30533](https://github.com/ggml-org/llama.cpp/pull/30533) gives each loop iteration its own
+  scope, so a variable set in one iteration no longer leaks into the next, as in Python's
+  Jinja. All three bring llama.cpp's template output closer to the reference; none needs a
+  preset change.
+- **The embedding path and the RAM prompt cache.** EmbeddingGemma 2 runs pooled (`embeddings`,
+  mean pooling). [#30445](https://github.com/ggml-org/llama.cpp/pull/30445) skips the LM head
+  and its logits buffer for a pooled context, which for EmbeddingGemma 2 had already lost its
+  logits buffer at b11572 (no LM head). [#30461](https://github.com/ggml-org/llama.cpp/pull/30461)
+  removes a redundant expand from the embedding graphs; its PR reports EmbeddingGemma 2's
+  embeddings bit-exact. [#30522](https://github.com/ggml-org/llama.cpp/pull/30522) fixes the
+  startup abort #30461 caused for an embedding model started without `--embeddings`, which the
+  preset always sets. [#30416](https://github.com/ggml-org/llama.cpp/pull/30416),
+  [#30439](https://github.com/ggml-org/llama.cpp/pull/30439) and
+  [#30446](https://github.com/ggml-org/llama.cpp/pull/30446) pad the cache-less attention an
+  embedding model runs to 256 keys, with the embeddings unchanged.
+  [#30498](https://github.com/ggml-org/llama.cpp/pull/30498) stops saving embedding and rerank
+  slots to the RAM prompt cache (`--cache-ram`, 8GiB by default), since nothing reads them
+  back: EmbeddingGemma 2's instance no longer fills that cache in system RAM. Completions are
+  cached as before.
+- **Vulkan KV on AMD.** [#27703](https://github.com/ggml-org/llama.cpp/pull/27703) copies a
+  layer's f16 K and V into one contiguous scratch buffer before flash attention, so the reads
+  spread across all memory channels. It runs only on AMD outside RDNA4, so on Strix Halo
+  (RDNA 3.5), with an f16 cache, which every set-A model uses, and only for a batch of at least
+  256 query tokens: prompt processing, never single-token generation. The scratch is one
+  layer's K and V at the current KV length, at most 256MiB for gpt-oss-120b at c = 131072 (a
+  full-attention layer's 8 KV heads of 64 at f16), held in the instance's compute buffers. The
+  PR measures prompt processing faster at depth on a Radeon 8060S and generation unchanged.
+- **Vulkan bf16.** [#29069](https://github.com/ggml-org/llama.cpp/pull/29069) lets Vulkan run a
+  matrix multiply whose activations are bf16 by widening them to f32, where it refused the
+  operation before; bf16 activations come from a graph that asks for them, such as a bf16
+  depthwise-convolution kernel (#28937). Set A's graphs produce none, and bf16 weights, such as
+  Mistral Small 4's mmproj-BF16, were already supported. A mixture-of-experts multiply
+  (`MUL_MAT_ID`) with bf16 activations is still refused.
+- **Vulkan's F32 `MUL_MAT_ID`.** Still refused. `ggml_backend_vk_device_supports_op` in
+  `ggml/src/ggml-vulkan/ggml-vulkan.cpp` at b11669 (line 15505) returns false for a
+  `MUL_MAT_ID` whose precision is `GGML_PREC_F32`, so the scheduler runs it on the CPU. Mistral
+  Small 4's expert down-projections ask for that precision, and they stay on the CPU on this
+  build; [#30105](https://github.com/ggml-org/llama.cpp/pull/30105), which would run them on
+  Vulkan, is open and unchanged since 2026-10-08.
+- **Gemma 4 sliding-window reuse.** [#30580](https://github.com/ggml-org/llama.cpp/pull/30580)
+  fixes an off-by-two in the threshold that decides whether a slot state restored from the RAM
+  prompt cache or a slot file covers a sliding-window model's window. The threshold asked for
+  two cells more than the window holds, so a restored state was rejected and the slot rolled
+  back to an older checkpoint, or reprocessed the prompt. Gemma 4 26B-A4B, gemma-4-E4B and
+  gpt-oss-120b all have sliding-window layers: switching a slot back to an earlier
+  conversation from the RAM cache now reprocesses only the tokens after the window (on
+  gemma-4-E4B, 17 instead of 53 in the PR). Prefix reuse measured on earlier builds can read
+  better on b11669 where a run restores from the RAM cache.
+- **Slot selection.** [#30567](https://github.com/ggml-org/llama.cpp/pull/30567) makes the
+  extra tasks of a split request (`n` above 1, decision questions) take empty slots first, then
+  the least recently used, and save a state they overwrite to the prompt cache; every slot
+  choice now uses one eviction rule. A request with `n` = 1, which every consumer and
+  instrument sends, picks its slot as before. [#30574](https://github.com/ggml-org/llama.cpp/pull/30574)
+  also saves a draft model's state in a slot file; set A runs no draft.
+- **The Ministral 3 and Qwen3-Coder handlers.** Both change only in the chat-output rewrite's
+  one line, which appends to the prompt as a part (#30389); their detection, reasoning tags and
+  parsers are as on b11572. They matter to the candidates, not set A: by
+  `common_chat_template_detect_params_init` in `common/chat.cpp` at b11669, Mistral Small 4's
+  upstream template (`[SYSTEM_PROMPT]`, `[TOOL_CALLS]` and `[ARGS]`, no `[CALL_ID]`) takes the
+  Ministral 3 handler, and Nemotron 3.5 Super's (`<tool_call>`, `<function=`, `<parameter=`,
+  `<think>`) takes the Qwen3-Coder handler with reasoning on. That the GGUFs embed those same
+  templates is confirmed when each loads.
+- **Nemotron support.** [#30520](https://github.com/ggml-org/llama.cpp/pull/30520) adds
+  Nemotron 3.5 Super VL and Nemotron Bolt 74B A9B: the `NemotronH_Omni_Reasoning_V3`
+  architecture in the Nemotron-H graph, and its vision encoder in `mtmd`. b11669 is the first
+  build that runs the nemotron set's main model, as the profile's `[engine]` comment says; set
+  A runs on no part of it.
+- **Other.** [#30405](https://github.com/ggml-org/llama.cpp/pull/30405) maps into a backend
+  buffer only the ranges of a model file that buffer's tensors use, so a model with per-layer
+  token embeddings no longer pins its lazily read embedding table into the GPU buffer. That may
+  lower gemma-4-E4B's footprint (it has per-layer embeddings); the next footprint run shows it.
+  [#29741](https://github.com/ggml-org/llama.cpp/pull/29741) changes how Vulkan shares host
+  memory between several GPUs, with a single GPU unaffected;
+  [#29877](https://github.com/ggml-org/llama.cpp/pull/29877) applies only to devices with no
+  cooperative matrix and no integer dot product, and
+  [#30215](https://github.com/ggml-org/llama.cpp/pull/30215) only to NVIDIA's coopmat2, so
+  neither runs on Strix Halo. [#30582](https://github.com/ggml-org/llama.cpp/pull/30582) fixes
+  the web UI's agentic turn limit. The ggml library moves to 0.27.0 and llama.cpp to 0.7.0
+  ([#30603](https://github.com/ggml-org/llama.cpp/pull/30603)).
+- **Sampling defaults.** Unchanged: `common/common.h` gains only two fields, the draft's batch
+  size and whether `--cache-ram` was given. The GGUF `general.sampling.*` defaults and the
+  presets' values apply as before.
+- **`/v1/messages` thinking.** Unchanged: `tools/server/server-chat.cpp` has no commit in the
+  range. A request's `thinking` with `type` `enabled` sets the reasoning budget from
+  `budget_tokens`; `disabled`, `adaptive` and `output_config.effort` are not read.
+  [#20479](https://github.com/ggml-org/llama.cpp/pull/20479), which maps Claude's
+  `thinking.type` and `output_config.effort` (and OpenAI's and OpenRouter's reasoning fields)
+  to the template's reasoning, is open and unchanged since 2026-06-26. Claude Code meets
+  `/v1/messages` and its thinking blocks as b11572 served them.
+- **Flags and preset keys.** Two changes: `--spec-draft-n-ubatch` (`LLAMA_ARG_SPEC_DRAFT_N_UBATCH`,
+  [#30459](https://github.com/ggml-org/llama.cpp/pull/30459)) sets a draft model's physical
+  batch, and `--cache-ram`'s default becomes 0 for decision models (#30498). No flag is
+  renamed or removed. `ctx-checkpoints` (`-ctxcp`, default 32 per slot) and
+  `checkpoint-min-step` (default 8192) are as before, and `tools/server/server-models.cpp`
+  has no change, so router mode, the preset keys, `--models-max`, and `load-on-startup` are
+  unchanged. No note requires a preset change, so the presets did not change for this move.
+
+### What was re-verified on b11669
+
+- **The install.** The architect installed b11669 from its Vulkan x64 asset (sha256 checked)
+  into `/opt/llama.cpp/b11669`, repointed `current` and restarted `llama-router`. All four of
+  set A's models loaded with no manual load, and `/props` reports `b11669-620d2225c`.
+- **The probe.** `mise run integration` against the router passed on b11669, set a, with the
+  same rendered unit and presets as on b11572: `/health`, the four models loaded, the build at
+  or above the minimum, each model's default sampling, gpt-oss-120b's chat and `/v1/messages`
+  tool call (`get_weather` `{"city":"Paris"}`), the 26B-A4B's image and gemma-4-E4B's audio
+  answers, and EmbeddingGemma 2's 768 dimensions.
+- **The swap.** `go run ./cmd/swap a` against the router read set A loaded and kept all four,
+  with no unload or load: the command's first run against a real router. `swap mistral`
+  stopped before any change, since the installed presets, rendered before the candidate sets
+  existed, list neither candidate.
