@@ -162,11 +162,20 @@ func TestRenderPresets(t *testing.T) {
 	}
 }
 
-// TestStrixHaloMatchesPinnedPreset renders the Strix Halo profile and compares its sections,
-// keys and values with the pinned copy of personal-agents' 96GiB preset. The one difference
-// allowed is load-on-startup = true on each model's section, which the profile renders and the
-// pinned copy lacks.
+// TestStrixHaloMatchesPinnedPreset renders the Strix Halo profile and compares the sections,
+// keys and values of set A, its startup set, with the pinned copy of personal-agents' 96GiB
+// preset. The one difference allowed is load-on-startup = true on each of set A's sections,
+// which the profile renders and the pinned copy lacks. Every other set's model renders without
+// load-on-startup and is left out of the comparison: the pinned copy predates the candidates.
 func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
+	p, err := profile.Load(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := p.StartupSet(); s == nil || s.Name != "a" {
+		t.Fatalf("StartupSet() = %+v; want set a", s)
+	}
+	startup := p.StartupSet().Models
 	got := parseINI(t, render(t, strixHalo))
 	text, err := os.ReadFile(pinned)
 	if err != nil {
@@ -176,7 +185,14 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 
 	models := 0
 	for name, keys := range got {
-		if name == "*" {
+		switch {
+		case name == "*":
+			continue
+		case !slices.Contains(startup, name):
+			if v, ok := keys["load-on-startup"]; ok {
+				t.Errorf("[%s] load-on-startup = %q; want the key absent outside set A", name, v)
+			}
+			delete(got, name)
 			continue
 		}
 		models++
@@ -186,7 +202,7 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 		delete(keys, "load-on-startup")
 	}
 	if models != 4 {
-		t.Errorf("rendered %d model sections; want 4", models)
+		t.Errorf("rendered %d of set A's model sections; want 4", models)
 	}
 	for name, wantKeys := range want {
 		gotKeys, ok := got[name]
@@ -245,18 +261,18 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 		},
 		{
 			"a set over four models",
-			replace(t, extraModel(t, text, "example/fifth-GGUF:Q4_0"), "models = [\n", "models = [\n  \"example/fifth-GGUF:Q4_0\",\n"),
+			replace(t, extraModel(t, text, "example/fifth-GGUF:Q4_0"), "startup = true\nmodels = [\n", "startup = true\nmodels = [\n  \"example/fifth-GGUF:Q4_0\",\n"),
 			"sets[0].models: 5 models, over the router's 4",
 		},
 		{
 			"a set naming a model the profile doesn't list",
 			text + extraSet("b", false, gptOSS, "example/unlisted-GGUF:Q4_0"),
-			`sets[1].models: "example/unlisted-GGUF:Q4_0" is not a model the profile lists`,
+			`sets[3].models: "example/unlisted-GGUF:Q4_0" is not a model the profile lists`,
 		},
 		{
 			"a set with no chat model",
 			text + extraSet("b", false, embedding),
-			"sets[1].models: required, at least one chat model",
+			"sets[3].models: required, at least one chat model",
 		},
 		{
 			"an unknown role",
@@ -271,17 +287,17 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 		{
 			"a model in no set",
 			extraModel(t, text, "example/fifth-GGUF:Q4_0"),
-			`models[4].id: "example/fifth-GGUF:Q4_0" is in no set`,
+			`models[6].id: "example/fifth-GGUF:Q4_0" is in no set`,
 		},
 		{
 			"a set named twice",
 			text + extraSet("a", false, gptOSS),
-			`sets[1].name: "a" is listed twice`,
+			`sets[3].name: "a" is listed twice`,
 		},
 		{
 			"a set listing a model twice",
 			text + extraSet("b", false, gptOSS, gptOSS),
-			`sets[1].models: "ggml-org/gpt-oss-120b-GGUF:MXFP4" is listed twice`,
+			`sets[3].models: "ggml-org/gpt-oss-120b-GGUF:MXFP4" is listed twice`,
 		},
 		{
 			"no role",
@@ -305,7 +321,7 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 		},
 		{
 			"a set assigning no embedding model",
-			replace(t, text, "embedding = \"ggml-org/embeddinggemma-2-GGUF:Q8_0\"\n", ""),
+			replace(t, text, "audio = \"ggml-org/gemma-4-E4B-it-GGUF:Q8_0\"\nembedding = \"ggml-org/embeddinggemma-2-GGUF:Q8_0\"\n\n# The binding test", "audio = \"ggml-org/gemma-4-E4B-it-GGUF:Q8_0\"\n\n# The binding test"),
 			"sets[0].roles.embedding: required",
 		},
 		{
@@ -315,7 +331,7 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 		},
 		{
 			"a role assigned to a model that doesn't declare it",
-			replace(t, text, "audio = \"ggml-org/gemma-4-E4B-it-GGUF:Q8_0\"", "audio = \"ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0\""),
+			replace(t, text, "Q4_0\"\naudio = \"ggml-org/gemma-4-E4B-it-GGUF:Q8_0\"", "Q4_0\"\naudio = \"ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0\""),
 			`sets[0].roles.audio: "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0" doesn't declare the audio role`,
 		},
 		{
@@ -330,7 +346,7 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 		},
 		{
 			"a generative model with a width",
-			replace(t, text, "kind = \"generative\"\nc = 131072", "kind = \"generative\"\ndims = 768\nc = 131072"),
+			replace(t, text, "gpt-oss-120b\"\nkind = \"generative\"\n", "gpt-oss-120b\"\nkind = \"generative\"\ndims = 768\n"),
 			"models[0].dims: only an embedding model has an output width",
 		},
 		{
@@ -354,8 +370,7 @@ func TestLoadAcceptsOptionalRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(base)
-	text = replace(t, text, "vision = \"ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0\"\n", "")
-	text = replace(t, text, "audio = \"ggml-org/gemma-4-E4B-it-GGUF:Q8_0\"\n", "")
+	text = replace(t, text, "vision = \"ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0\"\naudio = \"ggml-org/gemma-4-E4B-it-GGUF:Q8_0\"\n", "")
 	p, err := profile.Load(writeProfile(t, text))
 	if err != nil {
 		t.Fatalf("Load(no vision or audio model): %v", err)
@@ -756,4 +771,161 @@ func dropTable(t *testing.T, text, header string) string {
 	}
 	end := strings.Index(text[start:], "\n\n")
 	return text[:start] + text[start+end+2:]
+}
+
+// The candidate sets' main models, as the Strix Halo profile names them.
+const (
+	mistral  = "unsloth/Mistral-Small-4-119B-2603-GGUF:UD-Q4_K_XL"
+	nemotron = "ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF:NVFP4"
+)
+
+// TestStrixHaloCandidateSets shows the Strix Halo profile's two candidate sets: each holds its
+// main model, which takes chat and images, beside set A's gemma-4-E4B for audio and
+// EmbeddingGemma 2 for embeddings; each budget is an estimate, not yet measured; and neither
+// main model renders load-on-startup, while each renders its own settings.
+func TestStrixHaloCandidateSets(t *testing.T) {
+	p, err := profile.Load(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const (
+		e4b       = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+		embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+	)
+	for name, main := range map[string]string{"mistral": mistral, "nemotron": nemotron} {
+		s, err := p.Set(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.Startup {
+			t.Errorf("set %s is a startup set; want only set a", name)
+		}
+		if want := []string{main, e4b, embedding}; !slices.Equal(s.Models, want) {
+			t.Errorf("set %s models = %q; want %q", name, s.Models, want)
+		}
+		want := profile.SetRoles{Chat: main, Vision: main, Audio: e4b, Embedding: embedding}
+		if s.Roles != want {
+			t.Errorf("set %s roles = %+v; want %+v", name, s.Roles, want)
+		}
+		if b := s.MemoryBudget; b.EstimatedMiB <= 0 || b.EstimatedMiB > b.PoolMiB || b.MeasuredMiB != 0 || b.Build != "" {
+			t.Errorf("set %s budget = %+v; want an estimate within the pool, no measurement or build yet", name, b)
+		}
+		if m := p.Model(main); m == nil || m.C != 131072 || !slices.Equal(m.Roles, []string{profile.RoleChat, profile.RoleVision}) {
+			t.Errorf("Model(%s) = %+v; want a chat and vision model at c = 131072", main, m)
+		}
+	}
+
+	got := parseINI(t, render(t, strixHalo))
+	for _, tt := range []struct {
+		section    string
+		key, value string // a key the section sets, and its value
+		absent     string // a key the section doesn't set
+	}{
+		{mistral, "chat-template-kwargs", `{"reasoning_effort":"high"}`, "load-on-startup"},
+		{mistral, "temp", "0.7", "ctx-checkpoints"},
+		{nemotron, "ctx-checkpoints", "8", "load-on-startup"},
+		{nemotron, "top-p", "0.95", "chat-template-kwargs"},
+	} {
+		keys, ok := got[tt.section]
+		if !ok {
+			t.Errorf("[%s] not rendered", tt.section)
+			continue
+		}
+		if keys[tt.key] != tt.value {
+			t.Errorf("[%s] %s = %q; want %q", tt.section, tt.key, keys[tt.key], tt.value)
+		}
+		if v, ok := keys[tt.absent]; ok {
+			t.Errorf("[%s] %s = %q; want the key absent", tt.section, tt.absent, v)
+		}
+	}
+}
+
+// TestStrixHaloConsumerReasoning shows the candidates' consumer reasoning settings decode as
+// written, OpenCode's nested options included, and set A's models set none.
+func TestStrixHaloConsumerReasoning(t *testing.T) {
+	p, err := profile.Load(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := p.Model(mistral).Consumers
+	if m.Pi != "high" || m.OpenCode["reasoningEffort"] != "high" || len(m.OpenCode) != 1 {
+		t.Errorf("Mistral's consumers = %+v; want Pi high, OpenCode reasoningEffort high", m)
+	}
+	n := p.Model(nemotron).Consumers
+	kwargs, _ := n.OpenCode["chat_template_kwargs"].(map[string]any)
+	if n.Pi != "medium" || kwargs["enable_thinking"] != true || len(n.OpenCode) != 1 {
+		t.Errorf("Nemotron's consumers = %+v; want Pi medium, OpenCode chat_template_kwargs enable_thinking true", n)
+	}
+	set, err := p.Set("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range set.Models {
+		if c := p.Model(id).Consumers; c.Pi != "" || c.OpenCode != nil || c.Reason != "" {
+			t.Errorf("set A's %s sets consumers %+v; want none, so set A's runs reproduce", id, c)
+		}
+	}
+	if p.Model("example/unlisted-GGUF:Q4_0") != nil {
+		t.Error("Model(an unlisted ID) is not nil")
+	}
+}
+
+// TestLoadMemoryBudgetEstimate shows a set's budget may be an estimate alone, with no build, but
+// must be a measurement or an estimate, each positive, and a measurement names its build.
+func TestLoadMemoryBudgetEstimate(t *testing.T) {
+	base, err := os.ReadFile(skeleton)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(base)
+	estimate := replace(t, dropLine(t, text, "build ="), "measured_mib = ", "estimated_mib = ")
+	if _, err := profile.Load(writeProfile(t, estimate)); err != nil {
+		t.Errorf("Load(an estimate alone, no build): %v", err)
+	}
+	both := addLine(t, text, "measured_mib =", "estimated_mib = 70000")
+	if _, err := profile.Load(writeProfile(t, both)); err != nil {
+		t.Errorf("Load(a measurement beside its estimate): %v", err)
+	}
+	for _, tt := range []struct{ name, text, want string }{
+		{"neither", dropLine(t, text, "measured_mib ="), "sets[0].memory_budget.measured_mib: required, or estimated_mib"},
+		{"a negative estimate", replace(t, estimate, "estimated_mib = ", "estimated_mib = -"), "sets[0].memory_budget.estimated_mib: required, a positive integer"},
+		{"a measurement without its build", dropLine(t, both, "build ="), "sets[0].memory_budget.build: required"},
+		{"an estimate naming a malformed build", addLine(t, estimate, "estimated_mib =", `build = "latest"`), `sets[0].memory_budget.build: "latest" is not a llama.cpp build`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assertFails(t, writeProfile(t, tt.text), tt.want)
+		})
+	}
+}
+
+// TestLoadNamesInvalidConsumers shows a model's consumer reasoning must give a Pi thinking level
+// Pi takes and a reason, must set Pi or OpenCode, and belongs only to a generative chat model;
+// a key outside the schema is refused, though OpenCode's options are free-form.
+func TestLoadNamesInvalidConsumers(t *testing.T) {
+	base, err := os.ReadFile(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(base)
+	const mistralPi = "[models.consumers]\npi = \"high\""
+	for _, tt := range []struct{ name, text, want string }{
+		{"a level Pi doesn't take", replace(t, text, mistralPi, "[models.consumers]\npi = \"maximum\""), `models[4].consumers.pi: "maximum" is not one of Pi's thinking levels`},
+		{"no reason", replace(t, text, "reason = \"\"\"\nMistral Small 4's template", "unused = \"\"\"\nMistral Small 4's template"), "models[4].consumers.reason: required"},
+		{"a reason alone", replace(t, replace(t, text, mistralPi+"\n", "[models.consumers]\n"), "opencode = { reasoningEffort = \"high\" }\n", ""), "models[4].consumers: sets neither pi nor opencode"},
+		{"on the embedding model", replace(t, text, "[models.args]\nembeddings = true", "[models.consumers]\npi = \"high\"\nreason = \"x\"\n\n[models.args]\nembeddings = true"), "models[3].consumers: only a generative chat model runs under a consumer"},
+		{"an undefined key", replace(t, text, mistralPi, mistralPi+"\nclaude = \"high\""), "models.consumers.claude: not a key the schema defines"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assertFails(t, writeProfile(t, tt.text), tt.want)
+		})
+	}
+
+	p, err := profile.Load(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Model(mistral).Consumers.Reason = ""
+	if err := p.Validate(); err == nil || !strings.Contains(err.Error(), "models[4].consumers.reason: required") {
+		t.Errorf("Validate(consumers without a reason) = %v; want models[4].consumers.reason: required", err)
+	}
 }

@@ -34,10 +34,11 @@ const state = "../.state"
 const strixHalo = "../profiles/strix-halo.toml"
 
 // liveRouter returns a Recorder in front of the router SPIKE_ROUTER_URL names, served on a
-// local listener, that listener's URL, and the roles of the profile's set SPIKE_SET names, or
-// else of its startup set. It skips the test when SPIKE_ROUTER_URL is unset, fails it unless the
-// router has every model of the set loaded, and logs the build and the set it runs on.
-func liveRouter(t *testing.T) (*wire.Recorder, string, profile.SetRoles) {
+// local listener, that listener's URL, the roles of the profile's set SPIKE_SET names, or else
+// of its startup set, and the consumer reasoning setting of the set's chat model. It skips the
+// test when SPIKE_ROUTER_URL is unset, fails it unless the router has every model of the set
+// loaded, and logs the build and the set it runs on.
+func liveRouter(t *testing.T) (*wire.Recorder, string, profile.SetRoles, profile.ConsumerReasoning) {
 	t.Helper()
 	base := strings.TrimSuffix(os.Getenv("SPIKE_ROUTER_URL"), "/")
 	if base == "" {
@@ -68,7 +69,7 @@ func liveRouter(t *testing.T) (*wire.Recorder, string, profile.SetRoles) {
 	rec := wire.New(target)
 	srv := httptest.NewServer(rec)
 	t.Cleanup(srv.Close)
-	return rec, srv.URL, set.Roles
+	return rec, srv.URL, set.Roles, p.Model(set.Roles.Chat).Consumers
 }
 
 // toolTurn writes a file holding a fresh code into a new working directory under state, and
@@ -155,7 +156,7 @@ func blockTypes(bs []map[string]any) []string {
 // names Claude Code (MISE_ENV=consumers mise which claude), and ../.state/claude must hold its
 // login.
 func TestClaudeThinkingRoundTrip(t *testing.T) {
-	rec, proxy, roles := liveRouter(t)
+	rec, proxy, roles, _ := liveRouter(t)
 	command := os.Getenv("SPIKE_CLAUDE")
 	if command == "" {
 		t.Skip("SPIKE_CLAUDE is unset: set it to Claude Code (MISE_ENV=consumers mise which claude)")
@@ -245,12 +246,12 @@ func TestClaudeThinkingRoundTrip(t *testing.T) {
 	}
 }
 
-// TestPiReasoningRoundTrip runs one Pi turn that calls its read tool, through a Recorder, and
-// reports whether the request after the tool call carries the assistant's reasoning back as
+// TestPiReasoningRoundTrip runs one Pi turn that calls its read tool, through a Recorder, at
+// the set's chat model's thinking level, as the passk cell sets it, and reports whether the request after the tool call carries the assistant's reasoning back as
 // reasoning_content. Pi's answer is a finding, not a pass or fail. SPIKE_PI names Pi
 // (MISE_ENV=consumers mise which pi).
 func TestPiReasoningRoundTrip(t *testing.T) {
-	rec, proxy, roles := liveRouter(t)
+	rec, proxy, roles, reasoning := liveRouter(t)
 	command := os.Getenv("SPIKE_PI")
 	if command == "" {
 		t.Skip("SPIKE_PI is unset: set it to Pi (MISE_ENV=consumers mise which pi)")
@@ -258,7 +259,11 @@ func TestPiReasoningRoundTrip(t *testing.T) {
 	dir, prompt, code := toolTurn(t, "pi")
 	agent := t.TempDir()
 	defer save(t, rec, "pi")
-	text := send(t, consumers.Pi(command, proxy, agent), harness.Options{Provider: consumers.Provider, Model: roles.Chat, Dir: dir, HarnessTools: []string{"read"}}, prompt)
+	d, err := consumers.Pi(command, proxy, agent, roles.Chat, reasoning.Pi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := send(t, d, harness.Options{Provider: consumers.Provider, Model: roles.Chat, Dir: dir, HarnessTools: []string{"read"}}, prompt)
 	t.Logf("answer: %q", text)
 	if !strings.Contains(text, code) {
 		t.Errorf("the answer %q doesn't carry the file's code %s", text, code)
@@ -270,8 +275,9 @@ func TestPiReasoningRoundTrip(t *testing.T) {
 }
 
 // TestOpenCodeReasoningRoundTrip runs one OpenCode turn that calls its read tool, through a
-// Recorder, once with the set's chat model's interleaved setting naming reasoning_content, as
-// the passk cell sets it, and once without it, and reports whether the request after the tool call carries
+// Recorder, once with the set's chat model's interleaved setting naming reasoning_content and
+// its options, as the passk cell sets them, and once without the file that holds both, and
+// reports whether the request after the tool call carries
 // the assistant's reasoning back. OpenCode's answer is a finding, not a pass or fail. SPIKE_OPENCODE
 // names OpenCode (MISE_ENV=consumers mise which opencode).
 func TestOpenCodeReasoningRoundTrip(t *testing.T) {
@@ -285,14 +291,14 @@ func TestOpenCodeReasoningRoundTrip(t *testing.T) {
 			name = "unset"
 		}
 		t.Run(name, func(t *testing.T) {
-			rec, proxy, roles := liveRouter(t)
+			rec, proxy, roles, reasoning := liveRouter(t)
 			consumer := "opencode-" + name
 			dir, prompt, code := toolTurn(t, consumer)
 			var images []string
 			if roles.Vision != "" {
 				images = append(images, roles.Vision)
 			}
-			d, err := consumers.OpenCode(command, proxy, filepath.Join(t.TempDir(), "opencode"), roles.Chat, images...)
+			d, err := consumers.OpenCode(command, proxy, filepath.Join(t.TempDir(), "opencode"), roles.Chat, reasoning.OpenCode, images...)
 			if err != nil {
 				t.Fatal(err)
 			}

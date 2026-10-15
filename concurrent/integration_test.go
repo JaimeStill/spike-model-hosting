@@ -60,8 +60,12 @@ func TestLiveRun(t *testing.T) {
 		state := t.TempDir()
 		workers := concurrent.SplitSlots(p.Slots, 2)
 		modelChat.Workers = workers[1]
+		driver, err := consumers.Pi(command, base, state, chatModel, p.Model(chatModel).Consumers.Pi)
+		if err != nil {
+			t.Fatal(err)
+		}
 		chats = append(chats, concurrent.ChatStream{Name: "pi", Workers: workers[0], Chatter: concurrent.HarnessChat{
-			Driver:  consumers.Pi(command, base, state),
+			Driver:  driver,
 			Options: harness.Options{Provider: consumers.Provider, Model: chatModel, Dir: state, HarnessTools: []string{}},
 		}})
 	} else {

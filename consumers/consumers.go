@@ -53,10 +53,22 @@ func Executable(ctx context.Context, given, name string) (string, error) {
 // agent directory and cache, so the driver refuses dir unless it exists and is the user's alone;
 // the caller makes it. The driver's bridge sets tool_choice "required" on every request that
 // offers respond.
-func Pi(command, router, dir string) pi.Driver {
+//
+// thinking is Pi's thinking level for the chat model, or empty for Pi's own. Pi reads it from
+// its agent directory's settings file (PiSettings), written before the driver is returned, the
+// directory created private to the user, replacing any file a run before left. It fails when
+// the directory or the file can't be written.
+func Pi(command, router, dir, chat, thinking string) (pi.Driver, error) {
+	agent := filepath.Join(dir, "agent")
+	if err := os.MkdirAll(agent, 0o700); err != nil {
+		return pi.Driver{}, err
+	}
+	if err := os.WriteFile(filepath.Join(agent, "settings.json"), PiSettings(chat, thinking), 0o600); err != nil {
+		return pi.Driver{}, err
+	}
 	return pi.Driver{
 		Command:    command,
-		AgentDir:   filepath.Join(dir, "agent"),
+		AgentDir:   agent,
 		SessionDir: filepath.Join(dir, "sessions"),
 		CacheDir:   filepath.Join(dir, "cache"),
 		// Pi's llama.cpp provider takes the router's root.
@@ -65,7 +77,23 @@ func Pi(command, router, dir string) pi.Driver {
 		// models once its background refresh lands; sessions starting at once share the router's
 		// answer time.
 		CatalogWait: 30 * time.Second,
+	}, nil
+}
+
+// PiSettings is the settings file Pi reads from its agent directory: with thinking set, the
+// chat model's thinking level, under modelThinkingLevels by Provider/chat, which Pi applies when
+// a session selects the model; with none, no setting at all. Pi clamps the level to the levels
+// it reads the model as supporting. Its llama.cpp provider reads a model as reasoning only when
+// the template the router reports reads enable_thinking, offers it off and medium, and sends
+// chat_template_kwargs enable_thinking true at medium and false at off; it sends no reasoning
+// field for any other model, whatever the level. With no setting, a session's level is off.
+func PiSettings(chat, thinking string) []byte {
+	settings := map[string]any{}
+	if thinking != "" {
+		settings["modelThinkingLevels"] = map[string]string{Provider + "/" + chat: thinking}
 	}
+	b, _ := json.Marshal(settings)
+	return b
 }
 
 // ClaudeEnv is the environment that sends Claude Code's model requests to router, an
@@ -103,18 +131,18 @@ func CheckClaudeLogin(configDir string) error {
 
 // OpenCode returns OpenCode's driver: command on an OpenAI-compatible provider named Provider
 // at router/v1, its configuration, data and sessions under dir, with the chat model's
-// interleaved setting naming reasoning_content (InterleavedConfig). The provider lists each of
+// interleaved setting naming reasoning_content and its options (InterleavedConfig). The provider lists each of
 // imageModels as taking images, and chat, unless it is one of them, as text only, which the
 // driver does on its own. The driver writes its own configuration into
 // OPENCODE_CONFIG_CONTENT; the interleaved setting goes in the explicit configuration file
 // OPENCODE_CONFIG names, dir/interleaved.json, which OpenCode merges beneath it, model by model.
 // It fails when dir or that file can't be written.
-func OpenCode(command, router, dir, chat string, imageModels ...string) (opencode.Driver, error) {
+func OpenCode(command, router, dir, chat string, options map[string]any, imageModels ...string) (opencode.Driver, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return opencode.Driver{}, err
 	}
 	interleaved := filepath.Join(dir, "interleaved.json")
-	if err := os.WriteFile(interleaved, InterleavedConfig(chat), 0o600); err != nil {
+	if err := os.WriteFile(interleaved, InterleavedConfig(chat, options), 0o600); err != nil {
 		return opencode.Driver{}, err
 	}
 	models := map[string]opencode.Model{}
@@ -136,14 +164,19 @@ func OpenCode(command, router, dir, chat string, imageModels ...string) (opencod
 // InterleavedConfig is the OpenCode configuration that sets the chat model's interleaved field
 // to reasoning_content: OpenCode then moves each assistant message's reasoning into that field
 // of the request, which llama.cpp reads back into the model's prompt through its chat template.
-// The model's entry is where any other per-model OpenCode setting would go.
-func InterleavedConfig(chat string) []byte {
+// options, when there are any, are the model's options, which OpenCode sends with each of its
+// requests: an AI SDK option, such as reasoningEffort, as its request field, reasoning_effort,
+// and any other as given, such as chat_template_kwargs. They are how a chat model's reasoning
+// setting reaches the router.
+func InterleavedConfig(chat string, options map[string]any) []byte {
+	model := map[string]any{"interleaved": map[string]string{"field": "reasoning_content"}}
+	if len(options) > 0 {
+		model["options"] = options
+	}
 	b, _ := json.Marshal(map[string]any{
 		"$schema": "https://opencode.ai/config.json",
 		"provider": map[string]any{Provider: map[string]any{
-			"models": map[string]any{chat: map[string]any{
-				"interleaved": map[string]string{"field": "reasoning_content"},
-			}},
+			"models": map[string]any{chat: model},
 		}},
 	})
 	return b

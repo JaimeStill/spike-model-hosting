@@ -79,11 +79,15 @@ func TestCells(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pi, err := passk.Pi(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	cases := []struct {
 		cell                     conform.Cell
 		harness, pinned, profile string
 	}{
-		{passk.Pi(cfg), "pi", consumers.PiVersion, "Pi"},
+		{pi, "pi", consumers.PiVersion, "Pi"},
 		{passk.Claude(cfg), "claude", consumers.ClaudeVersion, "Claude Code"},
 		{oc, "opencode", consumers.OpenCodeVersion, "OpenCode"},
 	}
@@ -117,7 +121,11 @@ func TestCellsChatTakesImages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, c := range []conform.Cell{passk.Pi(cfg), passk.Claude(cfg), oc} {
+	pi, err := passk.Pi(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []conform.Cell{pi, passk.Claude(cfg), oc} {
 		if c.VisionModel != candidate || !c.DefaultTakesImages {
 			t.Errorf("%s: VisionModel %q, DefaultTakesImages %v; want %s and true", c.Harness, c.VisionModel, c.DefaultTakesImages, candidate)
 		}
@@ -128,6 +136,39 @@ func TestCellsChatTakesImages(t *testing.T) {
 	}
 	if o := passk.SessionOptions(cfg, "pi", consumers.Provider); o.Model != candidate {
 		t.Errorf("SessionOptions Model = %q, want %s", o.Model, candidate)
+	}
+}
+
+// TestCellsReasoning shows the chat model's consumer reasoning setting reaches Pi's settings
+// and OpenCode's configuration, under the run's state directory, and Claude Code's driver takes
+// none of it.
+func TestCellsReasoning(t *testing.T) {
+	cfg := config(t)
+	cfg.Reasoning = profile.ConsumerReasoning{
+		Pi:       "high",
+		OpenCode: map[string]any{"reasoningEffort": "high"},
+		Reason:   "the template accepts high",
+	}
+	if _, err := passk.Pi(cfg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := passk.OpenCode(cfg); err != nil {
+		t.Fatal(err)
+	}
+	for file, want := range map[string][]byte{
+		filepath.Join(cfg.State, "pi", "agent", "settings.json"): consumers.PiSettings(setA.Chat, "high"),
+		filepath.Join(cfg.State, "opencode", "interleaved.json"): consumers.InterleavedConfig(setA.Chat, cfg.Reasoning.OpenCode),
+	} {
+		got, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != string(want) {
+			t.Errorf("%s = %s; want %s", file, got, want)
+		}
+	}
+	if want := consumers.ClaudeEnv(cfg.Router, setA.Chat); !slices.Equal(passk.ClaudeDriver(cfg).Env, want) {
+		t.Errorf("Claude Code's Env = %q; want %q, unchanged by the reasoning setting", passk.ClaudeDriver(cfg).Env, want)
 	}
 }
 

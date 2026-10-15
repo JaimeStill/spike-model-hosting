@@ -12,14 +12,18 @@
 //   - Engine is the serving engine and its minimum build; Engine.Repository names its upstream.
 //   - Defaults, Model, Sampling, Set and MemoryBudget are the profile's tables.
 //   - A Set names up to MaxSetModels of the profile's models, at least one a chat model, with
-//     its own MemoryBudget. Exactly one set is the startup set, which Profile.StartupSet
-//     returns, and every model is in at least one set.
+//     its own MemoryBudget: measured on a build, or estimated for a set not yet measured.
+//     Exactly one set is the startup set, which Profile.StartupSet returns, and every model is
+//     in at least one set.
 //   - A Set's SetRoles assign the model each role's requests go to, chat and embedding
 //     required, vision and audio optional, each one of the set's models that declares the role;
 //     SetRoles.Models lists them once each. Profile.Set looks a set up by name, the startup set
 //     for none: the one lookup the probe and every instrument share.
 //   - Each Model declares its roles and its licence beside its origin, and an embedding model
-//     its output width, Dims.
+//     its output width, Dims; Profile.Model looks one up by router ID.
+//   - A chat Model's ConsumerReasoning is the reasoning setting the coding agents send with its
+//     requests, Pi's thinking level and OpenCode's options, each one its template accepts. It
+//     configures the consumers, not the router, and renders into no preset.
 //   - HostStrixHalo and HostNvidiaCUDA, EngineLlamaCPP, BindTailnet and BindLoopback, KVUnified
 //     and KVPerSlot, KindGenerative and KindEmbedding, RoleChat, RoleVision, RoleAudio and
 //     RoleEmbedding, and ReasoningLow, ReasoningMedium and ReasoningHigh are the values its

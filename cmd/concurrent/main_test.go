@@ -119,8 +119,8 @@ func TestRefusesUnknownSet(t *testing.T) {
 	}))
 	defer srv.Close()
 	_, errOut, code := run(t, []string{"SPIKE_ROUTER_URL=" + srv.URL}, "-set", "z")
-	if code != 2 || !strings.Contains(errOut, `no set "z"`) || !strings.Contains(errOut, `["a"]`) {
-		t.Errorf("exit %d, stderr %q; want 2, naming the unknown set and set a", code, errOut)
+	if code != 2 || !strings.Contains(errOut, `no set "z"`) || !strings.Contains(errOut, `["a" "mistral" "nemotron"]`) {
+		t.Errorf("exit %d, stderr %q; want 2, naming the unknown set and the profile's sets", code, errOut)
 	}
 	if n := requests.Load(); n != 0 {
 		t.Errorf("the router got %d requests, want 0", n)

@@ -195,7 +195,8 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 	if err != nil {
 		return concurrent.Report{}, err
 	}
-	piDriver, err := newPiDriver(o, piCmd)
+	// Pi runs the chat model at its thinking level; a valid profile lists every role model.
+	piDriver, err := newPiDriver(o, piCmd, chatModel, p.Model(chatModel).Consumers.Pi)
 	if err != nil {
 		return concurrent.Report{}, err
 	}
@@ -259,8 +260,9 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 }
 
 // newPiDriver returns Pi's driver, its agent directory, sessions and cache under the state
-// directory, on Pi's llama.cpp provider pointed at the router (consumers.Pi).
-func newPiDriver(o options, command string) (pi.Driver, error) {
+// directory, on Pi's llama.cpp provider pointed at the router, at the chat model's thinking
+// level (consumers.Pi).
+func newPiDriver(o options, command, chatModel, thinking string) (pi.Driver, error) {
 	root := filepath.Join(o.state, "pi")
 	// Pi runs code from its agent directory and cache, so the driver refuses either unless it
 	// is private to the user.
@@ -269,7 +271,7 @@ func newPiDriver(o options, command string) (pi.Driver, error) {
 			return pi.Driver{}, err
 		}
 	}
-	return consumers.Pi(command, o.router, root), nil
+	return consumers.Pi(command, o.router, root, chatModel, thinking)
 }
 
 // newClaudeDriver returns Claude Code's driver, its configuration directory under the state

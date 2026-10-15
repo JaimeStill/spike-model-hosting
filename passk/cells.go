@@ -54,18 +54,27 @@ type Config struct {
 	// and the direct client names the embedding model, though no capability embeds. Each must
 	// be loaded already: a run never loads one.
 	Roles profile.SetRoles
+	// Reasoning is the reasoning setting Pi and OpenCode send for the chat model, its
+	// profile.Model's Consumers; the zero value leaves each at its own default. Claude Code
+	// takes none.
+	Reasoning profile.ConsumerReasoning
 }
 
-// Pi returns Pi's cell: Pi on its llama.cpp provider pointed at cfg.Router (consumers.Pi), its
-// agent directory, sessions and cache under cfg.State/pi.
-func Pi(cfg Config) conform.Cell {
+// Pi returns Pi's cell: Pi on its llama.cpp provider pointed at cfg.Router, at the chat model's
+// thinking level, cfg.Reasoning.Pi (consumers.Pi), its agent directory, sessions and cache under
+// cfg.State/pi. It fails when Pi's settings file can't be written.
+func Pi(cfg Config) (conform.Cell, error) {
 	dir := filepath.Join(cfg.State, "pi")
-	d := consumers.Pi(cfg.Command, cfg.Router, dir)
-	return cell(cfg, "pi", consumers.PiVersion, scenario.Pi, consumers.Provider, d, []scenario.Need{privateDir(dir)})
+	d, err := consumers.Pi(cfg.Command, cfg.Router, dir, cfg.Roles.Chat, cfg.Reasoning.Pi)
+	if err != nil {
+		return conform.Cell{}, err
+	}
+	return cell(cfg, "pi", consumers.PiVersion, scenario.Pi, consumers.Provider, d, []scenario.Need{privateDir(dir)}), nil
 }
 
 // OpenCode returns OpenCode's cell: OpenCode on an OpenAI-compatible provider at cfg.Router/v1
-// with the chat model's interleaved setting naming reasoning_content (consumers.OpenCode), its
+// with the chat model's interleaved setting naming reasoning_content and its options,
+// cfg.Reasoning.OpenCode (consumers.OpenCode), its
 // state under cfg.State/opencode, the vision model, when the set has one, listed as taking
 // images. It fails when the driver's configuration file can't be written.
 func OpenCode(cfg Config) (conform.Cell, error) {
@@ -73,7 +82,7 @@ func OpenCode(cfg Config) (conform.Cell, error) {
 	if cfg.Roles.Vision != "" {
 		images = append(images, cfg.Roles.Vision)
 	}
-	d, err := consumers.OpenCode(cfg.Command, cfg.Router, filepath.Join(cfg.State, "opencode"), cfg.Roles.Chat, images...)
+	d, err := consumers.OpenCode(cfg.Command, cfg.Router, filepath.Join(cfg.State, "opencode"), cfg.Roles.Chat, cfg.Reasoning.OpenCode, images...)
 	if err != nil {
 		return conform.Cell{}, err
 	}

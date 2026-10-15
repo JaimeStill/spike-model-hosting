@@ -6,10 +6,11 @@
 // the chat model of the profile's set the run names (Config.Roles) over the router, on the
 // consumers package's driver, its state under the run's own directory and never the user's:
 //   - Pi on its llama.cpp provider, which the driver's bridge constrains to tool_choice
-//     "required" on every request that offers respond (consumers.Pi).
+//     "required" on every request that offers respond, at the chat model's thinking level
+//     (consumers.Pi).
 //   - OpenCode on an OpenAI-compatible provider, with the chat model's interleaved setting naming
-//     reasoning_content, so a turn that called tools sends its reasoning back; its tool_choice
-//     stays auto (consumers.OpenCode).
+//     reasoning_content, so a turn that called tools sends its reasoning back, and its options;
+//     its tool_choice stays auto (consumers.OpenCode).
 //   - Claude Code over the router's Anthropic messages, on the subscription login of its own
 //     configuration directory, every model alias mapped to the chat model (consumers.ClaudeCode).
 //
@@ -21,8 +22,9 @@
 //
 // The API:
 //   - Pi, OpenCode and Claude return a consumer's cell from a Config, whose Roles name the
-//     set's chat, vision, audio and embedding models; ClaudeDriver the Claude cell's driver,
-//     and SessionOptions the options a cell's sessions open with.
+//     set's chat, vision, audio and embedding models and whose Reasoning is the chat model's
+//     consumer reasoning setting (profile.ConsumerReasoning); ClaudeDriver the Claude cell's
+//     driver, and SessionOptions the options a cell's sessions open with.
 //   - Version reads the version a consumer's executable reports, which a cell checks against
 //     the consumers package's pin.
 //   - Tally counts a consumer's k trials, each a Trial, into a Row: a Cell per capability with

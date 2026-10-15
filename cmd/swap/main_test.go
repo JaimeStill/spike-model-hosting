@@ -146,9 +146,9 @@ func (f *fakeRouter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// twoSets writes the Strix Halo profile with a second set, b, of Gemma 4 26B-A4B, taking chat
+// withSetB writes the Strix Halo profile with one more set, b, of Gemma 4 26B-A4B, taking chat
 // and images both as a candidate main model does, and the embedding model, and returns its path.
-func twoSets(t *testing.T) string {
+func withSetB(t *testing.T) string {
 	t.Helper()
 	base, err := os.ReadFile(filepath.Join(root, "profiles", "strix-halo.toml"))
 	if err != nil {
@@ -169,7 +169,7 @@ pool_mib = 98304
 measured_mib = 30000
 build = "b11565"
 `
-	path := filepath.Join(t.TempDir(), "two-sets.toml")
+	path := filepath.Join(t.TempDir(), "with-set-b.toml")
 	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestSwap(t *testing.T) {
 	f := newFake(gemma26B, embedding)
 	srv := httptest.NewServer(f)
 	defer srv.Close()
-	out, errOut, code := run(t, nil, "-router", srv.URL, "-profile", twoSets(t), "-interval", "1ms", "a")
+	out, errOut, code := run(t, nil, "-router", srv.URL, "-profile", withSetB(t), "-interval", "1ms", "a")
 	if code != 0 {
 		t.Fatalf("exit %d, stderr %q\n%s", code, errOut, out)
 	}
@@ -211,9 +211,9 @@ func TestRefusesUnknownSet(t *testing.T) {
 	f := newFake(gptOSS)
 	srv := httptest.NewServer(f)
 	defer srv.Close()
-	_, errOut, code := run(t, nil, "-router", srv.URL, "-profile", twoSets(t), "c")
-	if code != 2 || !strings.Contains(errOut, `no set "c"`) || !strings.Contains(errOut, `["a" "b"]`) {
-		t.Errorf("exit %d, stderr %q; want 2, naming c and the sets a and b", code, errOut)
+	_, errOut, code := run(t, nil, "-router", srv.URL, "-profile", withSetB(t), "c")
+	if code != 2 || !strings.Contains(errOut, `no set "c"`) || !strings.Contains(errOut, `["a" "mistral" "nemotron" "b"]`) {
+		t.Errorf("exit %d, stderr %q; want 2, naming c and the profile's sets, b among them", code, errOut)
 	}
 	if f.requests != 0 {
 		t.Errorf("the router got %d requests, want none", f.requests)

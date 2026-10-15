@@ -217,12 +217,15 @@ func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.R
 			_, _ = fmt.Fprintf(stderr, "-- %s %s: %s\n", time.Now().Format(time.TimeOnly), c.Harness, cmp.Or(capability, "checking the consumer"))
 		},
 	}
+	// Pi and OpenCode run the chat model at its consumer reasoning setting; a valid profile lists
+	// every role model.
+	chat := p.Model(set.Roles.Chat)
 	start := time.Now()
 	trials := map[string][]passk.Trial{}
 	for k := 1; k <= o.k; k++ {
 		for _, name := range o.consumers {
 			_, _ = fmt.Fprintf(stderr, "== trial %d/%d: %s\n", k, o.k, name)
-			t, err := trial(ctx, o, set.Roles, root, name, k, opts)
+			t, err := trial(ctx, o, set.Roles, chat.Consumers, root, name, k, opts)
 			if err != nil {
 				return nil, err
 			}
@@ -239,8 +242,9 @@ func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.R
 	return rows, write(stdout, rows, trials, o, build, set.Name, time.Since(start))
 }
 
-// trial runs one consumer's cell once, through a Recorder of its own, and saves the recording.
-func trial(ctx context.Context, o options, roles profile.SetRoles, root, name string, k int, opts conform.Options) (passk.Trial, error) {
+// trial runs one consumer's cell once, on the set's roles and the chat model's consumer
+// reasoning setting, through a Recorder of its own, and saves the recording.
+func trial(ctx context.Context, o options, roles profile.SetRoles, reasoning profile.ConsumerReasoning, root, name string, k int, opts conform.Options) (passk.Trial, error) {
 	target, err := url.Parse(o.router)
 	if err != nil {
 		return passk.Trial{}, err
@@ -261,11 +265,14 @@ func trial(ctx context.Context, o options, roles profile.SetRoles, root, name st
 		State:        root,
 		ClaudeConfig: filepath.Join(o.state, "claude"),
 		Roles:        roles,
+		Reasoning:    reasoning,
 	}
 	var cell conform.Cell
 	switch name {
 	case "pi":
-		cell = passk.Pi(cfg)
+		if cell, err = passk.Pi(cfg); err != nil {
+			return passk.Trial{}, err
+		}
 	case "claude":
 		cell = passk.Claude(cfg)
 	default:

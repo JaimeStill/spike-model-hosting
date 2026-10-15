@@ -74,7 +74,8 @@ type Set struct {
 	// Roles names the model of the set's that each role's requests go to: the model the
 	// spike's probe and instruments send chat, images, audio and embeddings to.
 	Roles SetRoles `toml:"roles"`
-	// MemoryBudget is the set's measured footprint, all its models loaded.
+	// MemoryBudget is the set's footprint, all its models loaded: measured, or estimated
+	// until it is measured.
 	MemoryBudget MemoryBudget `toml:"memory_budget"`
 }
 
@@ -105,6 +106,17 @@ func (r SetRoles) Models() []string {
 		}
 	}
 	return ids
+}
+
+// Model returns the profile's model whose router ID is id, or nil when it lists none: how a
+// tool finds what the profile says of a set's role model, such as its chat model's Consumers.
+func (p *Profile) Model(id string) *Model {
+	for i := range p.Models {
+		if p.Models[i].ID == id {
+			return &p.Models[i]
+		}
+	}
+	return nil
 }
 
 // StartupSet returns the profile's startup set, or nil when no set is marked startup. A valid
@@ -169,18 +181,25 @@ type Defaults struct {
 	CheckpointMinStep int `toml:"checkpoint_min_step"`
 }
 
-// MemoryBudget records the measured memory footprint of a set's models, all loaded. Its
-// figures are recorded, never computed or checked against the pool: the binding test is a
-// measurement on the host, and this is where its result is kept.
+// MemoryBudget records the memory footprint of a set's models, all loaded. Its figures are
+// recorded, never computed or checked against the pool: the binding test is a measurement on
+// the host, and this is where its result is kept. A set not yet measured records its estimate
+// instead, which the measurement joins, never replaces, once the set has loaded on the host.
 type MemoryBudget struct {
 	// PoolMiB is the memory pool the models load into.
 	PoolMiB int `toml:"pool_mib"`
 	// MeasuredMiB is the pool used with every model in the set loaded and Slots requests in
-	// flight on each.
+	// flight on each. It, EstimatedMiB, or both is set.
 	MeasuredMiB int `toml:"measured_mib"`
-	// Build is the engine build the measurement ran on.
+	// EstimatedMiB is the same figure estimated from the models' file sizes and their caches'
+	// costs, for a set not yet measured. The estimate's arithmetic is kept in a comment beside
+	// it.
+	EstimatedMiB int `toml:"estimated_mib"`
+	// Build is the engine build the measurement ran on, required with MeasuredMiB. An estimate
+	// alone names none: it ran on no build.
 	Build string `toml:"build"`
-	// Source names where the full measurement is kept; it is optional.
+	// Source names where the full measurement, or the figures an estimate starts from, is kept;
+	// it is optional.
 	Source string `toml:"source"`
 }
 
@@ -210,6 +229,10 @@ const (
 	ReasoningMedium = "medium"
 	ReasoningHigh   = "high"
 )
+
+// piThinkingLevels are the thinking levels Pi's settings take (Pi 1.3.0's docs/settings.md,
+// defaultThinkingLevel), the values a model's Consumers.Pi may hold.
+var piThinkingLevels = []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 
 // reservedArgs are the presets keys the profile renders from its typed fields, which a model's
 // raw Args may not set.
@@ -273,7 +296,34 @@ type Model struct {
 	// ArgsReason says why the model sets Args; required when it sets any. It renders as a comment
 	// above the model's section.
 	ArgsReason string `toml:"args_reason"`
+	// Consumers is the reasoning setting each coding agent the spike drives sends when the
+	// model is a set's chat model; the zero value leaves each agent at its own default. It is
+	// the consumers' configuration, not the router's, so it renders into no preset.
+	Consumers ConsumerReasoning `toml:"consumers"`
 }
+
+// ConsumerReasoning is the reasoning setting a coding agent sends with a chat model's
+// requests, per agent, chosen so each sends a value the model's chat template accepts. Claude
+// Code has none: the spike runs it unchanged. A model that sets any of it is a generative
+// model that declares the chat role, and gives the Reason.
+type ConsumerReasoning struct {
+	// Pi is Pi's thinking level for the model, one of off, minimal, low, medium, high, xhigh
+	// and max, written into Pi's per-model settings (modelThinkingLevels). Pi clamps it to the
+	// levels it reads the model as supporting, and maps the result to the request its
+	// provider sends.
+	Pi string `toml:"pi"`
+	// OpenCode are the options OpenCode sends with each of the model's requests, set on the
+	// model in OpenCode's configuration: an AI SDK option such as reasoningEffort, which it
+	// sends as reasoning_effort, or a request field it passes through as given, such as
+	// chat_template_kwargs.
+	OpenCode map[string]any `toml:"opencode"`
+	// Reason says why each agent takes its value: what it sends, and that the model's template
+	// accepts it. Required when Pi or OpenCode is set.
+	Reason string `toml:"reason"`
+}
+
+// set reports whether c sets anything.
+func (c ConsumerReasoning) set() bool { return c.Pi != "" || len(c.OpenCode) > 0 || c.Reason != "" }
 
 // Sampling is a generative model's sampling, every value traced to Source. Each value is
 // required, so the card, not the engine's or the conversion's defaults, is what the model runs
@@ -336,6 +386,10 @@ func (h Host) Validate() error {
 // the unit's shell wrapper or systemd would read as syntax.
 const unsafeHostChars = " \t\n\r\v\f'\"\\$%`"
 
+// freeForm is the key path of the one table whose keys the schema leaves to the profile:
+// Model.Consumers.OpenCode, OpenCode's options.
+var freeForm = []string{"models", "consumers", "opencode"}
+
 // minBuild matches a llama.cpp build tag.
 var minBuild = regexp.MustCompile(`^b[0-9]+$`)
 
@@ -350,6 +404,11 @@ func Load(path string) (*Profile, error) {
 	}
 	var errs []error
 	for _, key := range md.Undecoded() {
+		// A consumer's options are free-form, passed to the consumer as given; the decoder
+		// reports a table nested in them as undecoded though it is kept.
+		if slices.Equal(key[:min(len(key), len(freeForm))], freeForm) {
+			continue
+		}
 		errs = append(errs, fmt.Errorf("%s: not a key the schema defines", key))
 	}
 	if err := errors.Join(append(errs, p.Validate())...); err != nil {
@@ -452,6 +511,7 @@ func (p *Profile) Validate() error {
 		if len(m.Args) > 0 {
 			required(field("args_reason"), m.ArgsReason)
 		}
+		errs = append(errs, m.validateConsumers(field("consumers"))...)
 	}
 
 	if len(p.Sets) == 0 {
@@ -495,10 +555,21 @@ func (p *Profile) Validate() error {
 			errs = append(errs, fmt.Errorf("%s: required, at least one %s model", field("models"), RoleChat))
 		}
 		errs = append(errs, s.validateRoles(field("roles"), models)...)
-		budget := field("memory_budget")
-		positive(budget+".pool_mib", s.MemoryBudget.PoolMiB)
-		positive(budget+".measured_mib", s.MemoryBudget.MeasuredMiB)
-		build(budget+".build", s.MemoryBudget.Build)
+		budget, b := field("memory_budget"), s.MemoryBudget
+		positive(budget+".pool_mib", b.PoolMiB)
+		switch {
+		case b.MeasuredMiB == 0 && b.EstimatedMiB == 0:
+			errs = append(errs, fmt.Errorf("%s.measured_mib: required, or estimated_mib for a set not yet measured", budget))
+		case b.MeasuredMiB < 0:
+			positive(budget+".measured_mib", b.MeasuredMiB)
+		case b.EstimatedMiB < 0:
+			positive(budget+".estimated_mib", b.EstimatedMiB)
+		}
+		// A measurement names the build it ran on; an estimate alone ran on none, though it may
+		// name one.
+		if b.MeasuredMiB != 0 || b.EstimatedMiB == 0 || b.Build != "" {
+			build(budget+".build", b.Build)
+		}
 	}
 	switch {
 	case len(p.Sets) > 0 && len(startup) == 0:
@@ -566,6 +637,30 @@ func (m Model) validateRoles(prefix string) []error {
 		errs = append(errs, fmt.Errorf("%s: an embedding model takes the %s role alone", prefix, RoleEmbedding))
 	case m.Kind == KindGenerative && embedding:
 		errs = append(errs, fmt.Errorf("%s: a generative model can't take the %s role", prefix, RoleEmbedding))
+	}
+	return errs
+}
+
+// validateConsumers reports a consumer reasoning setting on a model that can't be a chat model,
+// a Pi thinking level Pi doesn't take, and a setting without its reason, under the key path
+// prefix.
+func (m Model) validateConsumers(prefix string) []error {
+	c := m.Consumers
+	if !c.set() {
+		return nil
+	}
+	var errs []error
+	if m.Kind != KindGenerative || !slices.Contains(m.Roles, RoleChat) {
+		errs = append(errs, fmt.Errorf("%s: only a generative %s model runs under a consumer", prefix, RoleChat))
+	}
+	if c.Pi == "" && len(c.OpenCode) == 0 {
+		errs = append(errs, fmt.Errorf("%s: sets neither pi nor opencode", prefix))
+	}
+	if c.Pi != "" && !slices.Contains(piThinkingLevels, c.Pi) {
+		errs = append(errs, fmt.Errorf("%s.pi: %q is not one of Pi's thinking levels %q", prefix, c.Pi, piThinkingLevels))
+	}
+	if c.Reason == "" {
+		errs = append(errs, fmt.Errorf("%s.reason: required", prefix))
 	}
 	return errs
 }
