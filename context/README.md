@@ -77,9 +77,10 @@ of the admin tooling.
 
 - **Framework desktop** (Strix Halo, 96 GB GTT pool): the first host class, available now. It
   hosts and serves inference only. The spike may change anything in its hosting layer,
-  including the runtime, its configuration, and the models, through root commands the architect
-  runs; sessions observe that layer read-only, such as `amdgpu_top` over SSH. Only the OS
-  install and the Tailscale registration stay fixed, and there is no restore point.
+  including the runtime, its configuration, and the models. Sessions may do on it whatever
+  needs no sudo: the router's HTTP API (including load, unload, and downloads), user-level SSH
+  reads such as `amdgpu_top`, and logs. Root stays the architect's, run from exact commands.
+  Only the OS install and the Tailscale registration stay fixed, and there is no restore point.
 - **Dell NVIDIA workstation** (CUDA): available from 2026-10-14. The tasks that need it say so.
 - **Remote access:** sessions reach both hosts by Tailscale SSH in accept mode, set by the
   architect before the first task and reverted to check mode when the spike completes.
@@ -104,8 +105,9 @@ of the admin tooling.
   lookup the probe and every instrument share: each takes `-set` (or `SPIKE_SET`), the startup
   set by default. `profiles/strix-halo.toml` serves set A on
   the Framework. Renderers for the other platforms' configuration are planned.
-- **Model cards:** how to read a model card, what each value means, and the values set A takes
-  from each card, in [`model-cards.md`](model-cards.md).
+- **Model cards:** how to read a model card, what each value means, the values set A takes
+  from each card, and a catalog of each profiled model's maximum context and its computed KV
+  and recurrent-state cost, in [`model-cards.md`](model-cards.md).
 - **Serving platforms:** llama.cpp (Vulkan, ROCm, CUDA), vLLM, SGLang, and llama-swap, each with
   its setup and management record.
 - **Consumers:** Pi, Claude Code, OpenCode, and spike-harness-driver's `model` package as
@@ -157,16 +159,25 @@ The tasks, in the order they run; each cites the evidence it proves.
    a minimum build (evidence 1).
 3. `consumers`: the three consumers at once on the Vulkan router, and the baseline every
    platform is measured against, all run from the laptop (evidence 4, 5).
-4. `main-model`: Mistral Small 4's promotion probe against gpt-oss-120b (evidence 4, 6).
-5. `rocm`: llama.cpp's ROCm backend against Vulkan (evidence 2–7).
-6. `engines-strix`: vLLM, and SGLang time-boxed, on Strix Halo (evidence 2–7).
-7. `gateway`: the gateway approaches in front of the Framework (evidence 8, 10).
-8. `admin`: needs go-cli-sdk v0.1.0. The admin tool over the profile (evidence 9).
-9. `cuda`: needs the Dell NVIDIA workstation (from 2026-10-14). The CUDA profile and llama.cpp's
-   CUDA router (evidence 2, 5, 7).
-10. `engines-cuda`: needs the Dell NVIDIA workstation. vLLM and SGLang on CUDA; the gateway
+4. `main-model`: named sets in the profile, swapped over the router's API, with the probe and
+   every instrument taking a set; gpt-oss-120b's comparison row on b11669; Mistral Small 4
+   disqualified on Vulkan (evidence 4, 6).
+5. `evaluation`: role-specific evaluation pipelines (agent, vision, audio, embedding) with
+   staged gates (admission, fitness under ~3 minutes, capacity, quality, characterization);
+   graded fixtures of rising complexity; a set evaluation for co-loaded models covering all four
+   core roles; speed judged beside accuracy, with floors set by the hardware (evidence 4, 5).
+6. `candidates`: candidates for every role, including Nemotron 3.5 Super and new vision, audio,
+   and embedding candidates, run through the pipelines; the verdict and the startup set
+   (evidence 4, 6).
+7. `rocm`: llama.cpp's ROCm backend against Vulkan (evidence 2–7).
+8. `engines-strix`: vLLM, and SGLang time-boxed, on Strix Halo (evidence 2–7).
+9. `gateway`: the gateway approaches in front of the Framework (evidence 8, 10).
+10. `admin`: needs go-cli-sdk v0.1.0. The admin tool over the profile (evidence 9).
+11. `cuda`: needs the Dell NVIDIA workstation (from 2026-10-14). The CUDA profile and
+   llama.cpp's CUDA router (evidence 2, 5, 7).
+12. `engines-cuda`: needs the Dell NVIDIA workstation. vLLM and SGLang on CUDA; the gateway
    configurations and the admin tool rerun unchanged (evidence 2–9).
-11. `validate`: evidence 1–10 on both hosts, the platform comparison, and the answer.
+13. `validate`: evidence 1–10 on both hosts, the platform comparison, and the answer.
 
 ## References
 
