@@ -162,7 +162,12 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
 - Slice 5 hermetic half committed (63e28aa): mistral and nemotron sets (estimated budgets),
   per-model consumer reasoning ([models.consumers]); Pi can't send reasoning_effort to Mistral
   without a driver change (out of scope), so Mistral's effort comes from its preset. Live half
-  (download, swap, probe, footprint) next after slice 2.
+  committed (e3274ab, c14826a): presets render hf-repo; Mistral's ID tag is Q4_K_XL (the router
+  canonicalizes UD-Q4_K_XL; same files). Both candidates downloaded, loaded and probed on
+  b11669; swaps timed (a→mistral 2154 s, mistral→nemotron 2779 s, both mostly download;
+  nemotron→a 23 s). Mistral ~3.4 tok/s with ~8.5 CPU threads busy (the F32 fallback);
+  Nemotron ~12.1 tok/s. Mistral's image answer intermittent (3 of 15 repeats said no image).
+- Slice 7: Mistral bar and measurements in progress.
 
 ## Decisions
 
