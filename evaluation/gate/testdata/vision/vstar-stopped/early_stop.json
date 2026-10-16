@@ -1,0 +1,15 @@
+{
+ "bar": 0.99,
+ "size": 10,
+ "screening": 2,
+ "run": 6,
+ "passes": 2,
+ "upper_bound": 0.6529852329996819,
+ "stopped": [
+  "103",
+  "107",
+  "134",
+  "178"
+ ],
+ "reason": "the 95% upper bound 0.9217 on the pass rate (2/3) is below the bar 0.99"
+}

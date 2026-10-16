@@ -61,8 +61,9 @@ type ASR interface {
 // --no-python-downloads --python <Python> python <Project>/<script> ...`, which syncs the
 // project's .venv from its lock on first use. The datasets download from Hugging Face under
 // Cache, which the gated run keeps under the state directory: HF_HOME is its huggingface/,
-// MTEB_CACHE its mteb/, and ASR_CACHE, where asr_quality.py keeps each tier's clips as WAV, its
-// asr/.
+// MTEB_CACHE its mteb/, ASR_CACHE, where asr_quality.py keeps each tier's clips as WAV, its
+// asr/, and INSPECT_EVALS_CACHE_DIR, where inspect_evals' tasks keep their images, its
+// inspect_evals/.
 type UV struct {
 	// Exe is uv, and Python the interpreter it runs: the consumers mise environment's.
 	Exe, Python string
@@ -97,7 +98,8 @@ func (u UV) run(ctx context.Context, script string, args ...string) error {
 	cmd := exec.CommandContext(ctx, u.Exe, append([]string{"run", "--project", u.Project, "--locked", "--no-python-downloads",
 		"--python", u.Python, "python", filepath.Join(u.Project, script)}, args...)...)
 	cmd.Env = append(os.Environ(), "HF_HOME="+filepath.Join(u.Cache, "huggingface"),
-		"MTEB_CACHE="+filepath.Join(u.Cache, "mteb"), "ASR_CACHE="+filepath.Join(u.Cache, "asr"))
+		"MTEB_CACHE="+filepath.Join(u.Cache, "mteb"), "ASR_CACHE="+filepath.Join(u.Cache, "asr"),
+		"INSPECT_EVALS_CACHE_DIR="+filepath.Join(u.Cache, "inspect_evals"))
 	cmd.Stdout, cmd.Stderr = u.Log, u.Log
 	return cmd.Run()
 }
@@ -178,14 +180,16 @@ func readJSON(path string, v any, python bool) error {
 }
 
 // qualityBuilt reports whether the quality stage has a suite for any of the run's roles: so far,
-// the embedding role's MTEB tasks and the audio role's ASR sets.
+// the embedding role's MTEB tasks, the audio role's ASR sets and the vision role's tiers.
 func qualityBuilt(rep *Report) bool {
-	return slices.Contains(rep.Roles, RoleEmbedding) || slices.Contains(rep.Roles, RoleAudio)
+	return slices.Contains(rep.Roles, RoleEmbedding) || slices.Contains(rep.Roles, RoleAudio) ||
+		slices.Contains(rep.Roles, RoleVision)
 }
 
 // quality runs each role's quality suite that is built, one check a task or set, each judged
 // against its bar, by name, in r.Bars, and recorded, passed, when there is none. The embedding
-// role runs EmbeddingTasks through r.MTEB; the audio role, AudioSets through r.ASR.
+// role runs EmbeddingTasks through r.MTEB; the audio role, AudioSets through r.ASR; the vision
+// role, VisionTiers through r.Vision, cheapest first, stopping at the first tier that fails.
 func (r *Runner) quality(ctx context.Context, rep *Report) []Check {
 	var checks []Check
 	if slices.Contains(rep.Roles, RoleEmbedding) {
@@ -203,6 +207,9 @@ func (r *Runner) quality(ctx context.Context, rep *Report) []Check {
 				return checks
 			}
 		}
+	}
+	if slices.Contains(rep.Roles, RoleVision) {
+		checks = append(checks, r.visionTiers(ctx)...)
 	}
 	return checks
 }

@@ -29,3 +29,9 @@ run = "{{config_root}}/scripts/baseline.sh"
 [tasks.asr-tiers]
 description = "Draw the audio role's ASR tier lists from the sets' IDs with their seed"
 run = "{{config_root}}/scripts/asr-tiers.sh"
+
+# The vision role's tier lists, evaluation/tiers/vision-<benchmark>.txt, drawn again from their
+# seed and the benchmarks' pinned revisions. It reads the network and rewrites the committed lists.
+[tasks.vision-tiers]
+description = "Draw the vision role's V*Bench, DocVQA and MMMU tier lists from their IDs with their seed"
+run = "{{config_root}}/scripts/vision-tiers.sh"

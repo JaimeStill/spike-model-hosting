@@ -19,14 +19,19 @@ import (
 // run of EmbeddingGemma 2 on the Framework, under MTEB 2.26.3. An ASR set is answered with
 // testdata/asr/<set>: Inspect's JSON log of a live run of gemma-4-E4B on the Framework, trimmed
 // to the utterances of testdata/tiers/asr-<set>.txt, and, given a bar, testdata/asr/<set>-stopped
-// where there is one, a run early stopping ended. Each result is stamped with the suites
-// project's pin of MTEB or Inspect AI, since the check refuses another's and a pin moves on
-// while the recording stays the same.
+// where there is one, a run early stopping ended. A vision tier is answered likewise with
+// testdata/vision/<tier>: the Inspect JSON logs of a live run of Gemma 4 26B-A4B on the
+// Framework, trimmed to testdata/tiers/vision-<tier>.txt, or testdata/vision/<tier>-stopped
+// given a bar. Each result is stamped with the suites project's pin of MTEB, Inspect AI or
+// inspect_evals, since the check refuses another's and a pin moves on while the recording stays
+// the same.
 type fakeUV struct {
 	dir string
-	// fail names a task or set the fake exits 1 on, writing nothing; mteb and inspect, when
-	// set, are the versions stamped in place of the pins.
-	fail, mteb, inspect string
+	// fail names a task, set or vision tier the fake exits 1 on, writing nothing; mteb, inspect
+	// and evals, when set, are the versions stamped in place of the pins.
+	fail, mteb, inspect, evals string
+	// testdata, when set, is the directory the results are answered from in place of testdata.
+	testdata string
 }
 
 func newFakeUV(t *testing.T) *fakeUV {
@@ -35,18 +40,20 @@ func newFakeUV(t *testing.T) *fakeUV {
 
 // runner writes the fake's script as it is configured, and returns the UV that runs it.
 func (f *fakeUV) runner() gate.UV {
-	testdata, err := filepath.Abs("testdata")
+	testdata, err := filepath.Abs(cmp.Or(f.testdata, "testdata"))
 	if err != nil {
 		panic(err)
 	}
 	script := fmt.Sprintf(`#!/bin/sh
-printf '%%s|%%s|%%s|%%s\n' "$*" "$HF_HOME" "$MTEB_CACHE" "$ASR_CACHE" >> %[1]q
-kind= task= set= out= bar=
+printf '%%s|%%s|%%s|%%s|%%s\n' "$*" "$HF_HOME" "$MTEB_CACHE" "$ASR_CACHE" "$INSPECT_EVALS_CACHE_DIR" >> %[1]q
+kind= task= set= tier= out= bar=
 while [ $# -gt 0 ]; do
 	case $1 in
 	*/mteb_quality.py) kind=mteb ;;
 	*/asr_quality.py) kind=asr ;;
+	*/vision_quality.py) kind=vision ;;
 	--task) task=$2; shift ;;
+	--tier) tier=$2; shift ;;
 	--set) set=$2; shift ;;
 	--output) out=$2; shift ;;
 	--bar) bar=$2; shift ;;
@@ -64,9 +71,16 @@ asr)
 	[ -n "$bar" ] && [ -d "$src-stopped" ] && src=$src-stopped
 	mkdir -p "$out" && cp "$src"/*.json "$out"/ || exit 1
 	sed -i 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' "$out"/*.json ;;
+vision)
+	[ "$tier" = %[2]q ] && exit 1
+	src=%[3]q/vision/"$tier"
+	[ -n "$bar" ] && [ -d "$src-stopped" ] && src=$src-stopped
+	mkdir -p "$out" && cp "$src"/*.json "$out"/ || exit 1
+	sed -i -e 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' -e 's/"inspect_evals": "[^"]*"/"inspect_evals": "%[6]s"/' "$out"/*.json ;;
 *) exit 2 ;;
 esac
-`, filepath.Join(f.dir, "calls"), f.fail, testdata, cmp.Or(f.mteb, gate.MTEBVersion), cmp.Or(f.inspect, gate.InspectVersion))
+`, filepath.Join(f.dir, "calls"), f.fail, testdata, cmp.Or(f.mteb, gate.MTEBVersion), cmp.Or(f.inspect, gate.InspectVersion),
+		cmp.Or(f.evals, gate.InspectEvalsVersion))
 	exe := filepath.Join(f.dir, "uv")
 	if err := os.WriteFile(exe, []byte(script), 0o700); err != nil {
 		panic(err)
@@ -74,8 +88,8 @@ esac
 	return gate.UV{Exe: exe, Python: "/pinned/python", Project: "/module/evaluation/suites", Cache: "/state/cache"}
 }
 
-// calls returns each call's arguments, HF_HOME, MTEB_CACHE and ASR_CACHE, '|'-separated, in
-// order.
+// calls returns each call's arguments, HF_HOME, MTEB_CACHE, ASR_CACHE and
+// INSPECT_EVALS_CACHE_DIR, '|'-separated, in order.
 func (f *fakeUV) calls(t *testing.T) []string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(f.dir, "calls"))
@@ -149,7 +163,7 @@ func TestQualityEmbedding(t *testing.T) {
 	}
 	for i, task := range gate.EmbeddingTasks {
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
-			"/module/evaluation/suites/mteb_quality.py --router %s --model %s --task %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr",
+			"/module/evaluation/suites/mteb_quality.py --router %s --model %s --task %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
 			h.router.srv.URL, embedding, task, filepath.Join(h.runner.Dir, "mteb", task))
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)
@@ -328,7 +342,7 @@ func TestQualityAudio(t *testing.T) {
 	}
 	for i, set := range gate.AudioSets {
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
-			"/module/evaluation/suites/asr_quality.py eval --router %s --model %s --set %s --tier %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr",
+			"/module/evaluation/suites/asr_quality.py eval --router %s --model %s --set %s --tier %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
 			h.router.srv.URL, gemmaE4B, set, filepath.Join(h.runner.Tiers, gate.ASRTier(set)+".txt"), filepath.Join(h.runner.Dir, "asr", set))
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)

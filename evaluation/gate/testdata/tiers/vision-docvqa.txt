@@ -1,0 +1,7 @@
+# tier vision-docvqa
+# dataset lmms-lab-encoder/DocVQA@539088ef8a8ada01ac8e2e6d4e372586748a265e DocVQA validation
+# seed 20261016
+1167
+1623
+16553
+457

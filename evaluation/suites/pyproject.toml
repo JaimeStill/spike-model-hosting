@@ -1,12 +1,13 @@
 # The quality suites evaluate runs from the laptop (package evaluation/gate): MTEB's tasks for the
-# embedding role, through mteb_quality.py's encoder, and Inspect's for the generative roles, so
-# far asr_quality.py's ASR sets for the audio role. Each package is pinned exactly, and Python is
-# the consumers mise environment's 3.14.8; uv.lock is committed, and `mise run currency` reports
-# a pin behind its newest release. The quality stage reads the MTEB and Inspect AI pins from
-# this file (package evaluation/suites), the one place they are set. asr_quality.py imports
+# embedding role, through mteb_quality.py's encoder, and Inspect's for the generative roles, so far
+# asr_quality.py's ASR sets for the audio role and vision_quality.py's tiers, inspect_evals' stock
+# V*Bench, DocVQA and MMMU tasks, for the vision role. Each package is pinned exactly, and Python is
+# the consumers mise environment's 3.14.8; uv.lock is committed, and `mise run currency` reports a
+# pin behind its newest release. The quality stage reads the MTEB, Inspect AI and inspect_evals pins
+# from this file (package evaluation/suites), the one place they are set. asr_quality.py imports
 # huggingface-hub, pyarrow, kaldialign, regex (for the vendored asr_normalizer), soundfile and
-# openai (Inspect's openai-api provider), so each is pinned here too; none needs torch. The .venv
-# uv syncs here is untracked.
+# openai (Inspect's openai-api provider), so each is pinned here too; none needs torch. The .venv uv
+# syncs here is untracked.
 [project]
 name = "spike-suites"
 version = "0.0.0"

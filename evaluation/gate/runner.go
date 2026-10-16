@@ -17,8 +17,8 @@ import (
 )
 
 // The stages, in the order a run takes them. Admission, fitness and capacity are built; quality
-// is built for the embedding and audio roles; set and deep, and quality for the other roles, are
-// named so a run reports them, and later work fills them in.
+// is built for the embedding, audio and vision roles; set and deep, and quality for the agent
+// role, are named so a run reports them, and later work fills them in.
 const (
 	StageAdmission = "admission"
 	StageFitness   = "fitness"
@@ -60,9 +60,12 @@ type Runner struct {
 	// set's Inspect log, in asr/<set>.
 	MTEB MTEB
 	ASR  ASR
-	Dir  string
-	// Tiers is the directory of the tier lists the ASR sets run (TiersDir, under the module
-	// root).
+	// Vision runs the vision role's tiers, each tier's Inspect logs kept in the run's
+	// vision/<tier>.
+	Vision Vision
+	Dir    string
+	// Tiers is the directory of the tier lists the ASR sets and vision tiers run (TiersDir,
+	// under the module root).
 	Tiers string
 }
 

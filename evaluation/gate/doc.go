@@ -1,8 +1,8 @@
 // Package gate runs evaluate's gated stages for one model of a profile's set against the router:
 // admission, fitness, capacity, quality, set and deep, in that order, stopping at the first that
-// fails. Admission, fitness and capacity are built, and quality for the embedding and audio
-// roles; set and deep, and quality for the other roles, are named stages a run reports as not
-// built yet, which later work fills in.
+// fails. Admission, fitness and capacity are built, and quality for the embedding, audio and
+// vision roles; set and deep, and quality for the agent role, are named stages a run reports as
+// not built yet, which later work fills in.
 //
 //   - Admission judges the model on paper, from the profile and the router's build: licence and
 //     origin recorded (failing only when missing), the set's roles declared, the profile's
@@ -36,6 +36,22 @@
 //     requests'), the utterances, errors and words, the wall time, the dataset's revision, the
 //     normalizer's source and Inspect's release, and, for a set the model's card reports, the
 //     card's figure beside ours.
+//   - Quality runs the vision role's tiers (VisionTiers), cheapest first, through the suites
+//     project's vision_quality.py, Inspect AI's openai-api provider at four requests in flight,
+//     and stops at the first tier that fails. Tier 1 is the probe's image and question five
+//     times, at the router's defaults, passing on all five (pass^5, whatever the bars hold), and
+//     V*Bench, 100 seeded questions; tier 2 DocVQA, 150 seeded validation questions; tier 3
+//     MMMU, 200 seeded validation multiple-choice questions across its 30 subjects. The
+//     benchmarks are inspect_evals' stock tasks, their samples picked by Inspect's sample-id
+//     filtering from the tier lists in evaluation/tiers, at temperature 0 with reasoning off.
+//     Each benchmark's score, the accuracy or DocVQA's mean ANLS, is judged against its floor,
+//     by check name (vision-<tier>), under [bars] in evaluation/bars.toml, and recorded, never
+//     failing, without one. A floor also stops the tier early: after the screening fifth, once
+//     the one-sided 95% Wilson upper bound on the pass rate is under it, a sample passing at a
+//     score of 0.5 or more (a mean ANLS is never above that pass rate, so the bound holds for
+//     it too). Each check records the samples run and passed, the request and wall time, the
+//     dataset's revision, the tasks' inspect_evals versions and Inspect's release, and, for a
+//     tier the model's card reports, the card's figure beside ours.
 //
 // Every request carries autoload=false; a run refuses a model the router doesn't list loaded
 // before any stage, and never loads one.
@@ -55,8 +71,11 @@
 //     state root, as <state>/evaluate/<UTC time>-<Slug(model)>/report.json.
 //   - Footprint reads the pool; SSH reads it with amdgpu_top over ssh, and ParseAmdgpuTop parses
 //     that reading.
-//   - MTEB runs one MTEB task, and ASR one ASR set's tier; UV runs either through the suites
-//     project (SuitesDir) with uv. ReadMTEB reads an MTEB result, MTEB's <task>.json and the
+//   - MTEB runs one MTEB task, ASR one ASR set's tier and Vision one vision tier; UV runs each
+//     through the suites project (SuitesDir) with uv. ReadVision reads a vision tier's Inspect
+//     logs into a VisionResult, whose Score and Passes are the tier's; VisionTiers name the
+//     tiers, VisionCheck a tier's check, list and bar name, and InspectEvalsVersion is the
+//     inspect_evals the project pins. ReadMTEB reads an MTEB result, MTEB's <task>.json and the
 //     encoder's encoder.json, into an MTEBResult, and ReadASR an Inspect JSON log into an
 //     ASRResult, whose WER and RTFx are the set's. MTEBVersion and InspectVersion are the MTEB
 //     and Inspect AI the project pins (package evaluation/suites). AudioSets name the ASR sets,

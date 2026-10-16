@@ -65,7 +65,7 @@ func newHarness(t *testing.T, model string) *harness {
 		Router: h.router.srv.URL, Profile: p, Set: set, Model: model, Floors: floors,
 		Footprint: h.footprint, SampleEvery: 5 * time.Millisecond,
 		Media: gate.Media{PNG: []byte("png"), WAV: []byte("wav"), AudioSeconds: 6},
-		MTEB:  uv, ASR: uv, Dir: t.TempDir(), Tiers: tiers,
+		MTEB:  uv, ASR: uv, Vision: uv, Dir: t.TempDir(), Tiers: tiers,
 	}
 	return h
 }
@@ -126,8 +126,9 @@ func TestRunAgentPasses(t *testing.T) {
 	check(t, rep, gate.StageCapacity, gate.RoleAgent, "embedding tolerance")
 }
 
-// TestRunOtherRoles runs each other role's model of set A through the built stages: quality is
-// built for the embedding and audio roles, and runs MTEB's tasks or the ASR sets for them only.
+// TestRunOtherRoles runs each other role's model of set A through the built stages: quality runs
+// MTEB's tasks for the embedding role, the ASR sets for the audio role and the vision tiers for
+// the vision role.
 func TestRunOtherRoles(t *testing.T) {
 	for model, role := range map[string]string{gemma26B: gate.RoleVision, gemmaE4B: gate.RoleAudio, embedding: gate.RoleEmbedding} {
 		t.Run(role, func(t *testing.T) {
@@ -136,15 +137,17 @@ func TestRunOtherRoles(t *testing.T) {
 			if !rep.Passed || !equal(rep.Roles, []string{role}) {
 				t.Errorf("passed %v roles %q; want passed, %s\n%+v", rep.Passed, rep.Roles, role, rep.Stages)
 			}
-			quality, reached, runs := gate.StatusNotBuilt, gate.StageCapacity, 0
+			var runs int
 			switch role {
+			case gate.RoleVision:
+				runs = len(gate.VisionTiers)
 			case gate.RoleEmbedding:
-				quality, reached, runs = gate.StatusPass, gate.StageQuality, len(gate.EmbeddingTasks)
+				runs = len(gate.EmbeddingTasks)
 			case gate.RoleAudio:
-				quality, reached, runs = gate.StatusPass, gate.StageQuality, len(gate.AudioSets)
+				runs = len(gate.AudioSets)
 			}
-			if s := rep.Stage(gate.StageQuality).Status; s != quality || rep.Reached != reached {
-				t.Errorf("quality %s, reached %s; want %s, %s", s, rep.Reached, quality, reached)
+			if s := rep.Stage(gate.StageQuality).Status; s != gate.StatusPass || rep.Reached != gate.StageQuality {
+				t.Errorf("quality %s, reached %s; want pass, quality", s, rep.Reached)
 			}
 			if n := len(h.uv.calls(t)); n != runs {
 				t.Errorf("uv ran %d times; want %d", n, runs)
