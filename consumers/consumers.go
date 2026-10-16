@@ -23,7 +23,7 @@ const Provider = "llama.cpp"
 const (
 	PiVersion       = "1.3.0"
 	ClaudeVersion   = "2.1.301"
-	OpenCodeVersion = "1.19.1"
+	OpenCodeVersion = "1.19.3"
 )
 
 // claudeLogin is the file Claude Code keeps its subscription login in, in its configuration
