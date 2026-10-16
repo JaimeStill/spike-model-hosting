@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -269,14 +270,17 @@ func TestRefusesUnloaded(t *testing.T) {
 // TestRefusesUnknownSet shows the tool refuses a set the profile doesn't name, before it sends
 // the router anything.
 func TestRefusesUnknownSet(t *testing.T) {
-	f := &fakeRouter{}
-	srv := httptest.NewServer(f)
+	var requests atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		http.Error(w, "unexpected", http.StatusTeapot)
+	}))
 	defer srv.Close()
 	_, errOut, code := run(t, []string{"SPIKE_SET=z"}, "-router", srv.URL)
 	if code != 2 || !strings.Contains(errOut, `no set "z"`) {
 		t.Errorf("exit %d, stderr %q; want 2, naming the unknown set", code, errOut)
 	}
-	if len(f.slots) != 0 || len(f.prompts) != 0 {
-		t.Errorf("requests sent: %d chats, %d prompts; want none", len(f.slots), len(f.prompts))
+	if n := requests.Load(); n != 0 {
+		t.Errorf("the router got %d requests, want 0", n)
 	}
 }

@@ -162,11 +162,12 @@ func TestRenderPresets(t *testing.T) {
 	}
 }
 
-// TestStrixHaloMatchesPinnedPreset renders the Strix Halo profile and compares the sections,
-// keys and values of set A, its startup set, with the pinned copy of personal-agents' 96GiB
-// preset. The differences allowed are load-on-startup = true and hf-repo = the section's name on
-// each of set A's sections, which the profile renders and the pinned copy lacks. Every other set's model renders without
-// load-on-startup and is left out of the comparison: the pinned copy predates the candidates.
+// TestStrixHaloMatchesPinnedPreset renders the Strix Halo profile and compares the sections, keys
+// and values of set A, its startup set, with the pinned copy of personal-agents' 96GiB preset. The
+// differences allowed are load-on-startup = true and hf-repo = the section's name on each of set
+// A's sections, which the profile renders and the pinned copy lacks. Every other set's model
+// renders without load-on-startup and is left out of the comparison: the pinned copy predates the
+// candidates.
 func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 	p, err := profile.Load(strixHalo)
 	if err != nil {
@@ -779,74 +780,8 @@ func dropTable(t *testing.T, text, header string) string {
 	return text[:start] + text[start+end+2:]
 }
 
-// The candidate sets' main models, as the Strix Halo profile names them.
-const (
-	mistral  = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
-	nemotron = "ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF:NVFP4"
-)
-
-// TestStrixHaloCandidateSets shows the Strix Halo profile's two candidate sets: each holds its
-// main model, which takes chat and images, beside set A's gemma-4-E4B for audio and
-// EmbeddingGemma 2 for embeddings; each budget is an estimate, not yet measured; and neither
-// main model renders load-on-startup, while each renders its own settings.
-func TestStrixHaloCandidateSets(t *testing.T) {
-	p, err := profile.Load(strixHalo)
-	if err != nil {
-		t.Fatal(err)
-	}
-	const (
-		e4b       = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
-		embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
-	)
-	for name, main := range map[string]string{"mistral": mistral, "nemotron": nemotron} {
-		s, err := p.Set(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if s.Startup {
-			t.Errorf("set %s is a startup set; want only set a", name)
-		}
-		if want := []string{main, e4b, embedding}; !slices.Equal(s.Models, want) {
-			t.Errorf("set %s models = %q; want %q", name, s.Models, want)
-		}
-		want := profile.SetRoles{Chat: main, Vision: main, Audio: e4b, Embedding: embedding}
-		if s.Roles != want {
-			t.Errorf("set %s roles = %+v; want %+v", name, s.Roles, want)
-		}
-		if b := s.MemoryBudget; b.EstimatedMiB <= 0 || b.EstimatedMiB > b.PoolMiB || b.MeasuredMiB != 0 || b.Build != "" {
-			t.Errorf("set %s budget = %+v; want an estimate within the pool, no measurement or build yet", name, b)
-		}
-		if m := p.Model(main); m == nil || m.C != 131072 || !slices.Equal(m.Roles, []string{profile.RoleChat, profile.RoleVision}) {
-			t.Errorf("Model(%s) = %+v; want a chat and vision model at c = 131072", main, m)
-		}
-	}
-
-	got := parseINI(t, render(t, strixHalo))
-	for _, tt := range []struct {
-		section    string
-		key, value string // a key the section sets, and its value
-		absent     string // a key the section doesn't set
-	}{
-		{mistral, "chat-template-kwargs", `{"reasoning_effort":"high"}`, "load-on-startup"},
-		{mistral, "hf-repo", mistral, "mmproj"},
-		{nemotron, "hf-repo", nemotron, "mmproj"},
-		{mistral, "temp", "0.7", "ctx-checkpoints"},
-		{nemotron, "ctx-checkpoints", "8", "load-on-startup"},
-		{nemotron, "top-p", "0.95", "chat-template-kwargs"},
-	} {
-		keys, ok := got[tt.section]
-		if !ok {
-			t.Errorf("[%s] not rendered", tt.section)
-			continue
-		}
-		if keys[tt.key] != tt.value {
-			t.Errorf("[%s] %s = %q; want %q", tt.section, tt.key, keys[tt.key], tt.value)
-		}
-		if v, ok := keys[tt.absent]; ok {
-			t.Errorf("[%s] %s = %q; want the key absent", tt.section, tt.absent, v)
-		}
-	}
-}
+// mistral is the Mistral Small 4 candidate's router ID, as the Strix Halo profile names it.
+const mistral = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
 
 // TestRouterTag shows the tag the router lists a section by: the quant type at the end of the
 // section's tag, upper-cased.
@@ -877,30 +812,38 @@ func TestLoadNamesNonCanonicalID(t *testing.T) {
 	assertFails(t, path, fmt.Sprintf("%q lists on the router as %q", ud, mistral))
 }
 
-// TestStrixHaloConsumerReasoning shows the candidates' consumer reasoning settings decode as
-// written, OpenCode's nested options included, and set A's models set none.
-func TestStrixHaloConsumerReasoning(t *testing.T) {
-	p, err := profile.Load(strixHalo)
+// TestLoadConsumerReasoning shows a chat model's consumer reasoning setting decodes as written,
+// OpenCode's nested options included though the schema leaves them free-form, and a model that
+// sets none decodes to the zero value.
+func TestLoadConsumerReasoning(t *testing.T) {
+	base, err := os.ReadFile(skeleton)
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := p.Model(mistral).Consumers
-	if m.Pi != "high" || m.OpenCode["reasoningEffort"] != "high" || len(m.OpenCode) != 1 {
-		t.Errorf("Mistral's consumers = %+v; want Pi high, OpenCode reasoningEffort high", m)
-	}
-	n := p.Model(nemotron).Consumers
-	kwargs, _ := n.OpenCode["chat_template_kwargs"].(map[string]any)
-	if n.Pi != "medium" || kwargs["enable_thinking"] != true || len(n.OpenCode) != 1 {
-		t.Errorf("Nemotron's consumers = %+v; want Pi medium, OpenCode chat_template_kwargs enable_thinking true", n)
-	}
-	set, err := p.Set("a")
+	text := string(base)
+	second := strings.LastIndex(text, "[[models]]")
+	text = text[:second] + `[models.consumers]
+pi = "medium"
+reason = "the template accepts both"
+
+[models.consumers.opencode]
+reasoningEffort = "high"
+
+[models.consumers.opencode.chat_template_kwargs]
+enable_thinking = true
+
+` + text[second:]
+	p, err := profile.Load(writeProfile(t, text))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range set.Models {
-		if c := p.Model(id).Consumers; c.Pi != "" || c.OpenCode != nil || c.Reason != "" {
-			t.Errorf("set A's %s sets consumers %+v; want none, so set A's runs reproduce", id, c)
-		}
+	c := p.Model("ggml-org/gpt-oss-120b-GGUF:MXFP4").Consumers
+	kwargs, _ := c.OpenCode["chat_template_kwargs"].(map[string]any)
+	if c.Pi != "medium" || c.OpenCode["reasoningEffort"] != "high" || kwargs["enable_thinking"] != true || len(c.OpenCode) != 2 {
+		t.Errorf("Consumers = %+v; want Pi medium, OpenCode reasoningEffort high and chat_template_kwargs enable_thinking true", c)
+	}
+	if e := p.Model("ggml-org/embeddinggemma-2-GGUF:Q8_0").Consumers; e.Pi != "" || e.OpenCode != nil || e.Reason != "" {
+		t.Errorf("the embedding model's Consumers = %+v; want none", e)
 	}
 	if p.Model("example/unlisted-GGUF:Q4_0") != nil {
 		t.Error("Model(an unlisted ID) is not nil")

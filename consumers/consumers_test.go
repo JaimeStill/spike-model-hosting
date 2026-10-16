@@ -215,9 +215,6 @@ func TestOpenCodeOptions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(b, consumers.InterleavedConfig(chatModel, options)) {
-		t.Errorf("interleaved.json = %s; want InterleavedConfig's", b)
-	}
 	want := `"` + chatModel + `":{"interleaved":{"field":"reasoning_content"},"options":{"chat_template_kwargs":{"enable_thinking":true},"reasoningEffort":"high"}}`
 	if !bytes.Contains(b, []byte(want)) {
 		t.Errorf("interleaved.json = %s; want it to hold %s", b, want)

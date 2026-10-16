@@ -260,3 +260,23 @@ func TestSwapRouterDown(t *testing.T) {
 		t.Errorf("Run = %v, want the router's 503", err)
 	}
 }
+
+// TestSwapWaitsForLoading shows a swap waits for an incoming model the router is already
+// loading, rather than ask for it again, and unloads an outgoing model that is still loading.
+func TestSwapWaitsForLoading(t *testing.T) {
+	f := newFake(nil, []string{"b"})
+	for _, id := range []string{"a", "stale"} {
+		f.order = append(f.order, id)
+		f.status[id], f.pending[id], f.ends[id] = "loading", polls, "loaded"
+	}
+	rep, err := swap.Run(t.Context(), config(f.start(t), "a", "b"))
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if want := []string{"unload stale", "load b"}; !slices.Equal(f.commands, want) {
+		t.Errorf("commands %q, want %q: a waited for, not asked to load again", f.commands, want)
+	}
+	if !slices.Equal(names(rep.Loads), []string{"a", "b"}) {
+		t.Errorf("loads %q, want a then b, each a step", names(rep.Loads))
+	}
+}
