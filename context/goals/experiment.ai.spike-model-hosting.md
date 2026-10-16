@@ -70,23 +70,34 @@ Behaviors     1. The repository pins Pi 1.2.0, Claude Code 2.1.300, node 26.12.0
               8. gpt-oss-120b's pass^5 runs again on the new build and pins (Pi, Claude
                  Code over the router; OpenCode measured beside): the comparison row,
                  every cell named.
-              9. Each candidate is judged against that row: Pi 9/9 at 5/5, 0 invalid;
-                 Claude Code over streamed /v1/messages, every cell at or above
-                 gpt-oss-120b's same-build count, no more invalid, thinking streamed and
-                 returned on tool turns; vision cells 5/5 for Pi and Claude Code and the
-                 probe's image answer correct; engine generation ≥ 24 tok/s one stream,
-                 short profile. OpenCode measured, not judged. Every candidate gets the
-                 full bar and measurement set whatever its speed.
-              10. A candidate that misses only the speed floor re-runs once at
-                 the next-smaller native-kernel quant: Nemotron at ggml-org Q4_0; none for
-                 Mistral Small 4 (no quant avoids its CPU fallback). Nothing below ~4 bits;
-                 gpt-oss-120b stays MXFP4. Judged against the full bar; the record gives
-                 each candidate's estimated decode ceiling.
-              11. Each candidate set is measured: the concurrent run; footprint at 4 in
-                 flight with ≥ 3 GiB of the pool free, plus a system-RAM column for
-                 Nemotron; the GuideLLM grid (short and agentic, 1 and 4 streams); prefix
-                 reuse; the set's cold load. For Mistral Small 4 the record shows the CPU
-                 fallback from the router log. No engine row.
+              9. Each candidate is evaluated in stages, cheapest first; a failed gate
+                 disqualifies it and the later stages don't run. The record names the
+                 stage reached and the stages not run.
+                 1 fitness, under ~3 min, the model's native capabilities straight
+                   against the router, no consumer: it loads; chat, a tool call, and
+                   each declared role (image, audio, embedding) answer correctly;
+                   reasoning returns where declared; engine generation >= 24 tok/s
+                   one stream (stopping early once the rate is clearly below);
+                   prompt rate recorded; idle pool >= 3 GiB free.
+                 2 capacity: the concurrent run (no crossed nonces, embedding
+                   tolerance held) with footprint at 4 in flight >= 3 GiB free.
+                 3 reliability: one tool turn per consumer, then wire round-trips and
+                   conform pass^5 judged against gpt-oss-120b's row: Pi 9/9 at 5/5, 0
+                   invalid; Claude Code over streamed /v1/messages every cell at or
+                   above gpt-oss-120b's same-build count, no more invalid, thinking
+                   streamed and returned on tool turns; vision cells 5/5 for Pi and
+                   Claude Code. OpenCode measured, not judged.
+                 4 characterization, only past stage 3: the GuideLLM grid (short and
+                   agentic, 1 and 4 streams), prefix reuse, the set's cold load.
+                 One command runs the stages for a set, stops at the first failed
+                 gate, writes one report per run, and resumes from a named stage.
+              10. A candidate that fails only fitness's speed gate re-runs fitness once
+                 at the next-smaller native-kernel quant: Nemotron at ggml-org Q4_0;
+                 none for Mistral Small 4 (no quant avoids its CPU fallback). Nothing
+                 below ~4 bits; gpt-oss-120b stays MXFP4. The record gives each
+                 candidate's estimated decode ceiling.
+              11. Mistral Small 4, measured before the staged evaluation, keeps its
+                 record: speed grid, prefix reuse, wire round-trips, CPU fallback.
               12. Verdict: a failing candidate is "not promoted on Vulkan, Strix Halo,
                  b<N>", with its failing cells and re-probe triggers (#30105, #30260 for
                  Mistral Small 4). If both pass, more Claude Code cells at 5/5 leads,
@@ -120,13 +131,16 @@ Slices        1. Upgrade (1): consumer pins; currency shows only the Python hold
               5. Candidates in the profile (4): both sets render and download; each loads
                  by swap; probe and footprint pass per set.
               6. Comparison row (8): gpt-oss-120b pass^5 on the new build.
-              7. Mistral Small 4 (7, 9, 11, 10's record): settings, bar, measurements,
-                 CPU fallback.
-              8. Nemotron 3.5 Super (7, 9, 11), and 10's Q4_0 re-run if it applies.
-              9. Verdict (12): tie-break; startup set changes (architect's restart) or
+              7. Mistral Small 4 (7, 9, 11): disqualified at fitness (speed).
+              8. Staged evaluation (9): the evaluate command over the existing
+                 packages, fitness as a native-capability check under ~3 min; tested
+                 against fake endpoints; gpt-oss-120b's set A passes fitness live.
+              9. Nemotron 3.5 Super (9, 10): staged evaluation; the Q4_0 fitness
+                 re-run if it applies.
+              10. Verdict (12): tie-break; startup set changes (architect's restart) or
                  stays set A.
-              10. Records (13, 14, 15): context catalog, boundary text, Decisions, pending
-                 edits and note.
+              11. Records (13, 14, 15): context catalog, boundary text, Decisions,
+                 pending edits and note.
 Out of scope  The workstations (cuda and engines-cuda re-planned after this task). ROCm,
               vLLM, SGLang, llama-swap, gateways. Forcing tool_choice; parse-5xx resample
               or fallback. Building llama.cpp from source or patching #30105. Speculative
@@ -173,8 +187,8 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   architect's call for a staged evaluation; conform, concurrent and cold load not run.
   GuideLLM stalled overnight because the laptop suspended; long runs now hold
   systemd-inhibit. Router back on set A.
-- ESCALATION open (2026-10-16): staged evaluation with gates, an evaluate command, and
-  Nemotron's Q4_0 retry.
+- ESCALATION answered (2026-10-16): staged evaluation; brief behaviors 9-11 and slices 7-11
+  amended. Slice 8 (evaluate command) in progress.
 
 ## Decisions
 
@@ -483,6 +497,19 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   GGUFs are at most 1.3% smaller).
 - main-model (r3): Nemotron gets the full bar and measurement set even if its estimated decode
   ceiling (~18-20 tok/s) misses the floor, since the workstation re-plan needs its cells.
+
+- main-model (escalation, architect): candidates are evaluated in stages (fitness, capacity,
+  reliability, characterization), and a failed gate stops the later stages; supersedes r1's
+  full measurement set whatever the verdict and r3's full set for Nemotron.
+- main-model (escalation, architect): fitness is a native-capability test under ~3 minutes,
+  straight against the router with no consumer.
+- main-model (escalation): the stages run as one evaluate command that stops at the first failed
+  gate and resumes from a named stage; rejected running the commands by hand.
+- main-model (escalation): Nemotron's Q4_0 retry stays, as a fitness-only re-run.
+- main-model: a one-turn smoke per consumer opens stage 3, since Claude Code can't run on
+  Mistral at all (its template refuses a system message after the first user message).
+- main-model: long runs hold a systemd-inhibit sleep block and watch the router's slots, after
+  the laptop's suspend stalled a GuideLLM run overnight.
 
 ## Pending edits
 
