@@ -150,8 +150,8 @@ func blockTypes(bs []map[string]any) []string {
 }
 
 // TestClaudeThinkingRoundTrip runs one Claude Code turn that calls its Read tool, through a
-// Recorder, from the run's own configuration directory on the subscription login, every model
-// alias mapped to the set's chat model. It records the thinking request Claude Code sends, and checks
+// Recorder, from the run's own configuration directory on the subscription login, every model alias
+// mapped to the set's chat model. It records the thinking request Claude Code sends, and checks
 // thinking blocks stream back and the request after the tool call carries them back. SPIKE_CLAUDE
 // names Claude Code (MISE_ENV=consumers mise which claude), and ../.state/claude must hold its
 // login.
@@ -246,10 +246,10 @@ func TestClaudeThinkingRoundTrip(t *testing.T) {
 	}
 }
 
-// TestPiReasoningRoundTrip runs one Pi turn that calls its read tool, through a Recorder, at
-// the set's chat model's thinking level, as the passk cell sets it, and reports whether the request after the tool call carries the assistant's reasoning back as
-// reasoning_content. Pi's answer is a finding, not a pass or fail. SPIKE_PI names Pi
-// (MISE_ENV=consumers mise which pi).
+// TestPiReasoningRoundTrip runs one Pi turn that calls its read tool, through a Recorder, at the
+// set's chat model's thinking level, as the passk cell sets it, and reports whether the request
+// after the tool call carries the assistant's reasoning back as reasoning_content. Pi's answer is a
+// finding, not a pass or fail. SPIKE_PI names Pi (MISE_ENV=consumers mise which pi).
 func TestPiReasoningRoundTrip(t *testing.T) {
 	rec, proxy, roles, reasoning := liveRouter(t)
 	command := os.Getenv("SPIKE_PI")
@@ -275,11 +275,11 @@ func TestPiReasoningRoundTrip(t *testing.T) {
 }
 
 // TestOpenCodeReasoningRoundTrip runs one OpenCode turn that calls its read tool, through a
-// Recorder, once with the set's chat model's interleaved setting naming reasoning_content and
-// its options, as the passk cell sets them, and once without the file that holds both, and
-// reports whether the request after the tool call carries
-// the assistant's reasoning back. OpenCode's answer is a finding, not a pass or fail. SPIKE_OPENCODE
-// names OpenCode (MISE_ENV=consumers mise which opencode).
+// Recorder, once with the set's chat model's interleaved setting naming reasoning_content and its
+// options, as the passk cell sets them, and once without the file that holds both, and reports
+// whether the request after the tool call carries the assistant's reasoning back. OpenCode's answer
+// is a finding, not a pass or fail. SPIKE_OPENCODE names OpenCode (MISE_ENV=consumers mise which
+// opencode).
 func TestOpenCodeReasoningRoundTrip(t *testing.T) {
 	command := os.Getenv("SPIKE_OPENCODE")
 	if command == "" {

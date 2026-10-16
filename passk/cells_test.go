@@ -37,8 +37,8 @@ var setA = profile.SetRoles{
 	Embedding: "ggml-org/embeddinggemma-2-GGUF:Q8_0",
 }
 
-// TestClaudeDriver shows Claude Code runs from the given configuration directory with every
-// model request sent to the router as the set's chat model, as consumers.ClaudeEnv points it, its skill
+// TestClaudeDriver shows Claude Code runs from the given configuration directory with every model
+// request sent to the router as the set's chat model, as consumers.ClaudeEnv points it, its skill
 // plugin cached under the run's state directory.
 func TestClaudeDriver(t *testing.T) {
 	cfg := config(t)

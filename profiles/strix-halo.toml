@@ -81,13 +81,14 @@ vision = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
 audio = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
 embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
 
-# Estimated, never measured at 4 in flight: Mistral Small 4 was disqualified at fitness (speed)
-# on b11669 before the concurrent run, so measured_mib stays unset; idle on b11669 the set used
-# 87763MiB of the pool (context/memory-budget.md). By context/memory-budget.md's figures, 83154MiB of the pool is left for a main model
-# beside gemma-4-E4B and EmbeddingGemma 2 at the 3GiB bar, so the pool holds 98304 - 3072 - 83154 =
-# 12078MiB for those two and the desktop. Mistral Small 4 is ~71526MiB of UD-Q4_K_XL weights
-# and its mmproj, plus 2.8-5.1GiB of KV at c = 131072, taken at the top (5222MiB): 76748MiB,
-# compute buffers not counted. 12078 + 76748 = 88826MiB, 9478MiB under the pool.
+# Estimated, never measured at 4 in flight: Mistral Small 4 was disqualified at fitness (speed) on
+# b11669 before the concurrent run, so measured_mib stays unset; idle on b11669 the set used
+# 87763MiB of the pool (context/memory-budget.md). By context/memory-budget.md's figures, 83154MiB
+# of the pool is left for a main model beside gemma-4-E4B and EmbeddingGemma 2 at the 3GiB bar, so
+# the pool holds 98304 - 3072 - 83154 = 12078MiB for those two and the desktop. Mistral Small 4 is
+# ~71526MiB of UD-Q4_K_XL weights and its mmproj, plus 2.8-5.1GiB of KV at c = 131072, taken at the
+# top (5222MiB): 76748MiB, compute buffers not counted. 12078 + 76748 = 88826MiB, 9478MiB under the
+# pool.
 [sets.memory_budget]
 pool_mib = 98304
 estimated_mib = 88826
@@ -110,13 +111,13 @@ vision = "ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF:NVFP4"
 audio = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
 embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
 
-# Estimated, not yet measured: measured_mib is the pool used at 4 in flight, which the
-# concurrent run measures; idle on b11669 the set used 88598MiB of the pool
-# (context/memory-budget.md). As for the mistral set, 12078MiB of the pool is gemma-4-E4B's, EmbeddingGemma 2's and
-# the desktop's. Nemotron 3.5 Super is 73355MiB of NVFP4 weights (71.6GiB), 922MiB of Q8_0
-# mmproj (0.96GB), ~1GiB (1024MiB) of KV at c = 131072, and ~660MiB of Mamba state for 4 slots:
-# 75961MiB, compute buffers not counted. 12078 + 75961 = 88039MiB, 10265MiB under the pool. Its
-# 8 context checkpoints per slot sit in system RAM, outside this pool (the model's args_reason).
+# Estimated, not yet measured: measured_mib is the pool used at 4 in flight, which the concurrent
+# run measures; idle on b11669 the set used 88598MiB of the pool (context/memory-budget.md). As for
+# the mistral set, 12078MiB of the pool is gemma-4-E4B's, EmbeddingGemma 2's and the desktop's.
+# Nemotron 3.5 Super is 73355MiB of NVFP4 weights (71.6GiB), 922MiB of Q8_0 mmproj (0.96GB), ~1GiB
+# (1024MiB) of KV at c = 131072, and ~660MiB of Mamba state for 4 slots: 75961MiB, compute buffers
+# not counted. 12078 + 75961 = 88039MiB, 10265MiB under the pool. Its 8 context checkpoints per slot
+# sit in system RAM, outside this pool (the model's args_reason).
 [sets.memory_budget]
 pool_mib = 98304
 estimated_mib = 88039

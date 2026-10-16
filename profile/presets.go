@@ -28,10 +28,10 @@ type presetsData struct {
 	Startup map[string]bool
 }
 
-// RenderPresets writes the profile's llama.cpp router presets to w. Each model's reasons render
-// as a comment above its section. Only the startup set's models render load-on-startup = true;
-// the rest render without the key, which the router reads as false. The profile is validated first, so a profile built in code
-// renders only when Load would have accepted it.
+// RenderPresets writes the profile's llama.cpp router presets to w. Each model's reasons render as
+// a comment above its section. Only the startup set's models render load-on-startup = true; the
+// rest render without the key, which the router reads as false. The profile is validated first, so
+// a profile built in code renders only when Load would have accepted it.
 func (p *Profile) RenderPresets(w io.Writer) error {
 	if err := p.Validate(); err != nil {
 		return fmt.Errorf("profile: %w", err)

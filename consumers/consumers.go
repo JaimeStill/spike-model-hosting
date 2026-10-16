@@ -129,14 +129,14 @@ func CheckClaudeLogin(configDir string) error {
 	return nil
 }
 
-// OpenCode returns OpenCode's driver: command on an OpenAI-compatible provider named Provider
-// at router/v1, its configuration, data and sessions under dir, with the chat model's
-// interleaved setting naming reasoning_content and its options (InterleavedConfig). The provider lists each of
-// imageModels as taking images, and chat, unless it is one of them, as text only, which the
-// driver does on its own. The driver writes its own configuration into
-// OPENCODE_CONFIG_CONTENT; the interleaved setting goes in the explicit configuration file
-// OPENCODE_CONFIG names, dir/interleaved.json, which OpenCode merges beneath it, model by model.
-// It fails when dir or that file can't be written.
+// OpenCode returns OpenCode's driver: command on an OpenAI-compatible provider named Provider at
+// router/v1, its configuration, data and sessions under dir, with the chat model's interleaved
+// setting naming reasoning_content and its options (InterleavedConfig). The provider lists each of
+// imageModels as taking images, and chat, unless it is one of them, as text only, which the driver
+// does on its own. The driver writes its own configuration into OPENCODE_CONFIG_CONTENT; the
+// interleaved setting goes in the explicit configuration file OPENCODE_CONFIG names,
+// dir/interleaved.json, which OpenCode merges beneath it, model by model. It fails when dir or that
+// file can't be written.
 func OpenCode(command, router, dir, chat string, options map[string]any, imageModels ...string) (opencode.Driver, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return opencode.Driver{}, err

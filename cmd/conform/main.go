@@ -5,19 +5,19 @@
 //
 //	conform [-router url] [-profile path] [-set name] [-k n] [-consumers list] [-pi path] [-claude path] [-opencode path] [-state dir] [-timeout d]
 //
-// The consumers are Pi on its llama.cpp provider, Claude Code over the router's Anthropic
-// messages, and OpenCode with the chat model's interleaved setting on; the passk package says
-// how each cell is built. Every model they run on is one of the profile's set -set names, or
-// SPIKE_SET, by its roles: the chat model for every session, the vision model for images, the
-// audio model for the audio tool. With neither, the set is the profile's startup set. Each trial runs every consumer's nine capabilities once, consumer after
-// consumer, and the run makes -k trials. Every consumer's model requests go through a recording
-// proxy (wire.Recorder) in front of the router, one per consumer and trial, whose recording is
-// saved under the state directory's conform/wire/; a model request the router answers with an
-// error counts as invalid.
+// The consumers are Pi on its llama.cpp provider, Claude Code over the router's Anthropic messages,
+// and OpenCode with the chat model's interleaved setting on; the passk package says how each cell
+// is built. Every model they run on is one of the profile's set -set names, or SPIKE_SET, by its
+// roles: the chat model for every session, the vision model for images, the audio model for the
+// audio tool. With neither, the set is the profile's startup set. Each trial runs every consumer's
+// nine capabilities once, consumer after consumer, and the run makes -k trials. Every consumer's
+// model requests go through a recording proxy (wire.Recorder) in front of the router, one per
+// consumer and trial, whose recording is saved under the state directory's conform/wire/; a model
+// request the router answers with an error counts as invalid.
 //
-// The output names the build and the set it ran on, then a Markdown table, a row per consumer and a column per capability, each cell the
-// trials that passed out of k, then each consumer's pass^k, invalid requests and verdict against
-// the bar, and the reason for every trial that didn't pass.
+// The output names the build and the set it ran on, then a Markdown table, a row per consumer and a
+// column per capability, each cell the trials that passed out of k, then each consumer's pass^k,
+// invalid requests and verdict against the bar, and the reason for every trial that didn't pass.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. Every model of the set must be loaded
 // already: the tool checks GET /models first and never loads one. Each consumer is its

@@ -72,11 +72,11 @@ func Pi(cfg Config) (conform.Cell, error) {
 	return cell(cfg, "pi", consumers.PiVersion, scenario.Pi, consumers.Provider, d, []scenario.Need{privateDir(dir)}), nil
 }
 
-// OpenCode returns OpenCode's cell: OpenCode on an OpenAI-compatible provider at cfg.Router/v1
-// with the chat model's interleaved setting naming reasoning_content and its options,
-// cfg.Reasoning.OpenCode (consumers.OpenCode), its
-// state under cfg.State/opencode, the vision model, when the set has one, listed as taking
-// images. It fails when the driver's configuration file can't be written.
+// OpenCode returns OpenCode's cell: OpenCode on an OpenAI-compatible provider at cfg.Router/v1 with
+// the chat model's interleaved setting naming reasoning_content and its options,
+// cfg.Reasoning.OpenCode (consumers.OpenCode), its state under cfg.State/opencode, the vision
+// model, when the set has one, listed as taking images. It fails when the driver's configuration
+// file can't be written.
 func OpenCode(cfg Config) (conform.Cell, error) {
 	var images []string
 	if cfg.Roles.Vision != "" {

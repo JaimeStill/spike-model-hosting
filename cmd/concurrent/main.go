@@ -5,25 +5,23 @@
 //
 //	concurrent [-router url] [-profile path] [-set name] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
 //
-// It runs four streams at once: Pi over OpenAI chat, Claude Code over Anthropic messages, the
-// model client over chat, and the model client over embeddings. The chat streams send to the
-// chat model, and the embedding stream to the embedding model, of the profile's set -set names,
-// or SPIKE_SET, or else of its startup set. The chat streams share the chat model's slots, from
-// the profile, so every slot carries a request; each chat worker sends
-// -rounds requests, each with its own nonce. The embedding stream sends batch after batch until
-// the last chat request returns. The run passes when every answer carries its own nonce and no
-// other, and every batched embedding matches its input's lone embedding within the concurrent
-// package's EmbedTolerance. -inject-swap swaps two answers before the check, which must then
-// fail and name both.
+// It runs four streams at once: Pi over OpenAI chat, Claude Code over Anthropic messages, the model
+// client over chat, and the model client over embeddings. The chat streams send to the chat model,
+// and the embedding stream to the embedding model, of the profile's set -set names, or SPIKE_SET,
+// or else of its startup set. The chat streams share the chat model's slots, from the profile, so
+// every slot carries a request; each chat worker sends -rounds requests, each with its own nonce.
+// The embedding stream sends batch after batch until the last chat request returns. The run passes
+// when every answer carries its own nonce and no other, and every batched embedding matches its
+// input's lone embedding within the concurrent package's EmbedTolerance. -inject-swap swaps two
+// answers before the check, which must then fail and name both.
 //
-// The router comes from -router or SPIKE_ROUTER_URL. Every model of the set must be loaded
-// already: the tool checks GET /models first and never loads one. The report names the build and
-// the set it ran on. Pi is -pi, or SPIKE_PI, and
-// Claude Code is -claude, or SPIKE_CLAUDE; each defaults to the one the consumers mise
-// environment pins (MISE_ENV=consumers mise which pi, or claude). Their state lives under
-// -state, or SPIKE_STATE_DIR, which defaults to the repository's untracked .state/: Pi's agent
-// directory, sessions and cache under pi/, never the user's ~/.pi, and Claude Code's
-// configuration directory at claude/, never the user's ~/.claude. Claude Code runs on the
+// The router comes from -router or SPIKE_ROUTER_URL. Every model of the set must be loaded already:
+// the tool checks GET /models first and never loads one. The report names the build and the set it
+// ran on. Pi is -pi, or SPIKE_PI, and Claude Code is -claude, or SPIKE_CLAUDE; each defaults to the
+// one the consumers mise environment pins (MISE_ENV=consumers mise which pi, or claude). Their
+// state lives under -state, or SPIKE_STATE_DIR, which defaults to the repository's untracked
+// .state/: Pi's agent directory, sessions and cache under pi/, never the user's ~/.pi, and Claude
+// Code's configuration directory at claude/, never the user's ~/.claude. Claude Code runs on the
 // architect's subscription login, made once in that directory:
 //
 //	CLAUDE_CONFIG_DIR=$PWD/.state/claude MISE_ENV=consumers mise exec -- claude
