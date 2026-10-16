@@ -176,12 +176,10 @@ func describeSet(args []string, getenv func(string) string, stdout io.Writer) er
 			fmt.Fprintf(&b, "%s %s\n", r.role, r.id)
 		}
 	}
-	models := make(map[string]profile.Model, len(p.Models))
-	for _, m := range p.Models {
-		models[m.ID] = m
-	}
+	// A valid profile lists every model of its sets.
 	for _, id := range set.Models {
-		fmt.Fprintf(&b, "model %s %s %s\n", id, models[id].Kind, models[id].CardURL)
+		m := p.Model(id)
+		fmt.Fprintf(&b, "model %s %s %s\n", id, m.Kind, m.CardURL)
 	}
 	_, err = io.WriteString(stdout, b.String())
 	return err

@@ -30,7 +30,8 @@ type Model struct {
 	Status string
 	// Failed is whether the model's last load failed: the router lists it unloaded, with the
 	// exit code of the instance that failed.
-	Failed   bool
+	Failed bool
+	// ExitCode is that failed instance's exit code, when Failed is set.
 	ExitCode int
 }
 

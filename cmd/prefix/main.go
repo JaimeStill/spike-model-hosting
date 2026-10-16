@@ -179,13 +179,9 @@ func measure(ctx context.Context, o options, stdout io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", errUsage, err)
 	}
-	kind := make(map[string]string, len(p.Models))
-	for _, m := range p.Models {
-		kind[m.ID] = m.Kind
-	}
 	var ids []string
 	for _, id := range set.Models {
-		if kind[id] == profile.KindGenerative {
+		if p.Model(id).Kind == profile.KindGenerative {
 			ids = append(ids, id)
 		}
 	}
