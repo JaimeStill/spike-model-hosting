@@ -31,12 +31,23 @@ for mod in $GO_MODULES; do
 	[ "$directive" = "$go_minor" ] || report "$mod/go.mod: go $directive -> go $go_minor"
 done
 
-# mise tools pinned below their latest version. The consumers environment
-# loads mise.toml and mise.consumers.toml both, so one scan covers each, and
-# each line names the file that pins the tool.
-outdated=$(MISE_ENV=consumers mise outdated --bump --local --json |
-	jq -r 'to_entries[] |
-		"\(.value.source.path | split("/") | last): \(.key) \(.value.requested) -> \(.value.bump)"')
+# mise tools pinned below their latest version. `mise outdated --local` reads
+# only the configuration of the directory it runs in, so the scan runs in every
+# directory that holds a tracked mise configuration: the monorepo root and each
+# area. It runs under the consumers environment, which loads mise.toml and,
+# where there is one, mise.consumers.toml both, so one scan a directory covers
+# each file. Each line names, from the root, the file that pins the tool.
+mapfile -t config_dirs < <(git ls-files 'mise.toml' '*/mise.toml' 'mise.*.toml' '*/mise.*.toml' |
+	xargs -n1 dirname | sort -u)
+root=$PWD/
+outdated=
+for dir in "${config_dirs[@]}"; do
+	found=$(cd "$dir" && MISE_ENV=consumers mise outdated --bump --local --json |
+		jq -r --arg root "$root" 'to_entries[] |
+			"\(.value.source.path | ltrimstr($root)): \(.key) \(.value.requested) -> \(.value.bump)"')
+	outdated+=$found$'\n'
+done
+outdated=$(sort -u <<<"$outdated")
 while read -r line; do
 	[ -n "$line" ] && report "$line"
 done <<<"$outdated"

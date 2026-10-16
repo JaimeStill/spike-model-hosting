@@ -1,0 +1,12 @@
+# The Strix Halo host class: its profile (profile.toml) and the notes on the llama.cpp builds it
+# serves. The render tasks write the router's serving configuration from the profile to standard
+# output, through the hosting area's profile command; the unit's host values come from
+# SPIKE_SERVICE_USER, SPIKE_HF_HOME and SPIKE_MODELS_DIR in the environment.
+
+[tasks."render:presets"]
+description = "Render the Strix Halo profile's router presets (INI) to standard output"
+run = "GOWORK=off go run ../../hosting/cmd/profile render presets profile.toml"
+
+[tasks."render:unit"]
+description = "Render the Strix Halo profile's router systemd unit to standard output"
+run = "GOWORK=off go run ../../hosting/cmd/profile render unit profile.toml"

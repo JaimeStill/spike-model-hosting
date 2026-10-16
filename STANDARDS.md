@@ -19,10 +19,10 @@ The architecture pages that apply, in the architecture repository:
   starts, and the host-local values (the service user, HF_HOME, and the models directory) are
   given at render time.
 - Every consumer and instrument runs from the architect's laptop, pinned in
-  `mise.consumers.toml` and kept off the root PATH; nothing is served there. The Framework only
-  hosts and serves inference. Sessions may do on it whatever needs no sudo: the router's HTTP
-  API (including load, unload, and downloads), user-level SSH reads, and logs. Root stays the
-  architect's, run from exact commands.
+  `evaluation/mise.consumers.toml` and kept off the root PATH; nothing is served there. The
+  Framework only hosts and serves inference. Sessions may do on it whatever needs no sudo: the
+  router's HTTP API (including load, unload, and downloads), user-level SSH reads, and logs. Root
+  stays the architect's, run from exact commands.
 - llama.cpp is held to a minimum build, not pinned, and every document and measurement names the
   build it ran on.
 - A model of Chinese origin is chosen only when no alternative serves, and its entry records why

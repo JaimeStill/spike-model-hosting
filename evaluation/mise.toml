@@ -1,0 +1,24 @@
+# The evaluation area: the instruments that measure the router from the laptop. The tools they
+# drive are pinned in mise.consumers.toml, beside this file, which loads only under
+# MISE_ENV=consumers; the tasks that need them (baseline, gpt-oss-compat) are declared there. The
+# root's check covers its packages, module-wide.
+
+# The live tests of the wire recorder and the concurrent run, against the router SPIKE_ROUTER_URL
+# names. They drive Claude Code and Pi when the environment names them (see each test), so the
+# root's integration task, the probe alone, never runs them.
+[tasks.integration]
+description = "Run the evaluation area's integration-tagged live tests against SPIKE_ROUTER_URL"
+run = '''
+set -eu
+export GOWORK=off
+: "${SPIKE_ROUTER_URL:?set SPIKE_ROUTER_URL to the router to run against}"
+go test -race -tags integration -count=1 ./...
+'''
+
+# A set's memory on the host that serves the router, sampled over ssh while a run is in flight:
+# mise run //evaluation:footprint -- [-set name] <ssh destination> [samples] [seconds between].
+# It runs in the caller's directory, so a -profile path is the caller's.
+[tasks.footprint]
+description = "Sample a set's memory (VRAM + GTT) on the router's host over ssh"
+dir = "{{cwd}}"
+run = "{{config_root}}/scripts/footprint.sh"
