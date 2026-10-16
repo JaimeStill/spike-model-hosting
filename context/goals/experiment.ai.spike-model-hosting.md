@@ -1,8 +1,8 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** idle
-- **Task:** none
-- **Branch:** none
+- **State:** building
+- **Task:** evaluation
+- **Branch:** evaluation
 
 ## Tasks
 
@@ -20,104 +20,155 @@
 12. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
 13. [ ] validate
 
-## Task brief · main-model
+## Task brief · evaluation
 
 ```
-Problem       gpt-oss-120b leads the Framework's main-model pool, and it can't see images.
-              Two vision MoEs may replace it and Gemma 4 26B-A4B: Mistral Small 4 (Mistral
-              AI, France, Apache 2.0) and Nemotron 3.5 Super VL (NVIDIA, US, OpenMDW-1.1).
-              The plan promotes one only if it matches gpt-oss-120b per consumer on Pi tool
-              calls and Claude Code over /v1/messages, and its vision works on Vulkan. The
-              profile describes one model set, all loaded at startup; the instruments are
-              fixed on gpt-oss-120b; the router runs b11572; four consumer pins trail. Vulkan
-              runs Mistral Small 4's expert down-projections on the CPU on every current
-              build (llama.cpp #30105, open). Sessions may only observe the Framework.
-Behaviors     1. The repository pins Pi 1.2.0, Claude Code 2.1.300, node 26.12.0 and uv
-                 0.13.1 exactly; Python stays held at 3.14.8 (no torch 3.15 wheels).
-                 Currency reports only that hold; the check stays hermetic.
-              2. The Framework moves to the newest b-tag at BUILD (b11669 at PLAN). The
-                 spike records its release-note review since b11572: chat output rewrite,
-                 template number formatting, embedding path, Vulkan KV on AMD, SWA reuse,
-                 the Ministral 3 and Qwen3-Coder handlers, Nemotron support, and whether
-                 Vulkan still refuses F32 MUL_MAT_ID. Presets change only where the notes
-                 require it. The probe passes on set A; every measurement names the build
-                 from /props build_info.
-              3. A profile holds named sets: each lists its models (at most 4) and its own
-                 memory budget; exactly one is the startup set. Each model declares roles
-                 (chat, vision, audio, embedding) and a licence beside its origin.
-                 Validation refuses no or several startup sets, a set over 4 models, a set
-                 naming an unlisted model, a set with no chat model, an unknown role, a
-                 missing licence. Only the startup set renders load-on-startup. Set A as
-                 the startup set renders the same sections, keys and values as before.
-              4. The Strix Halo profile holds three sets, each value traced to its card;
-                 every set includes gemma-4-E4B and EmbeddingGemma 2. Set A (startup)
-                 unchanged. Mistral Small 4: unsloth UD-Q4_K_XL, the projector the router
-                 picks, c 131072, reasoning high, temp 0.7, top_p 1.0, top_k 0, min_p 0.
-                 Nemotron 3.5 Super: ggml-org NVFP4, c 131072, the template's reasoning
-                 (thinking on), temp 1.0, top_p 0.95, top_k 0, min_p 0, 8 context
-                 checkpoints per slot.
-              5. One command swaps the router between named sets over its HTTP API:
-                 unloads the outgoing set's models the incoming set doesn't share, then
-                 loads the rest, timing each step, ending with exactly the incoming set
-                 loaded. It refuses an unknown set and never loads before the unloads
-                 finish. Models download through the router's own Hugging Face fetch.
-              6. The probe and every instrument take a set name (conform, concurrent,
-                 wire, GuideLLM grid, prefix, cold load, footprint), find their chat,
-                 vision, audio and embedding models from its roles, and refuse a set that
-                 isn't loaded. Set A is the default, so consumers' runs reproduce.
-              7. Each consumer runs each candidate with a reasoning setting its card
-                 accepts (e.g. Pi "high" for Mistral Small 4); Claude Code unchanged. The
-                 wire record shows, per candidate and consumer, the reasoning request sent
-                 and the reasoning returned on a tool turn.
-              8. gpt-oss-120b's pass^5 runs again on the new build and pins (Pi, Claude
-                 Code over the router; OpenCode measured beside): the comparison row,
-                 every cell named.
-              9-12. Moved to the `candidates` task (escalation, 2026-10-16): the staged
-                 evaluation, Nemotron, the quant retry and the verdict. Mistral Small 4,
-                 measured before the move, keeps its record (disqualified at fitness).
-              13. The model-card note catalogs, for set A and both candidates: trained or
-                 maximum context, KV bytes per token, recurrent state per sequence, and the
-                 c the profile sets, with its reason.
-              14. The spike's instructions, README and standards say sessions may do on
-                 the Framework whatever needs no sudo (router HTTP incl. load, unload and
-                 downloads; user-level SSH reads; logs). Root stays the architect's, by
-                 exact commands.
-              15. Decisions records that the workstations stay on DGX OS 7. Pending edits
-                 add the roadmap's main-model entry and consumers summary, and a note for
-                 the next plan session with the workstation facts (aarch64 GB10, sm_121,
-                 273 GB/s unified; DGX OS 7.5, driver 580, CUDA 13.0; two units over
-                 200GbE; nvidia-smi can't report memory; dense candidates' decode ceiling;
-                 start dates and needs markers; admin's go-cli-sdk need met).
-Test seams    The profile package's load, validate and render (sets, roles, licence,
-              startup flag, per-set budgets). The swap command against a fake router. Set
-              resolution in the instruments against fake endpoints. Integration probes per
-              set at SPIKE_ROUTER_URL (2, 4, 5). Measured evidence (8-12).
-Slices        1. Upgrade (1): consumer pins; currency shows only the Python hold; check.
-              2. Build move (2): the architect's root commands; release-note review; probe
-                 on set A.
-              3. Sets and roles (3), set A only: validation tests; set A's render equals
-                 the installed presets.
-              4. Swap and set-aware instruments, walking skeleton (5, 6): swap set A out
-                 and back, timed; every instrument by set name against set A.
-              5. Candidates in the profile (4): both sets render and download; each loads
-                 by swap; probe and footprint pass per set.
-              6. Comparison row (8): gpt-oss-120b pass^5 on the new build.
-              7. Mistral Small 4 (7, 9, 11): disqualified at fitness (speed).
-              8. Records (13, 14, 15): context catalog, boundary text, Decisions,
-                 pending edits and note.
-Out of scope  The workstations (cuda and engines-cuda re-planned after this task). ROCm,
-              vLLM, SGLang, llama-swap, gateways. Forcing tool_choice; parse-5xx resample
-              or fallback. Building llama.cpp from source or patching #30105. Speculative
-              decoding with an MTP head. Quants below ~4 bits; Mistral Small 4 NVFP4.
-              Dense models. A template-arguments field (Nemotron's medium effort);
-              separate sampling for vision. Any change to spike-harness-driver,
-              personal-agents or clutch.
-Door          two-way. The repository reverts by PR. On the Framework the earlier b-tag
-              stays in its versioned directory and `current` points back; the startup set
-              reverts by rendering set A's presets and restarting; the candidates (~150 GB
-              of 657 GB free) move to the retired directory beside the cache. Swaps and
-              loads undo on restart. On the laptop, removing the new pins restores the old.
+Problem       The spike can't yet judge a model by what it does in each role.
+              The probe checks one image, one audio clip and one tool call;
+              conform judges only the agent model, through consumers; and the
+              staged evaluation main-model began was never built. Speed is
+              judged by one 24 tok/s floor taken from gpt-oss-120b. The
+              repository mixes hosting tooling, instruments, host
+              configuration and findings at its root and in context/, with no
+              front page. `candidates` needs, per role, graded pipelines that
+              fail a model early and cheaply, absolute speed floors, and set
+              A's scores as the bar, all on the Framework's newest build.
+Behaviors     1. The repository has five areas: hosting (the Go tooling for
+                 profiles and models: profile, router, swap, probe, and their
+                 commands); evaluation (the instruments, the pipelines and
+                 the evaluate command); devices (one area per host class:
+                 its profile, runbook, build log and host scripts); docs
+                 (methods and findings); context (marathon's files only).
+                 One Go module. Each area's commands live in it and find a
+                 profile from the module root, by host-class name, from any
+                 working directory. mise runs in monorepo mode: every area
+                 task runs as //area:task; the root check runs every area's
+                 check plus the module-wide steps, and stays hermetic. The
+                 consumer and instrument pins load only under
+                 MISE_ENV=consumers, in the evaluation area. Currency covers
+                 the root, every area and the evaluation Python lock, and
+                 reports only the Python hold.
+              2. OpenAI's gpt-oss compatibility test is gone (its task,
+                 script, suite state, and the node pin if nothing else needs
+                 it). conform, concurrent, prefix and coldload run only as
+                 evaluate's stages or steps, by name; their packages stay.
+              3. evaluate takes a model, or a set's role, through the stages
+                 admission, fitness, capacity, quality, set and deep. It
+                 stops at the first failed gate and resumes from a named
+                 stage. One report per run names the build, set, model,
+                 roles, stage reached, the stages not run and why, and each
+                 stage's wall time. It refuses a model that isn't loaded.
+              4. Admission is on paper: licence, origin (judged by
+                 STANDARDS), roles, card context, a budget estimate at least
+                 3 GiB under the pool, the minimum build. Fitness takes
+                 under ~3 min: a probe smoke per declared role, the
+                 single-stream floors, an idle pool at least 3 GiB free.
+                 Capacity: 4 in flight with at least 3 GiB free, no crossed
+                 nonce, the embedding tolerance held, the 4-stream floors.
+              5. Each role's floors are absolute and task-based, held as
+                 data with initial values a later decision may change:
+                 agent decode ≥ 20 tok/s, prefill ≥ 500 tok/s, an 8k
+                 prompt's TTFT ≤ 20 s, each of 4 streams ≥ 10 tok/s;
+                 vision one image question ≤ 10 s; audio RTFx ≥ 5, each of
+                 4 streams ≥ 1; embedding ≥ 4,300 tok/s, a 32-token query
+                 ≤ 250 ms. Ceiling efficiency (rate over 256 GB/s ÷ bytes
+                 per token) is recorded, never gated.
+              6. Each quality tier runs a committed, seeded list of sample
+                 IDs, the same for every model, its screening fifth first,
+                 and stops once the one-sided 95% upper bound falls below
+                 the bar; the record names the tier and the bound. A tier's
+                 bar is set A's score less set A's two-run spread.
+              7. Embedding (MTEB 2.26.3): STSBenchmark, Banking77, SciFact
+                 and NFCorpus in full, through an encoder that adds the
+                 card's task prompts and calls the router's embeddings API.
+              8. Audio (an Inspect task): 150 seeded utterances each from
+                 LibriSpeech clean and other, VoxPopuli, AMI, Earnings22 and
+                 FLEURS English, WER after the Open ASR Leaderboard's
+                 normalizer, with RTFx.
+              9. Vision (inspect_evals): the probe image x5, V*Bench 100,
+                 DocVQA 150, MMMU 200.
+              10. Agent, in cost order: BFCL single-turn 100 and multi-turn
+                 20 (inspect_evals), then conform pass^5, judged against
+                 gpt-oss-120b's comparison row (Pi 9/9 with 0 invalid;
+                 Claude Code each cell at or above it; OpenCode measured).
+              11. The set stage runs each role's tier 1 alone, then every
+                 role's at once, with at least 3 GiB of the pool free at the
+                 peak and no crossed answer.
+              12. One model's run, admission through the set stage, fits in
+                 1 hour for a chat-and-vision model at set A's rates.
+              13. The deep stage runs only after every gate passes: τ2
+                 airline and retail, 12 tasks each x 2 trials, whose user
+                 simulator and airline grader are Sonnet through the
+                 laptop's pinned Claude Code on the subscription login
+                 (tools off, own system prompt, no session persistence, the
+                 reported model ID recorded); and characterization (the
+                 GuideLLM grid, prefix reuse, cold load — the cold load
+                 needs the architect's restart).
+              14. The Framework runs the newest b-tag at the start of BUILD,
+                 with its release-note review since b11669 recorded, and the
+                 probe passes on it.
+              15. Set A's baseline runs every stage twice, each role on its
+                 assigned model. The findings record each tier's scores, bar
+                 and spread, the measured rates against the initial floors,
+                 the build, dates, harness versions and seeds. Then .state
+                 keeps only the logins and caches.
+              16. A root README gives the question, a map of the areas, and
+                 links to the docs and the planned answer. The docs cover
+                 the evaluation approach (each tool, its kind — load
+                 generator, conformance test, benchmark, harness — and which
+                 stage uses it and why), the models' card method, and the
+                 findings (baseline, tool reliability, memory budget). The
+                 Strix Halo area holds its runbook (OS, Tailscale, the
+                 versioned llama.cpp install, the rendered unit and presets,
+                 the root commands) and its build log. context/ keeps its
+                 vision, capability map and goals. CLAUDE.md, STANDARDS.md
+                 and the package docs are current.
+Test seams    evaluate's stage runner against a fake router and recorded
+              harness results (Inspect logs, MTEB JSON): gates, early stop,
+              resume, report. The claude -p Inspect provider against a fake
+              claude executable. The profile, swap and router packages,
+              moved without change. The integration probe at
+              SPIKE_ROUTER_URL. Measured evidence (12-15).
+Slices        1. Layout (1): the pure move; check green; currency reports
+                 only the Python hold; the probe passes on b11669.
+              2. Cleanup (2): the compatibility test removed; evaluate
+                 dispatches the existing instruments by stage or step name.
+              3. Gated skeleton (3-6): admission, fitness, capacity with the
+                 floors, the early stop, reports and resume; fakes in the
+                 check; gpt-oss-120b passes fitness and capacity live.
+              4. Embedding (7): the uv project and the MTEB encoder;
+                 EmbeddingGemma 2 through quality.
+              5. Audio (8): the ASR Inspect task; gemma-4-E4B through
+                 quality.
+              6. Vision (9): Gemma 4 26B-A4B through quality.
+              7. Agent (10): BFCL and conform; gpt-oss-120b through quality.
+              8. Set stage (11, 12): set A under load; one model's hour
+                 timed.
+              9. Deep stage (13): the claude -p provider; τ2 airline and
+                 retail; characterization on gpt-oss-120b.
+              10. Build move (14): the architect's root commands; the
+                 release-note review; the probe on the new build.
+              11. Baseline (15): set A run twice; findings committed; .state
+                 cleaned.
+              12. Docs and records (16): the README, the docs, the Strix
+                 Halo runbook, Decisions and pending edits.
+Out of scope  Candidates, Nemotron, any model beyond set A's four role
+              models; secondary roles. τ2 telecom and BFCL V4. Cloud model
+              APIs and API keys. ROCm, vLLM, SGLang, gateways, the
+              workstations, the admin tool. Splitting the Go module. Changes
+              to clutch, spike-harness-driver or personal-agents. Changing
+              the startup set. Forcing tool_choice, the parse-5xx resample.
+Door          two-way, except the cleaned .state run outputs. The repository
+              reverts by PR; moves and removals return from history. On the
+              Framework the earlier b-tag stays in its versioned directory
+              and `current` points back. One-way: deleted untracked raw logs
+              (removed only after the findings are committed), and Claude
+              Code subscription usage spent.
 ```
+
+## Progress
+
+slices 0/12 committed · standards — · spec — · editor —
 
 ## Decisions
 
@@ -472,10 +523,46 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   (`[models.consumers]`); Pi 1.3.0 sends no reasoning_effort to Mistral Small 4, so its
   preset's "high" applies, and changing Pi's driver stays out of scope.
 
+- evaluation (layout r1, architect): the reorganization folds into evaluation, since the evaluation decisions shape it; rejected a separate layout task.
+- evaluation (layout r1): areas hosting, evaluation, devices/<host-class>, docs, context (marathon only); profiles live with their host class, probe and router with hosting.
+- evaluation (layout r1): one Go module, packages by area; rejected per-area modules joined by go.work (workspace-only builds, or pushed pseudo-versions).
+- evaluation (layout r1): commands live inside their area; rejected one root cmd/.
+- evaluation (layout r1): mise monorepo mode (monorepo_root, config_roots, //area:task, root check runs every area's), stable in mise 2026.10.11; rejected nested configs run by cd.
+- evaluation (layout r1): consumer pins stay behind MISE_ENV=consumers in the evaluation area; rejected ungated, which would shadow the architect's own claude and pi.
+- evaluation (layout r1): measured records and the card method move to docs; the Strix Halo build log to its device area; context keeps README and goals.
+- evaluation (layout r1): a root README is the front page and holds "The answer"; context/README.md keeps vision and capability map.
+- evaluation (layout r1): docs carries the evaluation approach; no context toolkit note, since this task adopts the harness.
+- evaluation (layout r1): the Strix Halo runbook is written now, from the records; GB10, vLLM and SGLang pages come with their tasks.
+- evaluation (r1): Inspect AI 0.3.281 + inspect_evals 0.24.0 run the agent, vision and audio pipelines over the router's OpenAI API from the laptop; rejected native tau2-bench (Python <3.14 vs the 3.14.8 hold), bfcl-eval (no gpt-oss or Gemma 4 handler, idle since 2026-03), lmms-eval (torch), VLMEvalKit, and own fixtures alone.
+- evaluation (r1): MTEB 2.26.3 with a prompt-aware client encoder judges embeddings; rejected the stock OpenAI encoder (no task prompts) and own fixtures.
+- evaluation (r1): agent tiers BFCL single-turn, BFCL multi-turn, consumer tier (conform pass^5), then τ2.
+- evaluation (r1): vision tiers probe image + V*Bench, DocVQA, MMMU; rejected MathVista in place of MMMU.
+- evaluation (r1): audio tiers are the Open ASR Leaderboard's English sets plus FLEURS English, WER and RTFx.
+- evaluation (r1): embedding uses a seeded MTEB(eng, v2) subset; rejected the full benchmark.
+- evaluation (r1): the baseline is each role's assigned set A model; secondary roles go to candidates.
+- evaluation (r1): the set stage runs each role alone, then under load, with the footprint; rejected footprint-only and a cross-role workflow fixture.
+- evaluation (r1): a quality gate is set A's score within its two-run spread; rejected fixed absolute accuracy thresholds.
+- evaluation (r1): stages admission, fitness, capacity, quality, characterization (characterization now in the deep stage); supersedes main-model's four stages.
+- evaluation (r1): the Framework moves to the newest b-tag at the start of BUILD.
+- evaluation (r2): quality tiers run in cost order, τ2 last; rejected complexity order.
+- evaluation (r2): a tier stops early once the one-sided 95% upper bound, after its seeded screening fifth, falls below the bar; rejected stopping only when the bar is out of reach.
+- evaluation (r2): OpenAI's gpt-oss compatibility test is removed; BFCL tier 1 covers tool calls for every model and engine.
+- evaluation (r2): conform, concurrent, prefix and coldload fold into evaluate as named stages and steps; packages stay.
+- evaluation (r2): raw output and run reports stay in .state; set A's baseline tables are committed to docs findings; rejected committing every run's report.
+- evaluation (r2, architect): once findings are documented, .state run outputs are removed; logins and caches kept.
+- evaluation (r2): sample lists are committed seeded ID lists, the same for every model.
+- evaluation (r2): one uv project in the evaluation area holds inspect-ai, inspect-evals and mteb at Python 3.14.8; GuideLLM stays a mise pipx tool.
+- evaluation (r3, architect): one model's run, admission through the set stage across its declared roles, fits in 1 hour; supersedes r1's ~2 h per model and role.
+- evaluation (r3): τ2 and characterization form a deep stage only models passing every gate reach; rejected a token τ2 inside the hour (~6 tasks x 1 trial, ±40%).
+- evaluation (r3, architect): no cloud spend. τ2's user simulator and airline grader are Sonnet through the laptop's pinned Claude Code on the architect's subscription (claude -p, tools off, own system prompt, no session persistence), personal use of the unmodified binary; rejected a cloud API simulator (spend), gemma-4-E4B (weak, takes slots), Haiku (weaker user).
+- evaluation (r3): τ2 runs airline and retail only; rejected telecom, whose simulated user needs tools.
+- evaluation (r3): the hour's counts are BFCL 100 and 20 + conform pass^5; vision 5/100/150/200; audio 150 per set x 6; embedding's four tasks in full; τ2 12 tasks per domain x 2 trials in the deep stage.
+- evaluation (r3, architect): speed floors are absolute and task-based, initial values to tune as metrics come in: agent decode 20 tok/s, prefill 500 tok/s, 8k TTFT 20 s, 10 tok/s per stream at 4; vision 10 s per image question; audio RTFx 5, 1 per stream at 4; embedding 4,300 tok/s, 250 ms per query. Supersedes main-model r1's 24 tok/s floor (carried to candidates) and r1's 40%-of-ceiling gate; ceiling efficiency is a recorded diagnostic.
+
 ## Pending edits
 
 - coordinator · ai-hosting.md, "Where personal-agents' parts go": add "how to read a
-  model card (spike-model-hosting's model-card note)" to the methods proposed for the
+  model card (spike-model-hosting's docs page on model cards)" to the methods proposed for the
   architecture layer, and say that ai-hosting's per-model presets cite the card values that
   method reads.
 - coordinator · roadmap, the spike's profile summary: replace "pinned exactly in the profile"
@@ -485,9 +572,8 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   names release build b11529; the Framework's router now runs b11565 from the spike's rendered
   presets and unit, which hold llama.cpp to a minimum build (b11452).
 - coordinator · roadmap, consumers summary: the consumers run from the laptop against the
-  Framework's router; drop the Mistral sentence; add pass^5 over conform's 9 capabilities, OpenAI's
-  gpt-oss compatibility test as the engine row, and the baseline note (`context/baseline.md`)
-  that every later platform is measured against.
+  Framework's router; drop the Mistral sentence; add pass^5 over conform's 9 capabilities and the
+  baseline (`docs/findings/baseline.md`) that every later platform is measured against.
 - coordinator · roadmap: add task `main-model` after `consumers`, before `rocm`: named model sets
   with roles, swapping sets over the router's API, set-aware instruments, gpt-oss-120b's b11669
   comparison row, and Mistral Small 4 disqualified on Vulkan (3.36 tok/s, CPU fallback #30105).
@@ -508,7 +594,13 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   method changes); ai-hosting.md's "discrete VRAM" passages; the "from 2026-10-14" dates and
   needs markers; two-unit serving scope; the dense candidates (decode ceiling ~15 tok/s at 30B,
   ~4 at 128B); and admin's go-cli-sdk need (met).
-- coordinator · roadmap: add tasks `evaluation` (role pipelines for agent, vision, audio and
-  embedding models, graded fixtures, a set evaluation for co-loaded models, floors set by the
-  hardware) and `candidates` (candidates for every role, including Nemotron 3.5 Super, through
-  the pipelines; the verdict and startup set) after `main-model`, before `rocm`.
+- coordinator · roadmap: add task `evaluation` after `main-model` (the repository laid out by
+  area; evaluate's gated stages admission, fitness, capacity, quality, set and deep, with
+  absolute task-based floors, early stop and one-hour model runs; role pipelines on Inspect AI
+  and MTEB; τ2 with Claude Code as the simulated user; set A's baseline), then `candidates`
+  (candidates for every role, including Nemotron 3.5 Super, through the pipelines against set
+  A's bars; the verdict and startup set), both before `rocm`.
+- coordinator · ai-hosting.md (line 133) and roadmap.toml, validate task (line 515): repoint
+  `context/tool-reliability.md` to `docs/findings/tool-reliability.md`.
+- coordinator · ai-hosting.md, "Experiment: spike-model-hosting": candidates are judged by
+  evaluation's absolute floors and set A's per-tier bars, not the 24 tok/s floor.
