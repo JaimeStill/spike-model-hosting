@@ -489,6 +489,13 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
 - main-model (escalation 2, architect): `candidates` also looks for viable vision, audio and
   embedding candidates to test against set A's incumbents, not only agent models.
 
+- main-model: every preset section renders `hf-repo = <ID>`, set A's included, because the router
+  can download and start a model that isn't cached only from it; set A's render otherwise keeps
+  its sections, keys and values (spec review gap 1).
+- main-model: the system-RAM footprint column moves to `candidates` with Nemotron (spec review).
+- main-model: Mistral Small 4's KV estimate takes the top of 2.8-5.1 GiB; the catalog explains
+  the range (standards review).
+
 ## Pending edits
 
 - coordinator · ai-hosting.md, "Where personal-agents' parts go": add "how to read a
@@ -505,8 +512,9 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   Framework's router; drop the Mistral sentence; add pass^5 over conform's 9 capabilities, OpenAI's
   gpt-oss compatibility test as the engine row, and the baseline note (`context/baseline.md`)
   that every later platform is measured against.
-- coordinator · roadmap: add task `main-model` (the Mistral Small 4 probe) after `consumers`,
-  before `rocm`.
+- coordinator · roadmap: add task `main-model` after `consumers`, before `rocm`: named model sets
+  with roles, swapping sets over the router's API, set-aware instruments, gpt-oss-120b's b11669
+  comparison row, and Mistral Small 4 disqualified on Vulkan (3.36 tok/s, CPU fallback #30105).
 - coordinator · roadmap, the spike's goal summary: the new boundary: every consumer and
   instrument runs from the laptop, and the Framework only hosts and serves inference.
 - coordinator · ai-hosting.md, "Experiment: spike-model-hosting": the Hosts boundary change;
@@ -514,7 +522,8 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
 - coordinator · roadmap: the spike's workstation tasks need re-planning (a `plan` session after
   main-model): the hosts are two GB10 units (aarch64, sm_121, 128 GB unified at 273 GB/s, DGX OS
   7.5 with driver 580 and CUDA 13.0, joined by 200GbE QSFP), not a discrete-VRAM box; evidence 7,
-  the cuda summary ("sized to its VRAM", nvidia-smi footprint), ai-hosting.md's "discrete VRAM"
+  the cuda summary ("sized to its VRAM", nvidia-smi footprint; nvidia-smi reports "Memory-Usage: Not Supported" on GB10, so the
+  footprint method changes), ai-hosting.md's "discrete VRAM"
   passages, the "from 2026-10-14" dates and needs markers, two-unit serving scope, the dense
   candidates (decode ceiling ~15 tok/s at 30B, ~4 at 128B), and admin's go-cli-sdk need (met).
 - coordinator · roadmap: add tasks `evaluation` (role pipelines for agent, vision, audio and
