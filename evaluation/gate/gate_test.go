@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -299,6 +300,52 @@ func TestFloors(t *testing.T) {
 				t.Errorf("%s stage %s; want passed %v", tc.stage, st, tc.pass)
 			}
 		})
+	}
+}
+
+// TestTranscriptionRequest shows fitness's timed transcription and capacity's are one shape, the
+// quality stage's ASR task's: the card's prompt, asr_quality.py's PROMPT, first and the clip after
+// it, at temperature 0, with reasoning and the prompt cache off; capacity's carries its nonce
+// request after the clip.
+func TestTranscriptionRequest(t *testing.T) {
+	src, err := os.ReadFile("../suites/asr_quality.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^PROMPT = "([^"]*)"$`).FindSubmatch(src)
+	if m == nil {
+		t.Fatal(`asr_quality.py holds no PROMPT = "..." line`)
+	}
+	prompt := string(m[1])
+
+	h := newHarness(t, gemmaE4B)
+	h.run(t, "", nil)
+	if len(h.router.audio) != 1+4 {
+		t.Fatalf("%d audio requests; want fitness's one and capacity's 4", len(h.router.audio))
+	}
+	for i, body := range h.router.audio {
+		kwargs, _ := body["chat_template_kwargs"].(map[string]any)
+		if think, ok := kwargs["enable_thinking"].(bool); !ok || think {
+			t.Errorf("request %d: chat_template_kwargs %v; want enable_thinking false", i, body["chat_template_kwargs"])
+		}
+		if body["temperature"] != 0.0 || body["cache_prompt"] != false {
+			t.Errorf("request %d: temperature %v cache_prompt %v; want 0 and false", i, body["temperature"], body["cache_prompt"])
+		}
+		parts := body["messages"].([]any)[0].(map[string]any)["content"].([]any)
+		want := 2
+		if i > 0 {
+			want = 3
+		}
+		if len(parts) != want {
+			t.Fatalf("request %d: %d content parts; want %d", i, len(parts), want)
+		}
+		first, second := parts[0].(map[string]any), parts[1].(map[string]any)
+		if first["type"] != "text" || first["text"] != prompt || second["type"] != "input_audio" {
+			t.Errorf("request %d: parts %v, %v; want the text %q, then the clip", i, first["type"], second["type"], prompt)
+		}
+		if i > 0 && !fakeNonce.MatchString(parts[2].(map[string]any)["text"].(string)) {
+			t.Errorf("request %d: the part after the clip %v; want the nonce request", i, parts[2])
+		}
 	}
 }
 

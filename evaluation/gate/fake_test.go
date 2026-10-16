@@ -28,6 +28,8 @@ type fakeRouter struct {
 
 	mu       sync.Mutex
 	requests []string
+	// audio are the chat completions' bodies that carried an audio clip, in order.
+	audio []map[string]any
 }
 
 var fakeNonce = regexp.MustCompile(`nonce-[0-9a-f]{16}`)
@@ -139,6 +141,11 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 	kind := "chat"
 	if n := fakeNonce.FindString(text.String()); n != "" {
 		kind, answer = "capacity", answer+"\n"+n
+	}
+	if audio {
+		f.mu.Lock()
+		f.audio = append(f.audio, body)
+		f.mu.Unlock()
 	}
 	stream, _ := body["stream"].(bool)
 	f.record(fmt.Sprintf("%s %v %s", kind, stream, body["model"]))

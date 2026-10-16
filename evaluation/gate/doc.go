@@ -10,7 +10,9 @@
 //     router's build at or above the profile's minimum.
 //   - Fitness smokes each role the set assigns the model with the probe's request for it (a
 //     tool call, an image, an audio clip, an embedding), measures the role's single-stream
-//     floors from llama.cpp's timings or the client's clock, and reads the pool idle.
+//     floors from llama.cpp's timings or the client's clock, and reads the pool idle. The audio
+//     clip goes as the quality stage's ASR task sends one: the card's ASR prompt first, the clip
+//     after, at temperature 0 with reasoning off, the request capacity's audio streams send too.
 //   - Capacity puts the profile's slots of requests in flight on the model per role, through
 //     the concurrent package's run: no crossed nonce, the embedding tolerance held, the pool's
 //     floor free at the peak, and the role's 4-stream floor.

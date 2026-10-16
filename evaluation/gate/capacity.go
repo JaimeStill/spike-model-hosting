@@ -167,27 +167,22 @@ type recorder struct {
 	errorCount int
 }
 
-// Chat sends the agent the prompt as given. An image or audio request carries the medium and
-// asks for the role's work first, then the prompt's nonce on a line of its own, so the nonce
-// check reads an answer that did the work.
+// Chat sends the agent the prompt as given. An image request carries the image and asks for a
+// description first, then the prompt's nonce on a line of its own, so the nonce check reads an
+// answer that did the work; an audio request is fitness's timed transcription
+// (transcriptionBody), the same request to repeat the nonce after the clip.
 func (rc *recorder) Chat(ctx context.Context, prompt string) (string, error) {
-	var content any = prompt
-	maxTokens := 4096 // room for a reasoning model's reasoning before its answer
 	nonce := nonceRE.FindString(prompt)
-	repeat := " Then, on a line of its own, repeat this request ID exactly: " + nonce
+	repeat := "Then, on a line of its own, repeat this request ID exactly: " + nonce
+	var body map[string]any
 	switch rc.role {
 	case RoleVision:
-		content, maxTokens = []map[string]any{imagePart(rc.media.PNG), textPart("Describe this image in one sentence." + repeat)}, 512
+		body = chatBody(rc.model, []map[string]any{imagePart(rc.media.PNG), textPart("Describe this image in one sentence. " + repeat)}, 512, false)
 	case RoleAudio:
-		content, maxTokens = []map[string]any{audioPart(rc.media.WAV), textPart("Transcribe this audio clip." + repeat)}, 512
-	}
-	body := chatBody(rc.model, content, maxTokens, false)
-	if rc.role == RoleAudio {
-		// A transcription client turns reasoning off, as the profile leaves a request's shape to
-		// the client: asked to repeat the nonce too, gemma-4-E4B reasons ~200 tokens before its
-		// 25-token answer on b11669 (a plain "Transcribe this audio clip." doesn't), which would
-		// time its reasoning, not its transcription. Templates without the switch ignore it.
-		body["chat_template_kwargs"] = map[string]any{"enable_thinking": false}
+		body = transcriptionBody(rc.model, rc.media.WAV, repeat)
+	default:
+		// Room for a reasoning model's reasoning before its answer.
+		body = chatBody(rc.model, prompt, 4096, false)
 	}
 	comp, err := rc.c.complete(ctx, body)
 	rc.mu.Lock()

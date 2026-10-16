@@ -88,14 +88,16 @@ SETS = {
 # 165% WER and the sentence alone 47%, and on 40 LibriSpeech test.other utterances both scored
 # 6.3%. The normalizer writes numbers as digits whichever way they come, so the bullets don't
 # bear on the score. The prompt goes first and the clip after it, the card's modality order for
-# audio ("4. Modality order"), not the clip-first shape the fitness and capacity stages send:
-# on those LibriSpeech utterances clip-first scored 8.4%, dropping the start of some, and on the
-# short AMI clips it read the bullets back 17 times in 40.
+# audio ("4. Modality order"): on those LibriSpeech utterances clip-first scored 8.4%, dropping
+# the start of some, and on the short AMI clips it read the bullets back 17 times in 40. The
+# fitness and capacity stages send the same prompt in the same order (package evaluation/gate's
+# transcriptionBody); Go can't import this constant, so gate holds its own copy, asrPrompt, and a
+# gate test holds the two the same.
 PROMPT = "Transcribe the following speech segment in English into English text."
 
 # Greedy decoding, room for the longest clip's transcript, and the router's settings for a timed
 # transcription: the prompt cache off (llama.cpp's cache_prompt) and reasoning off (the
-# template's enable_thinking), as the capacity stage sends them.
+# template's enable_thinking), as the fitness and capacity stages send them.
 GENERATE = GenerateConfig(
     temperature=0,
     max_tokens=1024,

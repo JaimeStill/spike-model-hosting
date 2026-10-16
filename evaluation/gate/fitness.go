@@ -143,11 +143,9 @@ func (r *Runner) fitVision(ctx context.Context, c *client) []Check {
 }
 
 func (r *Runner) fitAudio(ctx context.Context, c *client) []Check {
-	// The clip, then the instruction, as the probe sends them, with the prompt cache off so an
-	// earlier send of the clip isn't reused.
 	rctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	comp, err := c.chatUncached(rctx, r.Model, []map[string]any{audioPart(r.Media.WAV), textPart("Transcribe this audio clip.")}, 512)
+	comp, err := c.complete(rctx, transcriptionBody(r.Model, r.Media.WAV, ""))
 	if err != nil {
 		return []Check{broken("transcription", RoleAudio, err), broken("rtfx", RoleAudio, err)}
 	}
@@ -163,6 +161,33 @@ func (r *Runner) fitAudio(ctx context.Context, c *client) []Check {
 		"decode_tok_s": comp.Timings.PredictedPerSecond,
 	}
 	return []Check{smoke, rtfx}
+}
+
+// asrPrompt is the card's ASR prompt (https://huggingface.co/google/gemma-4-E4B-it, "6. Audio"),
+// the language filled in and its formatting bullets left out. The quality stage's ASR task sends
+// the same sentence, asr_quality.py's PROMPT, which says why the bullets are left out; Python
+// can't read a Go constant, so it is written twice, and a test holds the two the same.
+const asrPrompt = "Transcribe the following speech segment in English into English text."
+
+// transcriptionBody is a timed transcription of wav by model, as fitness and capacity send it
+// and as the quality stage's ASR task does: the card's prompt first and the clip after it (the
+// card's modality order for audio), at temperature 0, with reasoning off (the template's
+// enable_thinking; templates without the switch ignore it) and the prompt cache off (llama.cpp's
+// cache_prompt), so an earlier send of the clip isn't reused. Reasoning off times the
+// transcription, not a reasoning model's thinking first: at the card's temperature 1,
+// gemma-4-E4B sometimes reasoned 145-169 tokens before a clip-first "Transcribe this audio
+// clip.", which put fitness's RTFx at 1.2-1.5 against its floor of 5. A non-empty after follows
+// the clip as a text part of its own: capacity's request to repeat its nonce.
+func transcriptionBody(model string, wav []byte, after string) map[string]any {
+	content := []map[string]any{textPart(asrPrompt), audioPart(wav)}
+	if after != "" {
+		content = append(content, textPart(after))
+	}
+	body := chatBody(model, content, 512, false)
+	body["temperature"] = 0
+	body["cache_prompt"] = false
+	body["chat_template_kwargs"] = map[string]any{"enable_thinking": false}
+	return body
 }
 
 func (r *Runner) fitEmbedding(ctx context.Context, c *client) []Check {
