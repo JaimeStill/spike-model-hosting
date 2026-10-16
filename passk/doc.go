@@ -23,8 +23,8 @@
 // The API:
 //   - Pi, OpenCode and Claude return a consumer's cell from a Config, whose Roles name the
 //     set's chat, vision, audio and embedding models and whose Reasoning is the chat model's
-//     consumer reasoning setting (profile.ConsumerReasoning); ClaudeDriver the Claude cell's
-//     driver, and SessionOptions the options a cell's sessions open with.
+//     consumer reasoning setting (profile.ConsumerReasoning). ClaudeDriver returns the Claude
+//     cell's driver, and SessionOptions the options a cell's sessions open with.
 //   - Version reads the version a consumer's executable reports, which a cell checks against
 //     the consumers package's pin.
 //   - Tally counts a consumer's k trials, each a Trial, into a Row: a Cell per capability with

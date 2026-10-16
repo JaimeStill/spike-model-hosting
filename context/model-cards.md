@@ -130,13 +130,21 @@ checkpoints are not counted.
 | Nemotron 3.5 Super VL ([config](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/main/config.json), [card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16)) | 1048576, the card's "up to 1M" and `max_position_embeddings` | 8 attention of 88 (2 KV heads × 128); 40 Mamba-2 (128 heads × 64, state 128, 8 groups, kernel 4); 40 MoE with no cache | 8,192 | 164.7 MiB (recurrent, f32) | 1.64 GiB | 8.64 GiB at 1048576 | 131072, gpt-oss-120b's, for the comparison; rejected 262144 and 1M. Its 8 checkpoints per slot hold ~5.1 GiB of recurrent state in system RAM, outside the pool. |
 
 Four models allow a larger context than the profile sets. Nemotron 3.5 Super's cache grows
-slowest, 8 KiB per token: its 1M costs 8 GiB of attention KV. Mistral Small 4 doubles to its 262144 for
-2.8 GiB more. Gemma 4 26B-A4B's full-attention KV goes from 0.625 GiB at 32768 to 5 GiB at its
-262144, which set A's budget can't hold. Gemma 4 E4B could reach its 131072 for 1.5 GiB more.
-gpt-oss-120b already runs at its maximum, and EmbeddingGemma 2 at its card's window.
+slowest, 8 KiB per token: its 1M costs 8 GiB of attention KV. Mistral Small 4 doubles to its
+262144 for 2.8 GiB more. Gemma 4 26B-A4B's full-attention KV goes from 0.625 GiB at 32768 to
+5 GiB at its 262144, which set A's budget can't hold. Gemma 4 E4B could reach its 131072 for
+1.5 GiB more. gpt-oss-120b already runs at its maximum, and EmbeddingGemma 2 at its card's
+window.
 
 Gemma 4 26B-A4B's full-attention layers set `attention_k_eq_v`, using K as V; an engine that
 stores one tensor for both halves that part, which the table doesn't assume.
+
+Mistral Small 4's KV at `c = 131072` is 2.8-5.1 GiB, depending on how the engine lays out the
+MLA cache. The low end, the table's 2.81 GiB, caches only the latent (`kv_lora_rank` + rope,
+320 values per layer and token). llama.cpp b11669 does this: it loads `mistral4` through its
+DeepSeek-2 code, which allocates a K-only cache when the GGUF carries the MLA key lengths. The
+high end also caches the latent's 256 values a second time, as V (5.06 GiB, rounded up to 5.1).
+The profile's mistral budget takes the high end, so its estimate holds for either layout.
 
 ## Assumptions
 

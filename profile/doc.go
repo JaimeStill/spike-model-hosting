@@ -15,10 +15,10 @@
 //     its own MemoryBudget: measured on a build, or estimated for a set not yet measured.
 //     Exactly one set is the startup set, which Profile.StartupSet returns, and every model is
 //     in at least one set.
-//   - A Set's SetRoles assign the model each role's requests go to, chat and embedding
-//     required, vision and audio optional, each one of the set's models that declares the role;
-//     SetRoles.Models lists them once each. Profile.Set looks a set up by name, the startup set
-//     for none: the one lookup the probe and every instrument share.
+//   - A Set's SetRoles assign each role's requests to one of the set's models that declares the
+//     role. Chat and embedding are required, and vision and audio optional; SetRoles.Models lists
+//     the assigned models once each. Profile.Set looks a set up by name, or returns the startup
+//     set for an empty name; the probe and every instrument share this one lookup.
 //   - Each Model declares its roles and its licence beside its origin, and an embedding model
 //     its output width, Dims; Profile.Model looks one up by router ID. RouterTag is the tag the
 //     router lists a model by, the one a Model's ID must end with.

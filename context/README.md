@@ -55,15 +55,16 @@ of the admin tooling.
   install path for vLLM on Strix Halo. Ollama, LM Studio, and TGI are recorded on paper.
 - **Gateways, live:** no gateway, agentgateway, and LiteLLM. Envoy AI Gateway (Agent Router) and
   vLLM's production-stack are Kubernetes-first and recorded on paper.
-- **Main-model pool:** gpt-oss-120b leads. Mistral Small 4 replaces it only if it matches
-  gpt-oss-120b on `/v1/messages` and Pi tool calls and its vision works on Vulkan; the
-  `main-model` task runs that probe. Gemma 4 26B-A4B completes the pool.
+- **Main-model pool:** gpt-oss-120b leads, and Gemma 4 26B-A4B completes the pool. Mistral
+  Small 4 is disqualified on Vulkan at b11669 (`main-model`). Nemotron 3.5 Super and other
+  candidates go to the `candidates` task, through the `evaluation` task's pipelines.
 - **Shared model set (set A):** gpt-oss-120b (ggml-org MXFP4, the main model), Gemma 4 26B-A4B
   (vision), gemma-4-E4B (audio and the small model), and EmbeddingGemma 2 (embeddings), each in
   its platform's native format: GGUF for llama.cpp, safetensors for vLLM and SGLang. On the
-  Framework all four stay loaded together; Mistral Small 4 swaps in for gpt-oss-120b and Gemma 4
-  26B-A4B. The workstation's set is sized to its VRAM in the `cuda` task, whose candidate list
-  adds the dense models Mistral Medium 3.5, Gemma 4 31B, and Muse Glimmer 30B.
+  Framework all four stay loaded together as the startup set; a candidate set swaps its main
+  model in for gpt-oss-120b and Gemma 4 26B-A4B. The workstation's set is sized to its VRAM in
+  the `cuda` task, whose candidate list adds the dense models Mistral Medium 3.5, Gemma 4 31B,
+  and Muse Glimmer 30B.
 - **Model origin:** models of Chinese origin are avoided where an alternative serves
   (`standards-lab/context/ai-strategy.md`, "Constraint: model origin").
 - **Versions:** every engine, gateway, and model runs its latest upstream release. Every document
@@ -103,8 +104,8 @@ of the admin tooling.
   validates, and renders the profiles in `profiles/`, and describes a set for the scripts. Each
   set assigns the model each role's requests go to (`[sets.roles]`), and `Profile.Set` is the one
   lookup the probe and every instrument share: each takes `-set` (or `SPIKE_SET`), the startup
-  set by default. `profiles/strix-halo.toml` serves set A on
-  the Framework. Renderers for the other platforms' configuration are planned.
+  set by default. `profiles/strix-halo.toml` holds the Framework's sets, with set A the startup
+  set. Renderers for the other platforms' configuration are planned.
 - **Model cards:** how to read a model card, what each value means, the values set A takes
   from each card, and a catalog of each profiled model's maximum context and its computed KV
   and recurrent-state cost, in [`model-cards.md`](model-cards.md).
@@ -115,11 +116,11 @@ of the admin tooling.
   OpenCode against the router for every tool and test: the pinned version, its harness driver,
   the Claude Code login check, and state under the run's own directory.
 - **Router state:** the `router` package reads a router's models, their status, and its build
-  over HTTP, so each tool refuses to start against an unloaded model and names the build it ran
-  on, and loads and unloads a model.
+  over HTTP, and loads and unloads a model. Each tool reads the state to refuse to start against
+  an unloaded model and to name the build it ran on.
 - **Set swap:** the `swap` package and the `swap` command (`cmd/swap`) swap the router from the
-  set it has loaded to another of the profile's sets over its API, unloads before loads, and
-  time each model's step and the total.
+  set it has loaded to another of the profile's sets over its API. They unload before they load,
+  and time each model's step and the total.
 - **Concurrent run:** the `concurrent` package and the `concurrent` command (`cmd/concurrent`)
   run Pi, Claude Code, and the model client's chat and embedding streams against the router at
   once. The run fails when an answer carries another request's nonce, or an embedding differs

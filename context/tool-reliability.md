@@ -247,8 +247,8 @@ case's tool with arguments the tool's schema accepts:
 
 ## The comparison row: pass^5 on b11669
 
-`main-model` judges each candidate main model against gpt-oss-120b on the same build and
-pins, so gpt-oss-120b's pass^5 ran again after the move to b11669. It ran as
+The `candidates` task judges each candidate main model against gpt-oss-120b on the same build
+and pins, so gpt-oss-120b's pass^5 ran again after the move to b11669. It ran as
 `go run ./cmd/conform -set a -k 5` with `SPIKE_ROUTER_URL=http://framework:8080`, from the
 laptop (host `terminal`) against the Framework's router, on 2026-10-15. The router reported
 `b11669-620d2225c` in `/props` `build_info`, with set A's four models loaded. The model was
@@ -314,25 +314,27 @@ with 0 invalid. OpenCode is measured, not judged.
 
 ## Mistral Small 4: disqualified at fitness (speed) on Vulkan, Strix Halo, b11669
 
-Mistral Small 4 is out of the main-model evaluation at its first stage. The evaluation is staged:
-a candidate that fails a fitness gate is disqualified, and the later stages don't run. The
-fitness gate is engine generation of at least 24 tok/s, one stream, on the short profile. Mistral
-Small 4 (unsloth `UD-Q4_K_XL`, mmproj `BF16`, set `mistral`) generated at 3.36 tok/s there
-([`baseline.md`](baseline.md), "Mistral Small 4 on b11669"). The router reported
+Mistral Small 4 failed the evaluation's first stage, so it is disqualified. The evaluation is
+staged: a candidate that fails a fitness gate is disqualified, and the later stages don't run.
+The fitness gate is engine generation of at least 24 tok/s, one stream, on the short profile.
+Mistral Small 4 (unsloth `UD-Q4_K_XL`, mmproj `BF16`, set `mistral`) generated at 3.36 tok/s
+there ([`baseline.md`](baseline.md), "Mistral Small 4 on b11669"). The router reported
 `b11669-620d2225c`. The runs went from the laptop (host `terminal`) against the Framework's
-router, on 2026-10-15 and 2026-10-16. The re-probe triggers are llama.cpp
-[#30105](https://github.com/ggml-org/llama.cpp/pull/30105) (Vulkan F32 `MUL_MAT_ID`, which
-would move its expert down-projections off the CPU) and
-[#30260](https://github.com/ggml-org/llama.cpp/pull/30260), the two the main-model brief names.
+router, on 2026-10-15 and 2026-10-16.
+
+Two open llama.cpp PRs would trigger a re-probe.
+[#30105](https://github.com/ggml-org/llama.cpp/pull/30105) is the Vulkan fix: it honours F32
+precision in `MUL_MAT_ID`, which would move Mistral's expert down-projections off the CPU.
+[#30260](https://github.com/ggml-org/llama.cpp/pull/30260) is the CUDA one.
 
 These stages didn't run:
 
-- the conform pass^5 (behavior 9). It started and was stopped 5 minutes in, partway through Pi's
-  first trial, before it wrote any report, so it has no cells;
-- the concurrent run and the footprint at 4 in flight. The set's budget stays an estimate
-  ([`memory-budget.md`](memory-budget.md));
-- the set's cold load;
-- the verdict's per-bar-line judgement against the comparison row.
+- The conform pass^5 started and was stopped 5 minutes in, partway through Pi's first trial,
+  before it wrote any report, so it has no cells.
+- The concurrent run and the footprint at 4 in flight didn't run, so the set's budget stays an
+  estimate ([`memory-budget.md`](memory-budget.md)).
+- The set's cold load didn't run.
+- The verdict didn't judge each bar line against the comparison row.
 
 What did run is kept below, since it bears on a re-probe.
 

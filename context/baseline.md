@@ -128,13 +128,10 @@ larger than 25 GiB (gpt-oss-120b alone is about 60 GiB), on an ext4 NVMe drive. 
 
 ## Mistral Small 4 on b11669: disqualified at fitness (speed)
 
-Mistral Small 4 is disqualified at the fitness stage on Vulkan, Strix Halo, b11669. One stream
-on the short profile, the engine generated at 3.36 tok/s against the 24 tok/s floor. The
-re-probe triggers are llama.cpp [#30105](https://github.com/ggml-org/llama.cpp/pull/30105) and
-[#30260](https://github.com/ggml-org/llama.cpp/pull/30260). Once a candidate fails a fitness
-gate the later stages don't run: conform pass^5, the concurrent run with its footprint at 4 in
-flight, and the cold load did not run ([`tool-reliability.md`](tool-reliability.md), "Mistral
-Small 4: disqualified at fitness").
+Mistral Small 4 is disqualified at the fitness stage on Vulkan, Strix Halo, b11669: one stream
+on the short profile, the engine generated at 3.36 tok/s against the 24 tok/s floor.
+[`tool-reliability.md`](tool-reliability.md), "Mistral Small 4: disqualified at fitness", lists
+the stages that didn't run and the llama.cpp PRs that would trigger a re-probe.
 
 The figures are for set `mistral`: unsloth's Mistral Small 4 `UD-Q4_K_XL` with its mmproj `BF16`
 at `c = 131072`, beside gemma-4-E4B and EmbeddingGemma 2. The router was b11669

@@ -15,7 +15,8 @@
 // The API:
 //   - Watch polls a router until a restart has every model it waits for loaded again, and
 //     writes the times.
-//   - Tracker follows one restart, its zero value ready to use, Tracker.Models the models it waits
-//     for: Tracker.Observe takes each poll, Tracker.Ready and Tracker.Done say how far it got,
-//     Tracker.Progress describes a restart that didn't finish, and Tracker.Write writes the times.
+//   - Tracker follows one restart, and its zero value is ready to use; Tracker.Models names the
+//     models it waits for. Tracker.Observe takes each poll, Tracker.Ready and Tracker.Done say
+//     how far it got, Tracker.Progress describes a restart that didn't finish, and Tracker.Write
+//     writes the times.
 package coldload

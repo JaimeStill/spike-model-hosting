@@ -196,8 +196,8 @@ is read from the router's `/props` `build_info`.
   `common_chat_template_detect_params_init` in `common/chat.cpp` at b11669, Mistral Small 4's
   upstream template (`[SYSTEM_PROMPT]`, `[TOOL_CALLS]` and `[ARGS]`, no `[CALL_ID]`) takes the
   Ministral 3 handler, and Nemotron 3.5 Super's (`<tool_call>`, `<function=`, `<parameter=`,
-  `<think>`) takes the Qwen3-Coder handler with reasoning on. That the GGUFs embed those same
-  templates is confirmed when each loads.
+  `<think>`) takes the Qwen3-Coder handler with reasoning on. "The candidates loaded on
+  b11669" below confirms that each GGUF's embedded template takes the same handler.
 - **Nemotron support.** [#30520](https://github.com/ggml-org/llama.cpp/pull/30520) adds
   Nemotron 3.5 Super VL and Nemotron Bolt 74B A9B: the `NemotronH_Omni_Reasoning_V3`
   architecture in the Nemotron-H graph, and its vision encoder in `mtmd`. b11669 is the first

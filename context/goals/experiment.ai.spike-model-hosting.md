@@ -488,6 +488,9 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   parking main-model on its branch.
 - main-model (escalation 2, architect): `candidates` also looks for viable vision, audio and
   embedding candidates to test against set A's incumbents, not only agent models.
+- main-model (escalation 2): the r1, r2, r3 and escalation decisions on Nemotron, the staged
+  evaluation, the quant retry and the verdict carry to `candidates` as settled, including r1's
+  "a passing candidate's set becomes the startup set".
 
 - main-model: every preset section renders `hf-repo = <ID>`, set A's included, because the router
   can download and start a model that isn't cached only from it; set A's render otherwise keeps
@@ -495,6 +498,17 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
 - main-model: the system-RAM footprint column moves to `candidates` with Nemotron (spec review).
 - main-model: Mistral Small 4's KV estimate takes the top of 2.8-5.1 GiB; the catalog explains
   the range (standards review).
+- main-model: each set names the model each role's requests go to (`[sets.roles]`), beside the
+  roles each model declares; the probe and every instrument find their models through
+  `Profile.Set`.
+- main-model: the probe and every instrument take `-set`, else SPIKE_SET, else the profile's
+  startup set.
+- main-model: validation refuses a model ID whose tag the router would rename
+  (`profile.RouterTag`), so Mistral Small 4's ID ends in `Q4_K_XL`, not `UD-Q4_K_XL`; the tag
+  fetches the same files.
+- main-model: each chat model records the reasoning setting each consumer sends
+  (`[models.consumers]`); Pi 1.3.0 sends no reasoning_effort to Mistral Small 4, so its
+  preset's "high" applies, and changing Pi's driver stays out of scope.
 
 ## Pending edits
 
@@ -518,14 +532,20 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
 - coordinator · roadmap, the spike's goal summary: the new boundary: every consumer and
   instrument runs from the laptop, and the Framework only hosts and serves inference.
 - coordinator · ai-hosting.md, "Experiment: spike-model-hosting": the Hosts boundary change;
-  point the main-model probe to `main-model`.
+  point the main-model probe to `candidates`, with Mistral Small 4's disqualification in
+  `main-model`.
+- coordinator · roadmap, the spike's goal summary, and ai-hosting.md, "Experiment:
+  spike-model-hosting", Hosts: sessions may do on the Framework whatever needs no sudo (the
+  router's HTTP API including load, unload and downloads, user-level SSH reads, logs); root
+  stays the architect's, by exact commands.
 - coordinator · roadmap: the spike's workstation tasks need re-planning (a `plan` session after
   main-model): the hosts are two GB10 units (aarch64, sm_121, 128 GB unified at 273 GB/s, DGX OS
-  7.5 with driver 580 and CUDA 13.0, joined by 200GbE QSFP), not a discrete-VRAM box; evidence 7,
-  the cuda summary ("sized to its VRAM", nvidia-smi footprint; nvidia-smi reports "Memory-Usage: Not Supported" on GB10, so the
-  footprint method changes), ai-hosting.md's "discrete VRAM"
-  passages, the "from 2026-10-14" dates and needs markers, two-unit serving scope, the dense
-  candidates (decode ceiling ~15 tok/s at 30B, ~4 at 128B), and admin's go-cli-sdk need (met).
+  7.5 with driver 580 and CUDA 13.0, joined by 200GbE QSFP), not a discrete-VRAM box. The
+  re-plan revisits evidence 7; the cuda summary ("sized to its VRAM", and its nvidia-smi
+  footprint, since nvidia-smi reports "Memory-Usage: Not Supported" on GB10 and the footprint
+  method changes); ai-hosting.md's "discrete VRAM" passages; the "from 2026-10-14" dates and
+  needs markers; two-unit serving scope; the dense candidates (decode ceiling ~15 tok/s at 30B,
+  ~4 at 128B); and admin's go-cli-sdk need (met).
 - coordinator · roadmap: add tasks `evaluation` (role pipelines for agent, vision, audio and
   embedding models, graded fixtures, a set evaluation for co-loaded models, floors set by the
   hardware) and `candidates` (candidates for every role, including Nemotron 3.5 Super, through

@@ -1,7 +1,7 @@
-// Package router reads a running llama.cpp router's state over HTTP, and loads and unloads its
-// models: which models it lists and their status, and the build it runs. The spike's tools read
-// it before a run, so a run never starts against a model a request would load, and every
-// measurement names its build. Only the swap command loads or unloads a model.
+// Package router reads a running llama.cpp router's state over HTTP (the models it lists, their
+// status, and the build it runs), and loads and unloads its models. The spike's tools read the
+// state before a run, so a run never starts against a model a request would load, and every
+// measurement names its build. Only the swap package loads or unloads a model.
 //
 // The API:
 //   - Models returns each model GET /models lists, a Model with its status and whether its
