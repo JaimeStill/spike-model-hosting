@@ -115,6 +115,28 @@ func TestTrackerStart(t *testing.T) {
 	}
 }
 
+// TestTrackerModels shows a tracker given its models waits for those alone: a model outside them,
+// unloaded throughout, neither stops it starting nor keeps it from finishing, and one of them not
+// loaded at the first poll refuses the start.
+func TestTrackerModels(t *testing.T) {
+	t0 := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	tr := coldload.Tracker{Models: []string{"a"}}
+	for i, status := range []string{"loaded", "unloaded", "loaded"} {
+		if err := tr.Observe(t0.Add(time.Duration(i)*time.Second), map[string]string{"a": status, "other": "unloaded"}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !tr.Done() {
+		t.Errorf("not done: %s", tr.Progress())
+	}
+
+	tr = coldload.Tracker{Models: []string{"a", "b"}}
+	err := tr.Observe(t0, map[string]string{"a": "loaded"}, nil)
+	if err == nil || !strings.Contains(err.Error(), `b as ""`) {
+		t.Errorf("err %v, want one naming b, not listed", err)
+	}
+}
+
 // TestTrackerProgress shows how far an unfinished restart got, for the timeout's message.
 func TestTrackerProgress(t *testing.T) {
 	t0 := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)

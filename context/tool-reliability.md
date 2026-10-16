@@ -245,6 +245,153 @@ case's tool with arguments the tool's schema accepts:
   axis label the prompt didn't ask for, a `limit` of 100 added or a `limit` of 10 left out.
   The suite counts them and, outside `--strict`, passes them.
 
+## The comparison row: pass^5 on b11669
+
+The `candidates` task judges each candidate main model against gpt-oss-120b on the same build
+and pins, so gpt-oss-120b's pass^5 ran again after the move to b11669. It ran as
+`go run ./cmd/conform -set a -k 5` with `SPIKE_ROUTER_URL=http://framework:8080`, from the
+laptop (host `terminal`) against the Framework's router, on 2026-10-15. The router reported
+`b11669-620d2225c` in `/props` `build_info`, with set A's four models loaded. The model was
+gpt-oss-120b (ggml-org `MXFP4`) and clutch was at `9981a3e`, as on b11572. The consumers ran at
+the consumers environment's pins. Pi 1.3.0 ran on its `llama.cpp` provider with `required` on
+`respond`. Claude Code 2.1.301 ran over `/v1/messages` from `.state/claude` on the
+subscription login. OpenCode 1.19.1 ran with `interleaved` set to `reasoning_content` and
+`tool_choice` left at `auto`. The run's `CLAUDE_*` variables were unset. One set ran, in
+16m20s, and no request met a transient router error, so no consumer's set was rerun:
+
+| Consumer | exchange | cancel | resume | tool | skill | structured | vision | dropped-image | audio-tool | pass^5 | invalid | Bar |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Pi 1.3.0 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 9/9 (100%) | 0 | meets |
+| Claude Code 2.1.301 | 5/5 | 5/5 | 5/5 | 0/5 | 0/5 | 5/5 | 5/5 | n/a | 5/5 | 6/9 (66.7%) | 0 | fails |
+| OpenCode 1.19.1 | 5/5 | 5/5 | 5/5 | 4/5 | 3/5 | 5/5 | 5/5 | 5/5 | 3/5 | 6/9 (66.7%) | 18 | fails |
+
+This row is the bar the candidates are judged against. For Claude Code, a candidate must meet
+or beat each cell's count, with no more than 0 invalid requests. Pi's bar stays 9/9 at 5/5
+with 0 invalid. OpenCode is measured, not judged.
+
+- **Pi.** It held every cell with no invalid request, as it has on every build since b11529.
+- **Claude Code's `tool` and `skill`.** Both are the text-for-a-call failure of
+  the b11572 rows. In `tool`, gpt-oss called `lookup_code` and then, on all five trials, answered
+  the code as JSON text (`{"code": "ZX-596F89"}`) instead of calling `respond`. That turn
+  streamed no thinking block, so after the tool result the model went straight to its final.
+  In `skill`, three trials called `respond` with a motto the model made up ("When it matters
+  most", "Unknown", "Stay ready, stay clutch") without loading the skill. One loaded the skill
+  and then asked in text what the motto was, and one asked without loading it. `dropped-image`
+  stays n/a: Claude Code sends the image as it is.
+- **Claude Code's `audio-tool` and invalid count.** `audio-tool` passed 5/5, up from 3/5 in
+  both b11572 sets. No parse error reached Claude Code. In b11572's set 2, one `audio-tool`
+  request had failed with the error and Claude Code resent it seven times, which made all 8
+  invalid requests. The only non-2xx responses it got here were its `HEAD /api/hello` probes
+  (404), which aren't model requests.
+- **OpenCode.** Every one of its 18 invalid requests was the parse error, HTTP 200 then
+  "does not match the expected peg-native format". Of the 18, 14 came
+  in `audio-tool` (3, 3, 3 and 5 in trials 1 to 4) and 4 in `skill` (1 in trial 3 and 3 in
+  trial 4). As on b11572, OpenCode resends with growing waits, and an exchange fails when the
+  resends run out or the model answers in text. The `tool`, `skill` and `audio-tool` cells failed
+  5 of 15 runs. On b11572 they failed 6 of 15 in set 1 and 4 of 15 in set 2, so this is
+  the same proportion.
+- **Against b11572.** Pi: 9/9 then and now. Claude Code: `tool` 0/5 against 0/5 and 1/5,
+  `skill` 0/5 against 0/5 and 0/5, `audio-tool` 5/5 against 3/5 and 3/5, so pass^5 rose from
+  5/9 to 6/9, and invalid was 0 against 0 and 8. OpenCode: `tool` 4/5 against 4/5 and 5/5,
+  `skill` 3/5 against 3/5 and 4/5, `audio-tool` 3/5 against 2/5 and 2/5, so pass^5 was 6/9
+  against 6/9 and 7/9, and invalid was 18 against 17 and 14. Only Claude Code's
+  `audio-tool` moved more than five runs move on chance, and its rise was the absent parse
+  error. It came on one set, so it may not hold.
+- **What changed and why.** Three things changed between the rows, and the record pins none of
+  them as a cause:
+  - *The build's template number formatting.* [#30362](https://github.com/ggml-org/llama.cpp/pull/30362)
+    ([`llama-cpp-builds.md`](llama-cpp-builds.md)) changes the prompt only where a tool's
+    schema or a call's arguments carry a float. clutch's conform tools carry none: the only
+    number they declare is `structured`'s integer `count`. The recordings keep responses
+    and headers, not request bodies, so they don't show whether a consumer's own tools carry a
+    float. The gpt-oss parser is unchanged at b11669, so the parse 5xx still reaches clients on
+    `auto`, and OpenCode's invalid count shows it does.
+  - *Pi, 1.1.0 to 1.3.0.* This is a minor bump. Pi's major move, 0.99 to 1.x, came
+    between align's rows and consumers'. Pi changed no cell.
+  - *Claude Code, 2.1.296 to 2.1.301.* Its `tool` and `skill` failures are the model's, the
+    same as on b11572. Its `audio-tool` gain can't be split between this bump, the build, and
+    chance.
+
+## Mistral Small 4: disqualified at fitness (speed) on Vulkan, Strix Halo, b11669
+
+Mistral Small 4 failed the evaluation's first stage, so it is disqualified. The evaluation is
+staged: a candidate that fails a fitness gate is disqualified, and the later stages don't run.
+The fitness gate is engine generation of at least 24 tok/s, one stream, on the short profile.
+Mistral Small 4 (unsloth `UD-Q4_K_XL`, mmproj `BF16`, set `mistral`) generated at 3.36 tok/s
+there ([`baseline.md`](baseline.md), "Mistral Small 4 on b11669"). The router reported
+`b11669-620d2225c`. The runs went from the laptop (host `terminal`) against the Framework's
+router, on 2026-10-15 and 2026-10-16.
+
+Two open llama.cpp PRs would trigger a re-probe.
+[#30105](https://github.com/ggml-org/llama.cpp/pull/30105) is the Vulkan fix: it honours F32
+precision in `MUL_MAT_ID`, which would move Mistral's expert down-projections off the CPU.
+[#30260](https://github.com/ggml-org/llama.cpp/pull/30260) is the CUDA one.
+
+These stages didn't run:
+
+- The conform pass^5 started and was stopped 5 minutes in, partway through Pi's first trial,
+  before it wrote any report, so it has no cells.
+- The concurrent run and the footprint at 4 in flight didn't run, so the set's budget stays an
+  estimate ([`memory-budget.md`](memory-budget.md)).
+- The set's cold load didn't run.
+- The verdict didn't judge each bar line against the comparison row.
+
+What did run is kept below, since it bears on a re-probe.
+
+### Reasoning round-trip on the wire, set mistral
+
+The `wire` package's `RoundTrip` integration tests ran with `SPIKE_SET=mistral` on 2026-10-15,
+at the consumers environment's pins: Pi 1.3.0, Claude Code 2.1.301 and OpenCode 1.19.1. The
+run's `CLAUDE_*` variables were unset. Claude Code ran from `.state/claude` on the subscription
+login, with its own timeouts raised (`API_TIMEOUT_MS=3600000`,
+`CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS=1800000`, `CLAUDE_STREAM_IDLE_TIMEOUT_MS=1800000`). The
+recordings are under `.state/wire/`.
+
+| Consumer | Reasoning request sent | Reasoning back after a tool call | Turn |
+|---|---|---|---|
+| Pi 1.3.0 (`llama.cpp` provider) | none: no `reasoning_effort` and no `chat_template_kwargs`, so the preset's `reasoning_effort` "high" applies | yes, `reasoning_content` beside `tool_calls` (150 chars) | passed |
+| Claude Code 2.1.301 (`/v1/messages`) | `thinking` `{"type":"adaptive","display":"updates"}`, `output_config` `{"effort":"high"}`, `max_tokens` 32000, as on gpt-oss-120b | none: no request reached generation | failed, every request HTTP 500 |
+| OpenCode 1.19.1, `interleaved` set | `reasoning_effort` "high" (its `reasoningEffort` option), `tool_choice` "auto" | yes, `reasoning_content` beside `tool_calls` (238 chars) | passed |
+| OpenCode 1.19.1, `interleaved` unset | none (the file that holds the option is left out); the preset's "high" applies | yes, the same field (579 chars) | passed |
+
+- **Claude Code can't run on Mistral Small 4's template.** Claude Code puts a `system`-role
+  message inside `messages`, after the first user message. It holds its environment block
+  ("# Environment ... You are powered by the model ..."). It has done so since at least 2.1.296,
+  since the b11572 conform recordings carry it too. llama.cpp passes it through, and the
+  template served from `/props` renders a system message only at `messages[0]`. For any other
+  role it raises "Only user, assistant and tool roles are supported, got system." All 11 of the
+  turn's requests (the first and Claude Code's 10 resends) got that 500, so no thinking block
+  streamed and none went back. gpt-oss-120b's template accepted the same messages. Claude Code
+  stays unchanged and the profile keeps the embedded template (the brief), so on this template
+  Claude Code fails every cell before the model samples.
+- **OpenCode's title request.** OpenCode's title-generation request (no tools) sends a system
+  message and then two user messages. The template raises "After the optional system message,
+  conversation roles must alternate user and assistant", and all three such requests in each
+  run got a 500. The agent's own turn wasn't affected, but conform would count each one as
+  invalid.
+- **The probe's image answer is intermittent.** `SPIKE_SET=mistral` `TestRouter` failed only
+  its image check on its first run in this slice ("I cannot describe images as I don't have the
+  ability to see or process visual content."). Four repeats of the image check passed, each
+  naming the red circle, blue square and green triangle. That is 4 of 5 here, and 16 of 20 with
+  slice 5's 12 of 15.
+
+### Conform timeouts at 3.4 tok/s
+
+These are where a slow model's run would be cut short, found before conform started:
+
+- **The capability.** clutch's `conform.Options.Timeout` bounds each capability, and is
+  `cmd/conform`'s `-timeout` flag (default 10 minutes). The run used `-timeout 60m`.
+- **Claude Code.** Its request timeout is `API_TIMEOUT_MS` (default 600000). Its first-byte
+  window is `CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS`. Its stream idle watchdog is
+  `CLAUDE_STREAM_IDLE_TIMEOUT_MS` (at least 300000). Each is an environment variable that
+  reaches it through the driver, which appends to the parent's environment. They were raised
+  as above.
+- **Pi and OpenCode.** Pi's are `httpIdleTimeoutMs` (300000, for headers and for idle between
+  body bytes) and `retry.provider.timeoutMs`. OpenCode 1.19.1's are the provider's
+  `headerTimeout` and `chunkTimeout` (each 300000) and an unset `timeout`. All are settings-file
+  values, not flags or environment variables, so they stayed at their defaults. At 361 tok/s of
+  prefill and a token every 0.3 s, neither consumer's idle bound would be reached by a turn.
+
 ## Which task answers which layer
 
 - `profile`: `profiles/strix-halo.toml` sets each model's card sampling and leaves reasoning to

@@ -1,7 +1,9 @@
 package consumers_test
 
 import (
+	"bytes"
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,11 +18,18 @@ import (
 // router is the router's root behind a trailing slash, as a user might give it.
 const router = "http://127.0.0.1:9999/"
 
+// chatModel is a set's chat model, which the profile names and the consumers take.
+const chatModel = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+
 // TestPi shows Pi runs the given executable on its llama.cpp provider at the router, its agent
-// directory, sessions and cache all under the given directory, never ~/.pi.
+// directory, sessions and cache all under the given directory, never ~/.pi, with the chat
+// model's thinking level in the agent directory's settings, which only the user can read.
 func TestPi(t *testing.T) {
 	dir := t.TempDir()
-	d := consumers.Pi("/bin/pi", router, dir)
+	d, err := consumers.Pi("/bin/pi", router, dir, chatModel, "medium")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if d.Command != "/bin/pi" {
 		t.Errorf("Command = %q, want /bin/pi", d.Command)
 	}
@@ -32,6 +41,56 @@ func TestPi(t *testing.T) {
 	if want := []string{"LLAMA_BASE_URL=" + router}; !slices.Equal(d.Env, want) {
 		t.Errorf("Env = %q, want %q", d.Env, want)
 	}
+	if info, err := os.Stat(d.AgentDir); err != nil || info.Mode().Perm() != 0o700 {
+		t.Errorf("agent directory %s: %v, %v; want it made, mode 0700: Pi runs code from it", d.AgentDir, info, err)
+	}
+	file := filepath.Join(d.AgentDir, "settings.json")
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Errorf("%s has mode %v, want 0600", file, info.Mode().Perm())
+	}
+	if got := piThinking(t, file); !maps.Equal(got, map[string]string{"llama.cpp/" + chatModel: "medium"}) {
+		t.Errorf("%s modelThinkingLevels = %v, want the chat model at medium", file, got)
+	}
+}
+
+// TestPiNoThinking shows a chat model with no thinking level of its own leaves Pi at its
+// default, the settings file naming none, and that the file replaces one a run before left.
+func TestPiNoThinking(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := consumers.Pi("/bin/pi", router, dir, "example/candidate-GGUF:Q4_K_M", "high"); err != nil {
+		t.Fatal(err)
+	}
+	d, err := consumers.Pi("/bin/pi", router, dir, chatModel, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(d.AgentDir, "settings.json")
+	if got := piThinking(t, file); len(got) != 0 {
+		t.Errorf("%s modelThinkingLevels = %v, want none: the earlier run's setting replaced", file, got)
+	}
+	if got := string(consumers.PiSettings(chatModel, "")); got != "{}" {
+		t.Errorf("PiSettings(no level) = %s, want {}", got)
+	}
+}
+
+// piThinking reads the modelThinkingLevels of the Pi settings file at path.
+func piThinking(t *testing.T, path string) map[string]string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings struct {
+		ModelThinkingLevels map[string]string `json:"modelThinkingLevels"`
+	}
+	if err := json.Unmarshal(b, &settings); err != nil {
+		t.Fatalf("%s: %v", path, err)
+	}
+	return settings.ModelThinkingLevels
 }
 
 // TestClaudeCode shows Claude Code's driver runs the given executable from the run's own
@@ -39,22 +98,22 @@ func TestPi(t *testing.T) {
 // alias asks, and carries nothing else: no API key or token, which would take the place of the
 // subscription login.
 func TestClaudeCode(t *testing.T) {
-	d := consumers.ClaudeCode("/bin/claude", "/repo/.state/claude", router, consumers.ChatModel)
+	d := consumers.ClaudeCode("/bin/claude", "/repo/.state/claude", router, chatModel)
 	if d.Command != "/bin/claude" || d.ConfigDir != "/repo/.state/claude" {
 		t.Errorf("Command %q, ConfigDir %q; want the executable and the configuration directory given", d.Command, d.ConfigDir)
 	}
 	want := []string{
 		"ANTHROPIC_BASE_URL=" + router,
-		"ANTHROPIC_MODEL=" + consumers.ChatModel,
-		"ANTHROPIC_DEFAULT_OPUS_MODEL=" + consumers.ChatModel,
-		"ANTHROPIC_DEFAULT_SONNET_MODEL=" + consumers.ChatModel,
-		"ANTHROPIC_DEFAULT_HAIKU_MODEL=" + consumers.ChatModel,
+		"ANTHROPIC_MODEL=" + chatModel,
+		"ANTHROPIC_DEFAULT_OPUS_MODEL=" + chatModel,
+		"ANTHROPIC_DEFAULT_SONNET_MODEL=" + chatModel,
+		"ANTHROPIC_DEFAULT_HAIKU_MODEL=" + chatModel,
 	}
 	if !slices.Equal(d.Env, want) {
 		t.Errorf("Env = %q, want %q", d.Env, want)
 	}
-	if !slices.Equal(consumers.ClaudeEnv(router, consumers.ChatModel), want) {
-		t.Errorf("ClaudeEnv = %q, want %q", consumers.ClaudeEnv(router, consumers.ChatModel), want)
+	if !slices.Equal(consumers.ClaudeEnv(router, chatModel), want) {
+		t.Errorf("ClaudeEnv = %q, want %q", consumers.ClaudeEnv(router, chatModel), want)
 	}
 	for _, v := range d.Env {
 		if strings.HasPrefix(v, "ANTHROPIC_API_KEY=") || strings.HasPrefix(v, "ANTHROPIC_AUTH_TOKEN=") {
@@ -82,11 +141,11 @@ func TestCheckClaudeLogin(t *testing.T) {
 
 // TestOpenCode shows OpenCode talks to the router's OpenAI-compatible base, lists the image
 // models given as taking images, keeps its state under the given directory, and loads the
-// configuration file that sets gpt-oss-120b's interleaved field to reasoning_content.
+// configuration file that sets the chat model's interleaved field to reasoning_content.
 func TestOpenCode(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "opencode")
 	const vision = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
-	d, err := consumers.OpenCode("/bin/opencode", router, dir, vision)
+	d, err := consumers.OpenCode("/bin/opencode", router, dir, chatModel, nil, vision)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,8 +192,53 @@ func TestOpenCode(t *testing.T) {
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
-	if f := got.Provider[consumers.Provider].Models[consumers.ChatModel].Interleaved.Field; f != "reasoning_content" {
-		t.Errorf("%s: %s's interleaved field is %q, want reasoning_content (%s)", file, consumers.ChatModel, f, b)
+	if f := got.Provider[consumers.Provider].Models[chatModel].Interleaved.Field; f != "reasoning_content" {
+		t.Errorf("%s: %s's interleaved field is %q, want reasoning_content (%s)", file, chatModel, f, b)
+	}
+	if bytes.Contains(b, []byte(`"options"`)) {
+		t.Errorf("%s = %s; want no options for a chat model given none", file, b)
+	}
+}
+
+// TestOpenCodeOptions shows a chat model's options, nested ones included, are set on its entry
+// beside its interleaved field, where OpenCode sends them with each of its requests.
+func TestOpenCodeOptions(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "opencode")
+	options := map[string]any{
+		"reasoningEffort":      "high",
+		"chat_template_kwargs": map[string]any{"enable_thinking": true},
+	}
+	if _, err := consumers.OpenCode("/bin/opencode", router, dir, chatModel, options); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "interleaved.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `"` + chatModel + `":{"interleaved":{"field":"reasoning_content"},"options":{"chat_template_kwargs":{"enable_thinking":true},"reasoningEffort":"high"}}`
+	if !bytes.Contains(b, []byte(want)) {
+		t.Errorf("interleaved.json = %s; want it to hold %s", b, want)
+	}
+}
+
+// TestOpenCodeChatTakesImages shows a chat model that is also the image model, as a candidate
+// main model is, is listed once, taking images, and its interleaved setting names its own ID.
+func TestOpenCodeChatTakesImages(t *testing.T) {
+	const candidate = "example/candidate-GGUF:Q4_K_M"
+	dir := filepath.Join(t.TempDir(), "opencode")
+	d, err := consumers.OpenCode("/bin/opencode", router, dir, candidate, nil, candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m := d.Providers[consumers.Provider].Models; len(m) != 1 || !m[candidate].Image {
+		t.Errorf("Models = %v, want only %s, taking images", m, candidate)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "interleaved.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(b, []byte(`"`+candidate+`":{"interleaved":{"field":"reasoning_content"}}`)) {
+		t.Errorf("interleaved.json = %s; want %s's interleaved field set", b, candidate)
 	}
 }
 

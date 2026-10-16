@@ -46,10 +46,108 @@ type Profile struct {
 	// Slots is the number of requests each model serves at once (llama.cpp's parallel).
 	Slots int `toml:"slots"`
 	// KV is KVUnified or KVPerSlot.
-	KV           string       `toml:"kv"`
-	Defaults     Defaults     `toml:"defaults"`
+	KV       string   `toml:"kv"`
+	Defaults Defaults `toml:"defaults"`
+	// Models are every model the profile serves, in any of its sets.
+	Models []Model `toml:"models"`
+	// Sets are the named groups of models the router loads together; exactly one is the
+	// startup set.
+	Sets []Set `toml:"sets"`
+}
+
+// MaxSetModels is the most models a set may hold: the router's default --models-max, the most
+// it keeps loaded at once. The router refuses to start when more presets load on startup.
+const MaxSetModels = 4
+
+// Set is a named group of the profile's models, loaded side by side and sized together against
+// the pool. The startup set's models render with load-on-startup, so the router loads them when
+// it starts; every other set's models render without it and stay unloaded until they are
+// loaded over the router's API.
+type Set struct {
+	// Name names the set, such as a; it is unique within the profile.
+	Name string `toml:"name"`
+	// Startup marks the set the router loads when it starts; exactly one set sets it.
+	Startup bool `toml:"startup"`
+	// Models are the set's models by router ID, each one the profile lists: at most
+	// MaxSetModels, at least one of them a chat model.
+	Models []string `toml:"models"`
+	// Roles names the model of the set's that each role's requests go to: the model the
+	// spike's probe and instruments send chat, images, audio and embeddings to.
+	Roles SetRoles `toml:"roles"`
+	// MemoryBudget is the set's footprint, all its models loaded: measured, or estimated
+	// until it is measured.
 	MemoryBudget MemoryBudget `toml:"memory_budget"`
-	Models       []Model      `toml:"models"`
+}
+
+// SetRoles assigns each role to one of a set's models, by router ID. A model's Roles say what
+// it can serve; a set may hold several models that serve a role, and SetRoles picks the one the
+// probe and the instruments send it to. Chat and Embedding are required; Vision and Audio are
+// optional, empty for a set that serves neither. Each model named is in the set and declares
+// the role it fills. One model may fill several roles, such as a candidate main model that
+// takes chat and images both.
+type SetRoles struct {
+	// Chat is the model every consumer's session runs on, and the model client's chat model.
+	Chat string `toml:"chat"`
+	// Vision is the model a request with an image goes to.
+	Vision string `toml:"vision"`
+	// Audio is the model a request with audio goes to.
+	Audio string `toml:"audio"`
+	// Embedding is the model embeddings are requested from.
+	Embedding string `toml:"embedding"`
+}
+
+// Models returns the set's role models, chat, vision, audio and embedding in that order, each
+// once, the empty ones left out: the models a run on the set needs loaded.
+func (r SetRoles) Models() []string {
+	var ids []string
+	for _, id := range []string{r.Chat, r.Vision, r.Audio, r.Embedding} {
+		if id != "" && !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// Model returns the profile's model whose router ID is id, or nil when it lists none: how a
+// tool finds what the profile says of a set's role model, such as its chat model's Consumers.
+func (p *Profile) Model(id string) *Model {
+	for i := range p.Models {
+		if p.Models[i].ID == id {
+			return &p.Models[i]
+		}
+	}
+	return nil
+}
+
+// StartupSet returns the profile's startup set, or nil when no set is marked startup. A valid
+// profile has exactly one.
+func (p *Profile) StartupSet() *Set {
+	for i := range p.Sets {
+		if p.Sets[i].Startup {
+			return &p.Sets[i]
+		}
+	}
+	return nil
+}
+
+// Set returns the set named name, or the startup set when name is empty: the one lookup the
+// probe and every instrument share, so a run on no named set runs on the set the router loads
+// when it starts. It fails naming the profile's sets when none is named name.
+func (p *Profile) Set(name string) (*Set, error) {
+	if name == "" {
+		if s := p.StartupSet(); s != nil {
+			return s, nil
+		}
+		return nil, errors.New("profile: no startup set")
+	}
+	names := make([]string, len(p.Sets))
+	for i := range p.Sets {
+		if p.Sets[i].Name == name {
+			return &p.Sets[i], nil
+		}
+		names[i] = p.Sets[i].Name
+	}
+	return nil, fmt.Errorf("profile: no set %q; the profile's sets are %q", name, names)
 }
 
 // Engine is the serving engine and the oldest build the profile runs on. MinBuild is a floor,
@@ -83,17 +181,25 @@ type Defaults struct {
 	CheckpointMinStep int `toml:"checkpoint_min_step"`
 }
 
-// MemoryBudget records the measured memory footprint of the profile's models, all loaded. Its
-// figures are recorded, never computed or checked against the pool: the binding test is a
-// measurement on the host, and this is where its result is kept.
+// MemoryBudget records the memory footprint of a set's models, all loaded. Its figures are
+// recorded, never computed or checked against the pool: the binding test is a measurement on
+// the host, and this is where its result is kept. A set not yet measured records its estimate
+// instead, which the measurement joins, never replaces, once the set has loaded on the host.
 type MemoryBudget struct {
 	// PoolMiB is the memory pool the models load into.
 	PoolMiB int `toml:"pool_mib"`
-	// MeasuredMiB is the pool used with every model loaded and Slots requests in flight on each.
+	// MeasuredMiB is the pool used with every model in the set loaded and Slots requests in
+	// flight on each. It, EstimatedMiB, or both is set.
 	MeasuredMiB int `toml:"measured_mib"`
-	// Build is the engine build the measurement ran on.
+	// EstimatedMiB is the same figure estimated from the models' file sizes and their caches'
+	// costs, for a set not yet measured. The estimate's arithmetic is kept in a comment beside
+	// it.
+	EstimatedMiB int `toml:"estimated_mib"`
+	// Build is the engine build the measurement ran on, required with MeasuredMiB. An estimate
+	// alone names none: it ran on no build.
 	Build string `toml:"build"`
-	// Source names where the full measurement is kept; it is optional.
+	// Source names where the full measurement, or the figures an estimate starts from, is kept;
+	// it is optional.
 	Source string `toml:"source"`
 }
 
@@ -104,6 +210,18 @@ const (
 	KindEmbedding  = "embedding"
 )
 
+// The roles a model may declare: what a client may send it. A model's roles are a subset of
+// these, and every set holds at least one RoleChat model.
+const (
+	RoleChat      = "chat"
+	RoleVision    = "vision"
+	RoleAudio     = "audio"
+	RoleEmbedding = "embedding"
+)
+
+// roles are the values a model's Roles may hold.
+var roles = []string{RoleChat, RoleVision, RoleAudio, RoleEmbedding}
+
 // The reasoning efforts a model's Sampling may set. Empty, the default, leaves the effort to the
 // chat template.
 const (
@@ -112,11 +230,16 @@ const (
 	ReasoningHigh   = "high"
 )
 
+// piThinkingLevels are the thinking levels Pi's settings take (Pi 1.3.0's docs/settings.md,
+// defaultThinkingLevel), the values a model's Consumers.Pi may hold.
+var piThinkingLevels = []string{"off", "minimal", "low", "medium", "high", "xhigh", "max"}
+
 // reservedArgs are the presets keys the profile renders from its typed fields, which a model's
-// raw Args may not set.
+// raw Args may not set. hf-repo renders from the model's ID; hf and hfr are its short aliases.
 var reservedArgs = []string{
 	"jinja", "n-gpu-layers", "metrics", "checkpoint-min-step", "parallel", "kv-unified",
-	"load-on-startup", "c", "temp", "top-p", "top-k", "min-p", "chat-template-kwargs",
+	"load-on-startup", "hf-repo", "hf", "hfr", "c", "temp", "top-p", "top-k", "min-p",
+	"chat-template-kwargs",
 }
 
 // hostArgs are the keys the unit or the host owns, which a model's raw Args may not set either:
@@ -139,12 +262,21 @@ var hostArgs = []string{
 // Model is one model the router serves, with the provenance its settings come from.
 type Model struct {
 	// ID is the model's router ID, such as ggml-org/gpt-oss-120b-GGUF:MXFP4; it names the
-	// model's presets section.
+	// model's presets section and is its hf-repo, the Hugging Face repository and quant tag the
+	// router fetches its weights by. Its tag must be the one the router lists it by
+	// (RouterTag), or the router lists the model under another ID.
 	ID string `toml:"id"`
 	// Publisher is the organization that trained and released the model.
 	Publisher string `toml:"publisher"`
 	// Origin is the publisher's country of origin. Validation records it and never judges it.
 	Origin string `toml:"origin"`
+	// Licence is the licence the model's weights are released under, as its card states it,
+	// such as Apache-2.0. Like Origin, validation requires it and never judges it.
+	Licence string `toml:"licence"`
+	// Roles are what the model serves: RoleChat, RoleVision, RoleAudio or RoleEmbedding. A
+	// generative model takes any but RoleEmbedding; an embedding model takes RoleEmbedding
+	// alone.
+	Roles []string `toml:"roles"`
 	// CardURL is the model card the model's settings are traced to.
 	CardURL string `toml:"card_url"`
 	// C is the model's context size.
@@ -153,6 +285,10 @@ type Model struct {
 	CReason string `toml:"c_reason"`
 	// Kind is KindGenerative or KindEmbedding.
 	Kind string `toml:"kind"`
+	// Dims is an embedding model's output width, as its card states it: required for an
+	// embedding model and refused for a generative one. The probe checks an embedding's width
+	// against it.
+	Dims int `toml:"dims"`
 	// Sampling is a generative model's sampling, required for one and refused for an embedding
 	// model.
 	Sampling *Sampling `toml:"sampling"`
@@ -163,7 +299,34 @@ type Model struct {
 	// ArgsReason says why the model sets Args; required when it sets any. It renders as a comment
 	// above the model's section.
 	ArgsReason string `toml:"args_reason"`
+	// Consumers is the reasoning setting each coding agent the spike drives sends when the
+	// model is a set's chat model; the zero value leaves each agent at its own default. It is
+	// the consumers' configuration, not the router's, so it renders into no preset.
+	Consumers ConsumerReasoning `toml:"consumers"`
 }
+
+// ConsumerReasoning is the reasoning setting a coding agent sends with a chat model's
+// requests, per agent, chosen so each sends a value the model's chat template accepts. Claude
+// Code has none: the spike runs it unchanged. A model that sets any of it is a generative
+// model that declares the chat role, and gives the Reason.
+type ConsumerReasoning struct {
+	// Pi is Pi's thinking level for the model, one of off, minimal, low, medium, high, xhigh
+	// and max, written into Pi's per-model settings (modelThinkingLevels). Pi clamps it to the
+	// levels it reads the model as supporting, and maps the result to the request its
+	// provider sends.
+	Pi string `toml:"pi"`
+	// OpenCode are the options OpenCode sends with each of the model's requests, set on the
+	// model in OpenCode's configuration: an AI SDK option such as reasoningEffort, which it
+	// sends as reasoning_effort, or a request field it passes through as given, such as
+	// chat_template_kwargs.
+	OpenCode map[string]any `toml:"opencode"`
+	// Reason says why each agent takes its value: what it sends, and that the model's template
+	// accepts it. Required when Pi or OpenCode is set.
+	Reason string `toml:"reason"`
+}
+
+// set reports whether c sets anything.
+func (c ConsumerReasoning) set() bool { return c.Pi != "" || len(c.OpenCode) > 0 || c.Reason != "" }
 
 // Sampling is a generative model's sampling, every value traced to Source. Each value is
 // required, so the card, not the engine's or the conversion's defaults, is what the model runs
@@ -226,8 +389,29 @@ func (h Host) Validate() error {
 // the unit's shell wrapper or systemd would read as syntax.
 const unsafeHostChars = " \t\n\r\v\f'\"\\$%`"
 
+// freeForm is the key path of the one table whose keys the schema leaves to the profile:
+// Model.Consumers.OpenCode, OpenCode's options.
+var freeForm = []string{"models", "consumers", "opencode"}
+
 // minBuild matches a llama.cpp build tag.
 var minBuild = regexp.MustCompile(`^b[0-9]+$`)
+
+// quantTag matches the quant type at the end of a tag, after its last '-' or '.', as llama.cpp
+// reads it (common/preset.cpp, canonical_tag, at b11669).
+var quantTag = regexp.MustCompile(`(?i)[-.]([A-Z0-9_]+)$`)
+
+// RouterTag returns the tag the llama.cpp router lists a presets section's model by: the quant
+// type at the end of tag, upper-cased. The router renames a section whose tag differs, so
+// unsloth's UD-Q4_K_XL lists as Q4_K_XL, and Q8_0 as Q8_0. The tag still selects the weights:
+// the fetch picks the repository's first model file whose name holds the tag followed by '.' or
+// '-' (common/download.cpp, find_best_model), so a canonical tag fetches the same file where
+// the repository holds no other file it matches.
+func RouterTag(tag string) string {
+	if m := quantTag.FindStringSubmatch(tag); m != nil {
+		return strings.ToUpper(m[1])
+	}
+	return strings.ToUpper(tag)
+}
 
 // Load reads the profile at path and validates it. A profile that fails validation returns its
 // errors, each naming the field at fault by its TOML key path; a key the schema doesn't define
@@ -240,6 +424,11 @@ func Load(path string) (*Profile, error) {
 	}
 	var errs []error
 	for _, key := range md.Undecoded() {
+		// A consumer's options are free-form, passed to the consumer as given; the decoder
+		// reports a table nested in them as undecoded though it is kept.
+		if slices.Equal(key[:min(len(key), len(freeForm))], freeForm) {
+			continue
+		}
 		errs = append(errs, fmt.Errorf("%s: not a key the schema defines", key))
 	}
 	if err := errors.Join(append(errs, p.Validate())...); err != nil {
@@ -292,10 +481,6 @@ func (p *Profile) Validate() error {
 	positive("defaults.gpu_layers", p.Defaults.GPULayers)
 	positive("defaults.checkpoint_min_step", p.Defaults.CheckpointMinStep)
 
-	positive("memory_budget.pool_mib", p.MemoryBudget.PoolMiB)
-	positive("memory_budget.measured_mib", p.MemoryBudget.MeasuredMiB)
-	build("memory_budget.build", p.MemoryBudget.Build)
-
 	if len(p.Models) == 0 {
 		errs = append(errs, errors.New("models: required, at least one model"))
 	}
@@ -307,8 +492,17 @@ func (p *Profile) Validate() error {
 			errs = append(errs, fmt.Errorf("%s: %q is listed twice", field("id"), m.ID))
 		}
 		seen[m.ID] = true
+		// The router splits a section's name at its last ':' (common/preset.cpp).
+		if colon := strings.LastIndex(m.ID, ":"); colon >= 0 {
+			if repo, tag := m.ID[:colon+1], m.ID[colon+1:]; tag != RouterTag(tag) {
+				errs = append(errs, fmt.Errorf("%s: %q lists on the router as %q; name it so",
+					field("id"), m.ID, repo+RouterTag(tag)))
+			}
+		}
 		required(field("publisher"), m.Publisher)
 		required(field("origin"), m.Origin)
+		required(field("licence"), m.Licence)
+		errs = append(errs, m.validateRoles(field("roles"))...)
 		required(field("card_url"), m.CardURL)
 		positive(field("c"), m.C)
 		required(field("c_reason"), m.CReason)
@@ -320,6 +514,12 @@ func (p *Profile) Validate() error {
 			errs = append(errs, m.Sampling.validate(field("sampling"))...)
 		case m.Kind == KindEmbedding && m.Sampling != nil:
 			errs = append(errs, fmt.Errorf("%s: an embedding model doesn't sample", field("sampling")))
+		}
+		switch {
+		case m.Kind == KindEmbedding:
+			positive(field("dims"), m.Dims)
+		case m.Dims != 0:
+			errs = append(errs, fmt.Errorf("%s: only an embedding model has an output width", field("dims")))
 		}
 		for _, key := range slices.Sorted(maps.Keys(m.Args)) {
 			name := field("args." + key)
@@ -338,8 +538,158 @@ func (p *Profile) Validate() error {
 		if len(m.Args) > 0 {
 			required(field("args_reason"), m.ArgsReason)
 		}
+		errs = append(errs, m.validateConsumers(field("consumers"))...)
+	}
+
+	if len(p.Sets) == 0 {
+		errs = append(errs, errors.New("sets: required, at least one set"))
+	}
+	models := make(map[string]Model, len(p.Models))
+	for _, m := range p.Models {
+		models[m.ID] = m
+	}
+	names := make(map[string]bool, len(p.Sets))
+	inSet := make(map[string]bool, len(p.Models))
+	var startup []string
+	for i, s := range p.Sets {
+		field := func(name string) string { return fmt.Sprintf("sets[%d].%s", i, name) }
+		required(field("name"), s.Name)
+		if s.Name != "" && names[s.Name] {
+			errs = append(errs, fmt.Errorf("%s: %q is listed twice", field("name"), s.Name))
+		}
+		names[s.Name] = true
+		if s.Startup {
+			startup = append(startup, s.Name)
+		}
+		if len(s.Models) > MaxSetModels {
+			errs = append(errs, fmt.Errorf("%s: %d models, over the router's %d", field("models"), len(s.Models), MaxSetModels))
+		}
+		chat := false
+		listed := make(map[string]bool, len(s.Models))
+		for _, id := range s.Models {
+			m, ok := models[id]
+			switch {
+			case !ok:
+				errs = append(errs, fmt.Errorf("%s: %q is not a model the profile lists", field("models"), id))
+			case listed[id]:
+				errs = append(errs, fmt.Errorf("%s: %q is listed twice", field("models"), id))
+			}
+			listed[id] = true
+			inSet[id] = true
+			chat = chat || slices.Contains(m.Roles, RoleChat)
+		}
+		if !chat {
+			errs = append(errs, fmt.Errorf("%s: required, at least one %s model", field("models"), RoleChat))
+		}
+		errs = append(errs, s.validateRoles(field("roles"), models)...)
+		budget, b := field("memory_budget"), s.MemoryBudget
+		positive(budget+".pool_mib", b.PoolMiB)
+		switch {
+		case b.MeasuredMiB == 0 && b.EstimatedMiB == 0:
+			errs = append(errs, fmt.Errorf("%s.measured_mib: required, or estimated_mib for a set not yet measured", budget))
+		case b.MeasuredMiB < 0:
+			positive(budget+".measured_mib", b.MeasuredMiB)
+		case b.EstimatedMiB < 0:
+			positive(budget+".estimated_mib", b.EstimatedMiB)
+		}
+		// A measurement names the build it ran on; an estimate alone ran on none, though it may
+		// name one.
+		if b.MeasuredMiB != 0 || b.EstimatedMiB == 0 || b.Build != "" {
+			build(budget+".build", b.Build)
+		}
+	}
+	switch {
+	case len(p.Sets) > 0 && len(startup) == 0:
+		errs = append(errs, errors.New("sets: required, one set with startup = true"))
+	case len(startup) > 1:
+		errs = append(errs, fmt.Errorf("sets: %q are all startup sets; want exactly one", startup))
+	}
+	// A model in no set is refused: the router loads only the startup set, and the profile
+	// names no other way a model joins the pool, so a model in no set is configuration nothing
+	// loads. A model staged for later is listed with the set it joins.
+	for i, m := range p.Models {
+		if m.ID != "" && !inSet[m.ID] {
+			errs = append(errs, fmt.Errorf("models[%d].id: %q is in no set", i, m.ID))
+		}
 	}
 	return errors.Join(errs...)
+}
+
+// validateRoles reports a required role the set leaves unassigned, and each role assigned to a
+// model the set doesn't hold or that doesn't declare the role, under the key path prefix.
+// models are the profile's models by router ID.
+func (s Set) validateRoles(prefix string, models map[string]Model) []error {
+	var errs []error
+	for _, r := range []struct {
+		role, id string
+		required bool
+	}{
+		{RoleChat, s.Roles.Chat, true},
+		{RoleVision, s.Roles.Vision, false},
+		{RoleAudio, s.Roles.Audio, false},
+		{RoleEmbedding, s.Roles.Embedding, true},
+	} {
+		field := prefix + "." + r.role
+		switch {
+		case r.id == "" && r.required:
+			errs = append(errs, fmt.Errorf("%s: required", field))
+		case r.id == "":
+		case !slices.Contains(s.Models, r.id):
+			errs = append(errs, fmt.Errorf("%s: %q is not one of the set's models", field, r.id))
+		case !slices.Contains(models[r.id].Roles, r.role):
+			errs = append(errs, fmt.Errorf("%s: %q doesn't declare the %s role", field, r.id, r.role))
+		}
+	}
+	return errs
+}
+
+// validateRoles reports each of the model's roles outside the closed set, a role listed twice,
+// no role at all, and a role its kind can't take, under the key path prefix.
+func (m Model) validateRoles(prefix string) []error {
+	if len(m.Roles) == 0 {
+		return []error{fmt.Errorf("%s: required, at least one of %q", prefix, roles)}
+	}
+	var errs []error
+	for _, r := range m.Roles {
+		if !slices.Contains(roles, r) {
+			errs = append(errs, fmt.Errorf("%s: %q is not one of %q", prefix, r, roles))
+		}
+	}
+	if len(m.Roles) != len(slices.Compact(slices.Sorted(slices.Values(m.Roles)))) {
+		errs = append(errs, fmt.Errorf("%s: %q lists a role twice", prefix, m.Roles))
+	}
+	embedding := slices.Contains(m.Roles, RoleEmbedding)
+	switch {
+	case m.Kind == KindEmbedding && (!embedding || len(m.Roles) > 1):
+		errs = append(errs, fmt.Errorf("%s: an embedding model takes the %s role alone", prefix, RoleEmbedding))
+	case m.Kind == KindGenerative && embedding:
+		errs = append(errs, fmt.Errorf("%s: a generative model can't take the %s role", prefix, RoleEmbedding))
+	}
+	return errs
+}
+
+// validateConsumers reports a consumer reasoning setting on a model that can't be a chat model,
+// a Pi thinking level Pi doesn't take, and a setting without its reason, under the key path
+// prefix.
+func (m Model) validateConsumers(prefix string) []error {
+	c := m.Consumers
+	if !c.set() {
+		return nil
+	}
+	var errs []error
+	if m.Kind != KindGenerative || !slices.Contains(m.Roles, RoleChat) {
+		errs = append(errs, fmt.Errorf("%s: only a generative %s model runs under a consumer", prefix, RoleChat))
+	}
+	if c.Pi == "" && len(c.OpenCode) == 0 {
+		errs = append(errs, fmt.Errorf("%s: sets neither pi nor opencode", prefix))
+	}
+	if c.Pi != "" && !slices.Contains(piThinkingLevels, c.Pi) {
+		errs = append(errs, fmt.Errorf("%s.pi: %q is not one of Pi's thinking levels %q", prefix, c.Pi, piThinkingLevels))
+	}
+	if c.Reason == "" {
+		errs = append(errs, fmt.Errorf("%s.reason: required", prefix))
+	}
+	return errs
 }
 
 // validate reports each Sampling value that is missing or out of range, under the key path

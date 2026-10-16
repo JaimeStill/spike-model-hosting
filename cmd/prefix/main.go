@@ -1,11 +1,12 @@
-// Command prefix measures prefix-cache reuse on the router: for each generative model, a run of
-// requests that share one long prefix and end in different questions.
+// Command prefix measures prefix-cache reuse on the router: for each generative model of a set, a
+// run of requests that share one long prefix and end in different questions.
 //
 // Usage:
 //
-//	prefix [-router url] [-profile path] [-prefix-tokens n] [-requests n] [-max-tokens n] [-slot id]
+//	prefix [-router url] [-profile path] [-set name] [-prefix-tokens n] [-requests n] [-max-tokens n] [-slot id]
 //
-// For each generative model the profile lists, the tool builds a prefix of exactly
+// The set is the profile's set -set names, or SPIKE_SET, or else its startup set. For each of
+// the set's generative models, the tool builds a prefix of exactly
 // -prefix-tokens tokens in that model's own tokenizer, through the router's /tokenize and
 // /detokenize, and starts it with a nonce unique to the run, so no cache on the server holds any
 // of it before the first request. It then sends -requests streamed chat completions back to back,
@@ -19,9 +20,9 @@
 // prompt similarity. -slot pins every request to one slot (llama.cpp's id_slot), which takes the
 // server's slot choice out of what is measured.
 //
-// The router comes from -router or SPIKE_ROUTER_URL. Every model the run sends to must be loaded
+// The router comes from -router or SPIKE_ROUTER_URL. Every model of the set must be loaded
 // already: the tool checks GET /models first, and every request carries autoload=false, so it
-// never loads one.
+// never loads one. The output names the build and the set it ran on.
 //
 // It exits 0 when every request was measured, 1 when one failed or the tool can't run, and 2 on
 // a usage error.
@@ -82,12 +83,12 @@ func main() {
 
 // usage is the tool's usage, printed on -h and after a usage error.
 const usage = `usage:
-  prefix [-router url] [-profile path] [-prefix-tokens n] [-requests n] [-max-tokens n] [-slot id]
+  prefix [-router url] [-profile path] [-set name] [-prefix-tokens n] [-requests n] [-max-tokens n] [-slot id]
 `
 
 // options are the tool's flags, after the environment's fallbacks.
 type options struct {
-	router, profile                         string
+	router, profile, set                    string
 	prefixTokens, requests, maxTokens, slot int
 	timeout                                 time.Duration
 }
@@ -118,7 +119,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 }
 
-// parse reads the flags in args, the router falling back to SPIKE_ROUTER_URL.
+// parse reads the flags in args, the router and the set falling back to SPIKE_ROUTER_URL and
+// SPIKE_SET.
 func parse(args []string, getenv func(string) string) (options, error) {
 	fs := flag.NewFlagSet("prefix", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -126,6 +128,7 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	var o options
 	fs.StringVar(&o.router, "router", getenv("SPIKE_ROUTER_URL"), "the router's root URL (SPIKE_ROUTER_URL)")
 	fs.StringVar(&o.profile, "profile", "profiles/strix-halo.toml", "the profile the router serves")
+	fs.StringVar(&o.set, "set", getenv("SPIKE_SET"), "the profile's set to measure (SPIKE_SET); empty is the startup set")
 	fs.IntVar(&o.prefixTokens, "prefix-tokens", 8192, "the shared prefix's length, in the model's tokens")
 	fs.IntVar(&o.requests, "requests", 5, "the requests per model, the first of them cold")
 	fs.IntVar(&o.maxTokens, "max-tokens", 32, "the tokens each request may generate")
@@ -172,17 +175,18 @@ func measure(ctx context.Context, o options, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	set, err := p.Set(o.set)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errUsage, err)
+	}
 	var ids []string
-	for _, m := range p.Models {
-		if m.Kind == profile.KindGenerative {
-			ids = append(ids, m.ID)
+	for _, id := range set.Models {
+		if p.Model(id).Kind == profile.KindGenerative {
+			ids = append(ids, id)
 		}
 	}
-	if len(ids) == 0 {
-		return errors.New("the profile lists no generative model")
-	}
 	hc := &http.Client{}
-	if err := router.CheckLoaded(ctx, hc, o.router, ids...); err != nil {
+	if err := router.CheckLoaded(ctx, hc, o.router, set.Models...); err != nil {
 		return err
 	}
 	build, err := router.Build(ctx, hc, o.router)
@@ -193,8 +197,8 @@ func measure(ctx context.Context, o options, stdout io.Writer) error {
 	if o.slot >= 0 {
 		slot = fmt.Sprintf("pinned to slot %d", o.slot)
 	}
-	if _, err := fmt.Fprintf(stdout, "router %s, build %s\nprefix %d tokens, %d requests per model, %d tokens out, %s\n\n",
-		o.router, build, o.prefixTokens, o.requests, o.maxTokens, slot); err != nil {
+	if _, err := fmt.Fprintf(stdout, "router %s, build %s, set %s\nprefix %d tokens, %d requests per model, %d tokens out, %s\n\n",
+		o.router, build, set.Name, o.prefixTokens, o.requests, o.maxTokens, slot); err != nil {
 		return err
 	}
 

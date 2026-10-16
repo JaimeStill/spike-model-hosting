@@ -24,30 +24,20 @@ import (
 // strixHalo is the profile the router serves; every expectation below is read from it.
 const strixHalo = "../profiles/strix-halo.toml"
 
-// The set-A models each capability probe sends to, by router ID. The profile types no role, so
-// the probe names them; TestRouter fails if the profile no longer lists one. The embedding
-// model is found by its kind instead.
-const (
-	chatModel   = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
-	visionModel = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
-	audioModel  = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
-)
-
-// embeddingDims is EmbeddingGemma 2's output width, per its model card.
-const embeddingDims = 768
-
 // samplingTolerance absorbs the float32 the server holds sampling in: top_p 0.95 reads back as
 // 0.949999988079071.
 const samplingTolerance = 1e-6
 
 // requestTimeout bounds one request. The models are already loaded, so this covers generation
-// only, which on gpt-oss-120b's reasoning takes tens of seconds.
+// only, which on a reasoning model such as gpt-oss-120b takes tens of seconds.
 const requestTimeout = 3 * time.Minute
 
-// TestRouter probes the router SPIKE_ROUTER_URL names, serving the Strix Halo profile's render.
-// Each check is a subtest, so a failure names the check. Every model-routed request carries
-// autoload=false: the probe checks that the router loaded the models at startup, and never
-// loads one itself.
+// TestRouter probes the router SPIKE_ROUTER_URL names, serving the Strix Halo profile's render,
+// with the set SPIKE_SET names loaded, or else the startup set. Each check is a subtest, so a
+// failure names the check, and each capability probe sends to the model the set assigns its role;
+// a set that assigns no vision or audio model skips that probe. Every model-routed request
+// carries autoload=false: the probe checks that the set's models are loaded, and never loads one
+// itself.
 func TestRouter(t *testing.T) {
 	base := os.Getenv("SPIKE_ROUTER_URL")
 	if base == "" {
@@ -57,24 +47,18 @@ func TestRouter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	set, err := p.Set(os.Getenv("SPIKE_SET"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("set %s", set.Name)
 	r := &router{base: strings.TrimSuffix(base, "/"), client: &http.Client{Timeout: requestTimeout}}
 
 	models := make(map[string]profile.Model, len(p.Models))
-	var embedding string
 	for _, m := range p.Models {
 		models[m.ID] = m
-		if m.Kind == profile.KindEmbedding {
-			embedding = m.ID
-		}
 	}
-	for _, id := range []string{chatModel, visionModel, audioModel} {
-		if _, ok := models[id]; !ok {
-			t.Fatalf("%s doesn't list %s, which the probe sends to", strixHalo, id)
-		}
-	}
-	if embedding == "" {
-		t.Fatalf("%s lists no embedding model", strixHalo)
-	}
+	chatModel, visionModel, audioModel, embedding := set.Roles.Chat, set.Roles.Vision, set.Roles.Audio, set.Roles.Embedding
 
 	t.Run("health", func(t *testing.T) {
 		var got struct {
@@ -100,11 +84,11 @@ func TestRouter(t *testing.T) {
 		for _, m := range got.Data {
 			status[m.ID] = m.Status.Value
 		}
-		for _, m := range p.Models {
-			if s, ok := status[m.ID]; !ok {
-				t.Errorf("/models doesn't list %s", m.ID)
+		for _, id := range set.Models {
+			if s, ok := status[id]; !ok {
+				t.Errorf("/models doesn't list %s", id)
 			} else if s != "loaded" {
-				t.Errorf("/models lists %s as %q, want loaded", m.ID, s)
+				t.Errorf("/models lists %s as %q, want loaded", id, s)
 			}
 		}
 	})
@@ -114,7 +98,7 @@ func TestRouter(t *testing.T) {
 			BuildInfo string `json:"build_info"`
 		}
 		r.get(t, "/props", &got)
-		t.Logf("router build_info: %s", got.BuildInfo)
+		t.Logf("router build_info: %s, set %s", got.BuildInfo, set.Name)
 		have, err := buildNumber(got.BuildInfo)
 		if err != nil {
 			t.Fatalf("/props build_info: %v", err)
@@ -129,7 +113,8 @@ func TestRouter(t *testing.T) {
 	})
 
 	t.Run("sampling", func(t *testing.T) {
-		for _, m := range p.Models {
+		for _, id := range set.Models {
+			m := models[id]
 			if m.Sampling == nil {
 				continue
 			}
@@ -214,6 +199,9 @@ func TestRouter(t *testing.T) {
 	})
 
 	t.Run("image", func(t *testing.T) {
+		if visionModel == "" {
+			t.Skipf("set %s assigns no vision model", set.Name)
+		}
 		png := readFile(t, "testdata/shapes.png")
 		text := r.chat(t, visionModel, []map[string]any{
 			{"type": "text", "text": "Describe this image in one sentence."},
@@ -233,6 +221,9 @@ func TestRouter(t *testing.T) {
 	})
 
 	t.Run("audio", func(t *testing.T) {
+		if audioModel == "" {
+			t.Skipf("set %s assigns no audio model", set.Name)
+		}
 		wav := readFile(t, "testdata/phrase.wav")
 		text := r.chat(t, audioModel, []map[string]any{
 			{"type": "text", "text": "Transcribe this audio clip."},
@@ -264,8 +255,9 @@ func TestRouter(t *testing.T) {
 		if len(got.Data) != 1 {
 			t.Fatalf("/v1/embeddings returned %d embeddings, want 1", len(got.Data))
 		}
-		if n := len(got.Data[0].Embedding); n != embeddingDims {
-			t.Errorf("%s embedding has %d dimensions, want %d", embedding, n, embeddingDims)
+		// The width the profile records from the model's card.
+		if n, want := len(got.Data[0].Embedding), models[embedding].Dims; n != want {
+			t.Errorf("%s embedding has %d dimensions, want %d", embedding, n, want)
 		}
 	})
 }

@@ -1,9 +1,11 @@
 package router_test
 
 import (
+	"encoding/json"
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -66,5 +68,55 @@ func TestBuild(t *testing.T) {
 	}
 	if _, err := router.Build(t.Context(), http.DefaultClient, fake(t, "", "")); err == nil {
 		t.Error("a router that 404s /props gave no error")
+	}
+}
+
+// TestModelsFailed shows Models reads a failed load's flag and exit code beside the status.
+func TestModelsFailed(t *testing.T) {
+	base := fake(t, `{"data":[{"id":"a","status":{"value":"unloaded","failed":true,"exit_code":1}}]}`, "")
+	got, err := router.Models(t.Context(), http.DefaultClient, base)
+	want := []router.Model{{ID: "a", Status: router.StatusUnloaded, Failed: true, ExitCode: 1}}
+	if err != nil || len(got) != 1 || got[0] != want[0] {
+		t.Errorf("Models = %+v, %v; want %+v", got, err, want)
+	}
+}
+
+// TestLoadUnload shows Load and Unload post the model to their endpoints, and fail on an answer
+// that isn't success, carrying the router's message.
+func TestLoadUnload(t *testing.T) {
+	var got []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Model string `json:"model"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || r.Method != http.MethodPost {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		got = append(got, r.URL.Path+" "+in.Model)
+		switch in.Model {
+		case "refused":
+			http.Error(w, `{"error":{"message":"model not found"}}`, http.StatusBadRequest)
+		case "quiet":
+			_, _ = w.Write([]byte(`{"success":false}`))
+		default:
+			_, _ = w.Write([]byte(`{"success":true}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	if err := router.Load(t.Context(), http.DefaultClient, srv.URL, "a"); err != nil {
+		t.Errorf("Load(a): %v", err)
+	}
+	if err := router.Unload(t.Context(), http.DefaultClient, srv.URL, "b"); err != nil {
+		t.Errorf("Unload(b): %v", err)
+	}
+	if want := []string{"/models/load a", "/models/unload b"}; !slices.Equal(got, want) {
+		t.Errorf("requests %q, want %q", got, want)
+	}
+	if err := router.Load(t.Context(), http.DefaultClient, srv.URL, "refused"); err == nil || !strings.Contains(err.Error(), "model not found") {
+		t.Errorf("Load(refused) = %v, want the router's message", err)
+	}
+	if err := router.Unload(t.Context(), http.DefaultClient, srv.URL, "quiet"); err == nil {
+		t.Error("Unload(quiet): an answer without success gave no error")
 	}
 }

@@ -9,7 +9,8 @@ repository is managed with the marathon workflow; start from `context/README.md`
 - **Check:** `mise run check` (hermetic). The HTTP probes (the `probe` package) run against
   the router `SPIKE_ROUTER_URL` names, as `mise run integration`.
 - **Profiles:** `profiles/` holds the host-class profiles; `go run ./cmd/profile` lists,
-  validates, and renders them, and the `profile` package's doc lists its API.
+  validates, and renders them, and `go run ./cmd/swap` swaps the router between a profile's
+  named sets. The `profile` and `swap` packages' docs list their APIs.
 - **Goals:** this spike's tasks live in the coordinator's roadmap,
   `standards-lab/context/roadmap.toml`, under `experiment.ai.spike-model-hosting`. Its goal
   record is `context/goals/experiment.ai.spike-model-hosting.md`.
@@ -18,9 +19,10 @@ repository is managed with the marathon workflow; start from `context/README.md`
   `references.toml` and `references.local.toml`. The spike reads them and writes to none of them,
   except personal-agents and spike-harness-driver in its `align` task.
 - **Hosts:** the spike may change anything in the hosting layer of the Framework desktop and
-  the Dell NVIDIA workstation, through root commands the architect runs. The Framework only
-  hosts and serves inference; sessions observe its hosting layer read-only, such as
-  `amdgpu_top` over SSH. Every consumer and instrument runs from the architect's laptop, where
+  the Dell NVIDIA workstation; root stays the architect's, run from exact commands. The
+  Framework only hosts and serves inference. Sessions may do on it whatever needs no sudo: the
+  router's HTTP API (including load, unload, and downloads), user-level SSH reads such as
+  `amdgpu_top`, and logs. Every consumer and instrument runs from the architect's laptop, where
   nothing is served.
 - **Consumers and instruments:** `mise.consumers.toml` pins them, run as
   `MISE_ENV=consumers mise exec -- <tool>`; their untracked state is under `.state/`. The

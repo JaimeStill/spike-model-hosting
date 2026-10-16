@@ -1,17 +1,24 @@
 #!/usr/bin/env bash
 # baseline runs the consumers task's GuideLLM grid against the router
-# SPIKE_ROUTER_URL names, from the laptop: gpt-oss-120b, Gemma 4 26B-A4B and
-# gemma-4-E4B, each on a short profile (512 prompt tokens, 256 output) and an
-# agentic one (8192, 512), each at 1 and 4 concurrent streams. Every cell
-# prints the client's figures (GuideLLM's TTFT, ITL and output throughput)
-# beside the engine's own, from the model's /metrics before and after the
-# cell. Run it through `MISE_ENV=consumers mise run baseline`; it needs
+# SPIKE_ROUTER_URL names, from the laptop: each generative model of a profile's
+# set (set A's are gpt-oss-120b, Gemma 4 26B-A4B and gemma-4-E4B), each on a
+# short profile (512 prompt tokens, 256 output) and an agentic one (8192, 512),
+# each at 1 and 4 concurrent streams. Every cell prints the client's figures
+# (GuideLLM's TTFT, ITL and output throughput) beside the engine's own, from
+# the model's /metrics before and after the cell. Run it through
+# `MISE_ENV=consumers mise run baseline [-set name] [-profile path]`; it needs
 # GuideLLM, which only the consumers environment pins.
 #
+# The set is -set, or SPIKE_SET, or else the profile's startup set; the
+# profile is -profile, profiles/strix-halo.toml by default. Every model of the
+# set must be loaded already: the script checks GET /models first and never
+# loads one. The summary names the build and the set it ran on.
+#
 # The data is GuideLLM's synthetic text at fixed token counts: the prompt is
-# cut to its count by the model's own upstream tokenizer (fetched from Hugging
-# Face into the gitignored .state/hf, since the router serves GGUF files that
-# carry no tokenizer GuideLLM can read), and the output is held to its count
+# cut to its count by the model's own upstream tokenizer, the repository its
+# card_url names in the profile (fetched from Hugging Face into the gitignored
+# .state/hf, since the router serves GGUF files that carry no tokenizer
+# GuideLLM can read), and the output is held to its count
 # with max_completion_tokens and ignore_eos, so every request generates the
 # same number of tokens whatever the model would have said. The chat template
 # adds a few tokens to the prompt, which the client's input count shows.
@@ -33,6 +40,26 @@ set -euo pipefail
 cd "$MISE_PROJECT_ROOT"
 : "${SPIKE_ROUTER_URL:?set SPIKE_ROUTER_URL to the router to measure}"
 
+usage="usage: baseline.sh [-set name] [-profile path]"
+set_name=${SPIKE_SET:-}
+profile_path=profiles/strix-halo.toml
+while [ $# -gt 0 ]; do
+	case $1 in
+	-set) set_name=${2:?$usage} && shift 2 ;;
+	-profile) profile_path=${2:?$usage} && shift 2 ;;
+	*)
+		echo "$usage" >&2
+		exit 2
+		;;
+	esac
+done
+# The profile command describes the set, one fact a line (go run ./cmd/profile -h).
+desc=$(GOWORK=off go run ./cmd/profile set -set "$set_name" "$profile_path")
+set_name=$(awk '$1 == "set" { print $2 }' <<<"$desc")
+mapfile -t set_models < <(awk '$1 == "model" { print $2 }' <<<"$desc")
+# Each generative model of the set, with its card's URL.
+mapfile -t generative < <(awk '$1 == "model" && $3 == "generative" { print $2, $4 }' <<<"$desc")
+
 router=${SPIKE_ROUTER_URL%/}
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 out=.state/baseline/$stamp
@@ -44,16 +71,15 @@ models=$(curl -sSf "$router/models")
 guidellm_version=$(guidellm --version)
 guidellm_version=${guidellm_version##* }
 
-# tokenizer names the upstream Hugging Face repository whose tokenizer cuts a
-# router model's synthetic prompts.
-tokenizer() {
-	case $1 in
-	*gpt-oss-120b*) echo openai/gpt-oss-120b ;;
-	*gemma-4-26B-A4B*) echo google/gemma-4-26B-A4B-it ;;
-	*gemma-4-E4B*) echo google/gemma-4-E4B-it ;;
-	*) return 1 ;;
-	esac
-}
+# The router never loads a model for the grid: every model of the set must be
+# loaded before the first cell.
+for id in "${set_models[@]}"; do
+	status=$(jq -r --arg id "$id" '[.data[] | select(.id == $id)][0].status.value // "unlisted"' <<<"$models")
+	[ "$status" = loaded ] || {
+		echo "baseline: the router at $router lists $id as $status, not loaded; set $set_name must be loaded" >&2
+		exit 1
+	}
+done
 
 # metric reads one counter from a /metrics snapshot.
 metric() {
@@ -67,17 +93,20 @@ snapshot() {
 
 echo "| Model | Profile | Streams | Completed | Errored | TTFT median ms | TTFT p95 ms | ITL median ms | Output tok/s | Engine prompt tok/s | Engine gen tok/s | Engine cached tokens |"
 echo "|---|---|---|---|---|---|---|---|---|---|---|---|"
-for pattern in gpt-oss-120b gemma-4-26B-A4B gemma-4-E4B; do
-	model=$(jq -r --arg p "$pattern" '[.data[] | select(.id | contains($p))][0] | select(.status.value == "loaded") | .id' <<<"$models")
-	[ -n "$model" ] || {
-		echo "baseline: the router at $router has no loaded model matching $pattern" >&2
+for entry in "${generative[@]}"; do
+	read -r model card <<<"$entry"
+	# The model's name without its publisher, which labels its rows and files.
+	name=${model#*/}
+	stem=${name//:/-}
+	tok=${card#https://huggingface.co/}
+	[ "$tok" != "$card" ] || {
+		echo "baseline: $model's card_url, $card, is not a Hugging Face repository to take a tokenizer from" >&2
 		exit 1
 	}
-	tok=$(tokenizer "$model")
 	for shape in short:512:256:8 agentic:8192:512:4; do
 		IFS=: read -r profile prompt output per_stream <<<"$shape"
 		for streams in 1 4; do
-			cell=$out/$pattern-$profile-c$streams
+			cell=$out/$stem-$profile-c$streams
 			count=$((per_stream * streams))
 			jq -n --arg target "$router" --arg model "$model" --arg tok "$tok" \
 				--argjson streams "$streams" --argjson prompt "$prompt" --argjson output "$output" \
@@ -111,9 +140,9 @@ for pattern in gpt-oss-120b gemma-4-26B-A4B gemma-4-E4B; do
 				($m.time_to_first_token_ms.successful.median | round), ($m.time_to_first_token_ms.successful.percentiles.p95 | round),
 				($m.inter_token_latency_ms.successful.median * 10 | round / 10), ($m.output_tokens_per_second.successful.mean * 10 | round / 10)
 				] | map(tostring) | join(" | ")' "$cell.json")
-			echo "| $pattern | $profile $prompt/$output | $streams | $client | ${engine[0]} | ${engine[1]} | $cached |"
+			echo "| $name | $profile $prompt/$output | $streams | $client | ${engine[0]} | ${engine[1]} | $cached |"
 		done
 	done
 done
 echo
-echo "Router: $router, build $build; GuideLLM $guidellm_version; results in $out"
+echo "Router: $router, build $build, set $set_name; GuideLLM $guidellm_version; results in $out"

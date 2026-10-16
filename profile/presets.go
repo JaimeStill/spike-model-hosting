@@ -18,17 +18,29 @@ var presetsTemplate string
 const commentWidth = 100
 
 var presets = template.Must(template.New("presets").
-	Funcs(template.FuncMap{"comment": comment}).
+	Funcs(template.FuncMap{"comment": comment, "join": strings.Join}).
 	Parse(presetsTemplate))
 
-// RenderPresets writes the profile's llama.cpp router presets to w. Each model's reasons render
-// as a comment above its section. The profile is validated first, so a profile built in code
-// renders only when Load would have accepted it.
+// presetsData is what the presets template renders: the profile, and the router IDs of its
+// startup set's models, the ones whose sections set load-on-startup.
+type presetsData struct {
+	*Profile
+	Startup map[string]bool
+}
+
+// RenderPresets writes the profile's llama.cpp router presets to w. Each model's reasons render as
+// a comment above its section. Only the startup set's models render load-on-startup = true; the
+// rest render without the key, which the router reads as false. The profile is validated first, so
+// a profile built in code renders only when Load would have accepted it.
 func (p *Profile) RenderPresets(w io.Writer) error {
 	if err := p.Validate(); err != nil {
 		return fmt.Errorf("profile: %w", err)
 	}
-	if err := presets.Execute(w, p); err != nil {
+	startup := map[string]bool{}
+	for _, id := range p.StartupSet().Models {
+		startup[id] = true
+	}
+	if err := presets.Execute(w, presetsData{p, startup}); err != nil {
 		return fmt.Errorf("profile: render presets: %w", err)
 	}
 	return nil

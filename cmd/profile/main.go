@@ -4,6 +4,7 @@
 //
 //	profile engines [-dir profiles] [profile ...]
 //	profile validate <profile>
+//	profile set [-set name] <profile>
 //	profile render presets <profile>
 //	profile render unit [-user name] [-hf-home dir] [-models-dir dir] <profile>
 //
@@ -11,6 +12,12 @@
 // under the profiles directory. engines lists each profile's engine, one per line, as
 // "<profile> <engine> <owner/repo> <minimum build>"; given no profile, it lists every profile
 // in the directory. render writes to standard output.
+//
+// set describes the profile's set -set names, or SPIKE_SET, or else its startup set, for the
+// spike's scripts, one fact a line, each its key and then its values, separated by spaces:
+// "set <name>"; then "<role> <router ID>" for each role the set assigns, chat, vision, audio and
+// embedding, in that order; then "model <router ID> <kind> <card URL>" for each of the set's
+// models, in the set's order. An unknown set is a usage error.
 //
 // The unit's host values are the machine's, never a profile's, and are never committed: each
 // comes from its flag, or else from SPIKE_SERVICE_USER, SPIKE_HF_HOME or SPIKE_MODELS_DIR in
@@ -66,6 +73,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 const usage = `usage:
   profile engines [-dir profiles] [profile ...]
   profile validate <profile>
+  profile set [-set name] <profile>
   profile render presets <profile>
   profile render unit [-user name] [-hf-home dir] [-models-dir dir] <profile>
 `
@@ -80,6 +88,8 @@ func dispatch(args []string, getenv func(string) string, stdout io.Writer) error
 		return engines(rest, stdout)
 	case "validate":
 		return validate(rest, stdout)
+	case "set":
+		return describeSet(rest, getenv, stdout)
 	case "render":
 		if len(rest) == 0 {
 			return fmt.Errorf("%w: render needs presets or unit", errUsage)
@@ -136,6 +146,42 @@ func validate(args []string, stdout io.Writer) error {
 		return err
 	}
 	_, err = fmt.Fprintf(stdout, "%s: valid\n", path)
+	return err
+}
+
+// describeSet writes the facts of the set args name, one a line, as the command's doc says.
+func describeSet(args []string, getenv func(string) string, stdout io.Writer) error {
+	fs := newFlagSet("set")
+	name := fs.String("set", getenv("SPIKE_SET"), "the set to describe (SPIKE_SET); empty is the startup set")
+	if err := parse(fs, args); err != nil {
+		return err
+	}
+	p, _, err := loadOne("set", fs.Args())
+	if err != nil {
+		return err
+	}
+	set, err := p.Set(*name)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errUsage, err)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "set %s\n", set.Name)
+	for _, r := range []struct{ role, id string }{
+		{profile.RoleChat, set.Roles.Chat},
+		{profile.RoleVision, set.Roles.Vision},
+		{profile.RoleAudio, set.Roles.Audio},
+		{profile.RoleEmbedding, set.Roles.Embedding},
+	} {
+		if r.id != "" {
+			fmt.Fprintf(&b, "%s %s\n", r.role, r.id)
+		}
+	}
+	// A valid profile lists every model of its sets.
+	for _, id := range set.Models {
+		m := p.Model(id)
+		fmt.Fprintf(&b, "model %s %s %s\n", id, m.Kind, m.CardURL)
+	}
+	_, err = io.WriteString(stdout, b.String())
 	return err
 }
 

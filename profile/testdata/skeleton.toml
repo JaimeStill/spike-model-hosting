@@ -1,4 +1,5 @@
-# The walking skeleton: the Strix Halo profile with gpt-oss-120b alone.
+# The walking skeleton: the Strix Halo profile with gpt-oss-120b and the embedding model, the
+# two roles every set must fill.
 host_class = "strix-halo"
 bind = "tailnet"
 slots = 4
@@ -14,7 +15,16 @@ c = 32768
 gpu_layers = 999
 checkpoint_min_step = 4096
 
-[memory_budget]
+[[sets]]
+name = "a"
+startup = true
+models = ["ggml-org/gpt-oss-120b-GGUF:MXFP4", "ggml-org/embeddinggemma-2-GGUF:Q8_0"]
+
+[sets.roles]
+chat = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+
+[sets.memory_budget]
 pool_mib = 98304
 measured_mib = 94926
 build = "b11529"
@@ -24,6 +34,8 @@ source = "context/memory-budget.md"
 id = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
 publisher = "OpenAI"
 origin = "United States"
+licence = "Apache-2.0"
+roles = ["chat"]
 card_url = "https://huggingface.co/openai/gpt-oss-120b"
 kind = "generative"
 c = 131072
@@ -43,3 +55,27 @@ reason = """
 Sampling from openai/gpt-oss's README, "Recommended Sampling Parameters": temperature 1.0,
 top_p 1.0; top-k = 0 and min-p = 0 turn off the truncations the card doesn't name.
 """
+
+[[models]]
+id = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+publisher = "Google"
+origin = "United States"
+licence = "Apache-2.0"
+roles = ["embedding"]
+card_url = "https://huggingface.co/google/embeddinggemma-2"
+kind = "embedding"
+# dims: the 768-dimension output its card states.
+dims = 768
+c = 8192
+c_reason = """
+Text embeddings only, 768-dimension output. c = 8192 is the context window its card states.
+"""
+args_reason = """
+embeddings serves it as an embedding model, mean pooling per its card; b and ub match c.
+"""
+
+[models.args]
+embeddings = true
+pooling = "mean"
+b = 8192
+ub = 8192

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -15,15 +16,16 @@ import (
 )
 
 // Watch polls GET /models on the router at base every interval until the restart it waits for
-// has every model loaded again, and writes the times to w: first a line saying it is ready for
-// the restart, then the Tracker's. It fails when the first poll doesn't list every model loaded,
-// or when timeout passes first, saying how far the restart got. It only reads /models; it never
-// loads a model or starts a restart.
-func Watch(ctx context.Context, base string, interval, timeout time.Duration, w io.Writer) error {
+// has every one of models loaded again, and writes the times to w: first a line saying it is
+// ready for the restart, then the Tracker's. Empty models waits for every model the first poll
+// lists. It fails when the first poll doesn't list every model it waits for loaded, or when
+// timeout passes first, saying how far the restart got. It only reads /models; it never loads a
+// model or starts a restart.
+func Watch(ctx context.Context, base string, models []string, interval, timeout time.Duration, w io.Writer) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	hc := &http.Client{Timeout: max(interval, 2*time.Second)}
-	var t Tracker
+	t := Tracker{Models: models}
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	announced := false
@@ -51,10 +53,14 @@ func Watch(ctx context.Context, base string, interval, timeout time.Duration, w 
 	}
 }
 
-// Tracker follows a restart through the polls it observes; its zero value is ready to use: it waits for every model loaded, then
-// for the restart to start, then for every model loaded again.
+// Tracker follows a restart through the polls it observes; its zero value is ready to use: it
+// waits for every model loaded, then for the restart to start, then for every model loaded
+// again.
 type Tracker struct {
-	// models are the models the first poll listed, all loaded, sorted.
+	// Models are the models to wait for, such as a set's; empty, the tracker waits for every
+	// model the first poll lists. A model outside them is ignored, whatever its status.
+	Models []string
+	// models are the models waited for once the first poll listed them all loaded, sorted.
 	models []string
 	// lastSteady is the last poll before the restart that saw every model loaded.
 	lastSteady time.Time
@@ -76,16 +82,21 @@ func (t *Tracker) Observe(at time.Time, status map[string]string, err error) err
 		if err != nil {
 			return fmt.Errorf("the router must be up, every model loaded, before the restart: %w", err)
 		}
-		for id, s := range status {
-			if s != "loaded" {
+		ids := t.Models
+		if len(ids) == 0 {
+			ids = slices.Collect(maps.Keys(status))
+		}
+		var models []string
+		for _, id := range ids {
+			if s := status[id]; s != "loaded" {
 				return fmt.Errorf("the router lists %s as %q; start the timer with every model loaded, before the restart", id, s)
 			}
-			t.models = append(t.models, id)
+			models = append(models, id)
 		}
-		if len(t.models) == 0 {
+		if len(models) == 0 {
 			return errors.New("the router lists no models")
 		}
-		slices.Sort(t.models)
+		t.models = slices.Sorted(slices.Values(models))
 		t.lastSteady = at
 		t.gone = map[string]bool{}
 		t.loaded = map[string]time.Time{}

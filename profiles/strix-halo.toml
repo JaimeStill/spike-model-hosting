@@ -1,11 +1,16 @@
-# The Strix Halo profile: set A, four models loaded side by side and sized together against the
-# 96GiB GTT pool of a ~90-96GB unified-memory host. Its settings are personal-agents' 96GiB
-# preset (profiles/unified-96gb.ini) and the recipes it copies (reference/model-tiers.md,
-# "~90-96GB (unified memory)"); each model's reasons say why it takes its values.
+# The Strix Halo profile: three sets of models, each loaded side by side and sized together
+# against the 96GiB GTT pool of a ~90-96GB unified-memory host. Set A, the startup set, is four
+# models; its settings are personal-agents' 96GiB preset (profiles/unified-96gb.ini) and the
+# recipes it copies (reference/model-tiers.md, "~90-96GB (unified memory)"). The mistral and
+# nemotron sets are the main-model candidates, each a vision MoE that takes set A's chat and
+# image roles beside set A's gemma-4-E4B and EmbeddingGemma 2; they load only when swapped in
+# over the router's API (cmd/swap). Each model's reasons say why it takes its values.
 #
-# Each model runs its official embedded chat template at its card's sampling, with no reasoning
-# effort set (the template's default). A shape a client must get, such as a mandatory tool call,
-# is the client's to constrain per request (tool_choice, response_format), not the profile's.
+# Each model runs its official embedded chat template at its card's sampling. Set A's models
+# set no reasoning effort (the template's default); a candidate sets the one its card
+# recommends, or the template's default where that is the card's. A shape a client must get,
+# such as a mandatory tool call, is the client's to constrain per request (tool_choice,
+# response_format), not the profile's.
 host_class = "strix-halo"
 bind = "tailnet"
 slots = 4
@@ -14,7 +19,9 @@ kv = "unified"
 # min_build is a floor, not a pin: a host runs any build at or above it, and each measurement
 # names the build it ran on (memory_budget.build, and /props build_info). b11452 is the first
 # build that runs EmbeddingGemma 2, the newest of set A's models, so it is the oldest build set A
-# can serve on.
+# can serve on. The nemotron set needs b11669 or later (Nemotron 3.5 Super's support, the
+# goal record's main-model brief); the floor stays set A's, since set A is the startup set and
+# the host loads the nemotron set only after its move to b11669.
 [engine]
 name = "llama.cpp"
 backend = "vulkan"
@@ -29,18 +36,101 @@ c = 32768
 gpu_layers = 999
 checkpoint_min_step = 4096
 
+# Set A loads when the router starts: the harness model, a vision model, an audio model and
+# the embedding model, four, the router's default --models-max.
+[[sets]]
+name = "a"
+startup = true
+models = [
+  "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+  "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0",
+  "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+  "ggml-org/embeddinggemma-2-GGUF:Q8_0",
+]
+
+# The model each role's requests go to, for the probe and every instrument. Roles alone can't
+# pick them: three of set A's models declare chat and two declare vision. gpt-oss-120b is the
+# harness model, Gemma 4 26B-A4B takes the images and gemma-4-E4B the audio.
+[sets.roles]
+chat = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+vision = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+audio = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+
 # The binding test: with all four loaded and four requests in flight on each, at least 3GiB of
 # the pool stays free.
-[memory_budget]
+[sets.memory_budget]
 pool_mib = 98304
 measured_mib = 94926
 build = "b11565"
+source = "context/memory-budget.md"
+
+# The Mistral Small 4 candidate: Mistral Small 4 takes chat and images, gemma-4-E4B the audio,
+# EmbeddingGemma 2 the embeddings. Three models; it loads without load-on-startup, by swap.
+[[sets]]
+name = "mistral"
+models = [
+  "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL",
+  "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+  "ggml-org/embeddinggemma-2-GGUF:Q8_0",
+]
+
+[sets.roles]
+chat = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
+vision = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
+audio = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+
+# Estimated, never measured at 4 in flight: Mistral Small 4 was disqualified at fitness (speed) on
+# b11669 before the concurrent run, so measured_mib stays unset; idle on b11669 the set used
+# 87763MiB of the pool (context/memory-budget.md). By context/memory-budget.md's figures, 83154MiB
+# of the pool is left for a main model beside gemma-4-E4B and EmbeddingGemma 2 at the 3GiB bar, so
+# the pool holds 98304 - 3072 - 83154 = 12078MiB for those two and the desktop. Mistral Small 4 is
+# ~71526MiB of UD-Q4_K_XL weights and its mmproj, plus 2.8-5.1GiB of KV at c = 131072, taken at the
+# top (5222MiB): 76748MiB, compute buffers not counted. 12078 + 76748 = 88826MiB, 9478MiB under the
+# pool.
+[sets.memory_budget]
+pool_mib = 98304
+estimated_mib = 88826
+source = "context/memory-budget.md"
+
+# The Nemotron 3.5 Super candidate: Nemotron 3.5 Super VL takes chat and images, gemma-4-E4B the
+# audio, EmbeddingGemma 2 the embeddings. Three models; it loads without load-on-startup, by
+# swap.
+[[sets]]
+name = "nemotron"
+models = [
+  "ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF:NVFP4",
+  "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+  "ggml-org/embeddinggemma-2-GGUF:Q8_0",
+]
+
+[sets.roles]
+chat = "ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF:NVFP4"
+vision = "ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF:NVFP4"
+audio = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+
+# Estimated, not yet measured: measured_mib is the pool used at 4 in flight, which the concurrent
+# run measures; idle on b11669 the set used 88598MiB of the pool (context/memory-budget.md). As for
+# the mistral set, 12078MiB of the pool is gemma-4-E4B's, EmbeddingGemma 2's and the desktop's.
+# Nemotron 3.5 Super is 73355MiB of NVFP4 weights (71.6GiB), 922MiB of Q8_0 mmproj (0.96GB), ~1GiB
+# (1024MiB) of KV at c = 131072, and ~660MiB of Mamba state for 4 slots: 75961MiB, compute buffers
+# not counted. 12078 + 75961 = 88039MiB, 10265MiB under the pool. Its 8 context checkpoints per slot
+# sit in system RAM, outside this pool (the model's args_reason).
+[sets.memory_budget]
+pool_mib = 98304
+estimated_mib = 88039
 source = "context/memory-budget.md"
 
 [[models]]
 id = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
 publisher = "OpenAI"
 origin = "United States"
+# Licence: the card's license metadata (apache-2.0) and the LICENSE file in
+# https://huggingface.co/openai/gpt-oss-120b.
+licence = "Apache-2.0"
+roles = ["chat"]
 card_url = "https://huggingface.co/openai/gpt-oss-120b"
 kind = "generative"
 c = 131072
@@ -67,6 +157,11 @@ turn off the two truncations the card doesn't name.
 id = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
 publisher = "Google"
 origin = "United States"
+# Licence: the card's license metadata (apache-2.0), linking Google's Gemma 4 licence page,
+# https://ai.google.dev/gemma/docs/gemma_4_license.
+licence = "Apache-2.0"
+# Vision through its mmproj, which the router loads beside the weights.
+roles = ["chat", "vision"]
 card_url = "https://huggingface.co/google/gemma-4-26B-A4B-it"
 kind = "generative"
 c = 32768
@@ -95,6 +190,13 @@ and sets min-p = 0 because the card names no min_p (llama.cpp's default is 0.05)
 id = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
 publisher = "Google"
 origin = "United States"
+# Licence: the card's license metadata (apache-2.0), linking Google's Gemma 4 licence page,
+# https://ai.google.dev/gemma/docs/gemma_4_license.
+licence = "Apache-2.0"
+# Audio and vision through its mmproj: mmproj-gemma-4-E4B-it-Q8_0.gguf sets both
+# clip.has_audio_encoder and clip.has_vision_encoder. Set A sends it audio; its images go to
+# Gemma 4 26B-A4B.
+roles = ["chat", "vision", "audio"]
 card_url = "https://huggingface.co/google/gemma-4-E4B-it"
 kind = "generative"
 c = 32768
@@ -121,8 +223,14 @@ sets min-p = 0 because the card names no min_p (llama.cpp's default is 0.05).
 id = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
 publisher = "Google"
 origin = "United States"
+# Licence: the card's license metadata (apache-2.0), at
+# https://huggingface.co/google/embeddinggemma-2.
+licence = "Apache-2.0"
+roles = ["embedding"]
 card_url = "https://huggingface.co/google/embeddinggemma-2"
 kind = "embedding"
+# dims: the 768-dimension output its card states.
+dims = 768
 c = 8192
 c_reason = """
 Text embeddings only, 768-dimension output. c = 8192 is the context window its card states (the
@@ -141,3 +249,124 @@ pooling = "mean"
 no-mmproj = true
 b = 8192
 ub = 8192
+
+# The ID's tag is Q4_K_XL, not the UD-Q4_K_XL of unsloth's file names: the router lists a section
+# by the quant type at the end of its tag (profile.RouterTag), so a UD-Q4_K_XL section lists as
+# Q4_K_XL. The tag fetches the same files: of the repository's model files, only the three
+# UD-Q4_K_XL/Mistral-Small-4-119B-2603-UD-Q4_K_XL-0000N-of-00003.gguf splits hold "Q4_K_XL"
+# followed by '-' or '.', 74.16GB (69.07GiB) together.
+[[models]]
+id = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
+publisher = "Mistral AI"
+origin = "France"
+# Licence: the card's license metadata (apache-2.0) and its "License" section, at
+# https://huggingface.co/mistralai/Mistral-Small-4-119B-2603.
+licence = "Apache-2.0"
+# Vision through its mmproj, which the router's -hf fetch picks from the repository and loads
+# beside the weights, as it does for set A's Gemmas: the profile names no projector (mmproj is
+# a host path, which no profile names). Of the repository's mmproj-BF16, -F16 and -F32 files,
+# b11669's fetch picks mmproj-BF16.gguf, the first of the two nearest the weights' 4 bits
+# (common/download.cpp, find_best_sibling).
+roles = ["chat", "vision"]
+card_url = "https://huggingface.co/mistralai/Mistral-Small-4-119B-2603"
+kind = "generative"
+c = 131072
+c_reason = """
+The Mistral Small 4 candidate's main model, unsloth's UD-Q4_K_XL (no ggml-org or mistralai GGUF
+exists); the router loads its mmproj alongside. Its card states a 256k (262144) context; c =
+131072 is gpt-oss-120b's, so the candidates compare at set A's main-model context, and 262144
+would leave the pool under the 3GiB bar. Its KV at this c is estimated at 2.8-5.1GiB.
+"""
+
+[models.sampling]
+source = "https://huggingface.co/mistralai/Mistral-Small-4-119B-2603"
+temperature = 0.7
+top_p = 1.0
+top_k = 0
+min_p = 0.0
+reasoning = "high"
+reason = """
+Sampling from the mistralai/Mistral-Small-4-119B-2603 model card, "Recommended Settings":
+reasoning_effort "high" for complex tasks, at temperature 0.7. Its chat template accepts only
+"none" or "high" (it raises on any other), so reasoning = "high" renders as the template's
+reasoning_effort. The card names no top_p, top_k or min_p, so top-p = 1.0, top-k = 0 and min-p
+= 0 turn off the truncations it doesn't name, as align decided for every model.
+"""
+
+# Pi and OpenCode each ask for the effort the preset already sets, the one the template accepts
+# besides none.
+[models.consumers]
+pi = "high"
+opencode = { reasoningEffort = "high" }
+reason = """
+Mistral Small 4's template accepts reasoning_effort "none" or "high" alone. OpenCode's
+reasoningEffort option sends reasoning_effort "high" on every request. Pi 1.3.0's llama.cpp
+provider reads a model as reasoning only when its template reads enable_thinking, which this
+one doesn't, and sends no reasoning_effort for any model: it clamps the level to off and sends
+no reasoning field, so the preset's reasoning_effort "high" applies. pi = "high" names that
+effort, so a Pi that reads the model as reasoning asks for the accepted one.
+"""
+
+[[models]]
+id = "ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF:NVFP4"
+publisher = "NVIDIA"
+origin = "United States"
+# Licence: the card's license metadata (other, license_name openmdw-1.1) and its "License/Terms
+# of Use" section, the OpenMDW License Agreement 1.1, at https://openmdw.ai/license/1-1/.
+licence = "OpenMDW-1.1"
+# Vision through its mmproj, which the router's -hf fetch picks and loads beside the weights:
+# of the repository's mmproj BF16 and Q8_0, b11669 picks mmproj-...-Q8_0.gguf, the nearer to
+# the weights' 4 bits. The NVFP4 tag matches the 120B weights, listed ahead of the
+# repository's 1.35GB lilicorr-...-NVFP4.gguf, and the fetch takes the first match.
+roles = ["chat", "vision"]
+card_url = "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+kind = "generative"
+c = 131072
+c_reason = """
+The Nemotron 3.5 Super candidate's main model, ggml-org's NVFP4, the publisher's evaluated
+precision (its card points to an NVFP4 release for deployment); the router loads its mmproj
+alongside. A Mamba-2 and Transformer hybrid MoE, 120B parameters with 12B active: its card
+states up to 1M tokens of context. c = 131072 is gpt-oss-120b's, so the candidates compare at
+set A's main-model context. Only its attention layers keep a KV cache, ~1GiB at this c; its
+Mamba layers keep a fixed recurrent state per sequence, ~660MiB for 4 slots.
+"""
+args_reason = """
+ctx-checkpoints = 8 caps the context checkpoints each slot keeps at 8, down from llama.cpp's 32
+(common/arg.cpp at b11669, --ctx-checkpoints). A hybrid model can't rewind its recurrent state,
+so the server saves checkpoints of it to reuse a prompt's prefix, and keeps them in system RAM
+outside the GPU pool: at the default 32, 4 slots would need ~20.6GiB of it (an estimate); at 8,
+about a quarter of that.
+"""
+
+[models.sampling]
+source = "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+temperature = 1.0
+top_p = 0.95
+top_k = 0
+min_p = 0.0
+reason = """
+Sampling from the nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16 model card, "Model
+Summary", Recommended Sampling: text at temperature 1.0, top_p 0.95; its vision values (0.6,
+0.95) are not applied, since one preset serves every request. The GGUF carries the same
+temperature and top_p. The card names no top_k or min_p, so top-k = 0 and min-p = 0 turn off
+those truncations. No reasoning is set: the card's Reasoning Mode is the template's
+enable_thinking, which defaults to true, so thinking stays on.
+"""
+
+# Pi and OpenCode each turn thinking on, the template's default, so the wire record shows it
+# asked for.
+[models.consumers]
+pi = "medium"
+opencode = { chat_template_kwargs = { enable_thinking = true } }
+reason = """
+Nemotron 3.5 Super's template takes enable_thinking, true by default; its card names
+medium_effort beside it, which no consumer sends. Pi 1.3.0's llama.cpp provider reads a
+template that reads enable_thinking as reasoning, offering the levels off and medium, and sends
+chat_template_kwargs enable_thinking: true at medium (with preserve_thinking, which the
+template ignores). Pi's level for a model it hasn't been given is off, which sends
+enable_thinking false, so pi = "medium" keeps thinking on. OpenCode sends chat_template_kwargs
+enable_thinking: true on every request.
+"""
+
+[models.args]
+ctx-checkpoints = 8

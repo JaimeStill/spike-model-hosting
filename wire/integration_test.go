@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
@@ -20,7 +21,8 @@ import (
 
 	"github.com/JaimeStill/spike-model-hosting/concurrent"
 	"github.com/JaimeStill/spike-model-hosting/consumers"
-	"github.com/JaimeStill/spike-model-hosting/passk"
+	"github.com/JaimeStill/spike-model-hosting/profile"
+	"github.com/JaimeStill/spike-model-hosting/router"
 	"github.com/JaimeStill/spike-model-hosting/wire"
 )
 
@@ -28,14 +30,38 @@ import (
 // working directories go.
 const state = "../.state"
 
+// strixHalo is the profile the router serves.
+const strixHalo = "../profiles/strix-halo.toml"
+
 // liveRouter returns a Recorder in front of the router SPIKE_ROUTER_URL names, served on a
-// local listener, and that listener's URL. It skips the test when the variable is unset.
-func liveRouter(t *testing.T) (*wire.Recorder, string) {
+// local listener, that listener's URL, the roles of the profile's set SPIKE_SET names, or else
+// of its startup set, and the consumer reasoning setting of the set's chat model. It skips the
+// test when SPIKE_ROUTER_URL is unset, fails it unless the router has every model of the set
+// loaded, and logs the build and the set it runs on.
+func liveRouter(t *testing.T) (*wire.Recorder, string, profile.SetRoles, profile.ConsumerReasoning) {
 	t.Helper()
 	base := strings.TrimSuffix(os.Getenv("SPIKE_ROUTER_URL"), "/")
 	if base == "" {
 		t.Skip("SPIKE_ROUTER_URL is unset: set it to the router to run against")
 	}
+	p, err := profile.Load(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, err := p.Set(os.Getenv("SPIKE_SET"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The consumers' providers can't carry autoload=false, so a test never starts against a
+	// model a request would load.
+	if err := router.CheckLoaded(t.Context(), http.DefaultClient, base, set.Models...); err != nil {
+		t.Fatal(err)
+	}
+	build, err := router.Build(t.Context(), http.DefaultClient, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("build %s, set %s", build, set.Name)
 	target, err := url.Parse(base)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +69,7 @@ func liveRouter(t *testing.T) (*wire.Recorder, string) {
 	rec := wire.New(target)
 	srv := httptest.NewServer(rec)
 	t.Cleanup(srv.Close)
-	return rec, srv.URL
+	return rec, srv.URL, set.Roles, p.Model(set.Roles.Chat).Consumers
 }
 
 // toolTurn writes a file holding a fresh code into a new working directory under state, and
@@ -124,13 +150,13 @@ func blockTypes(bs []map[string]any) []string {
 }
 
 // TestClaudeThinkingRoundTrip runs one Claude Code turn that calls its Read tool, through a
-// Recorder, from the run's own configuration directory on the subscription login, every model
-// alias mapped to gpt-oss-120b. It records the thinking request Claude Code sends, and checks
+// Recorder, from the run's own configuration directory on the subscription login, every model alias
+// mapped to the set's chat model. It records the thinking request Claude Code sends, and checks
 // thinking blocks stream back and the request after the tool call carries them back. SPIKE_CLAUDE
 // names Claude Code (MISE_ENV=consumers mise which claude), and ../.state/claude must hold its
 // login.
 func TestClaudeThinkingRoundTrip(t *testing.T) {
-	rec, proxy := liveRouter(t)
+	rec, proxy, roles, _ := liveRouter(t)
 	command := os.Getenv("SPIKE_CLAUDE")
 	if command == "" {
 		t.Skip("SPIKE_CLAUDE is unset: set it to Claude Code (MISE_ENV=consumers mise which claude)")
@@ -144,8 +170,8 @@ func TestClaudeThinkingRoundTrip(t *testing.T) {
 	}
 	dir, prompt, code := toolTurn(t, "claude")
 	defer save(t, rec, "claude")
-	text := send(t, consumers.ClaudeCode(command, config, proxy, consumers.ChatModel), harness.Options{
-		Provider: claude.Provider, Model: consumers.ChatModel, Dir: dir, HarnessTools: []string{"Read"},
+	text := send(t, consumers.ClaudeCode(command, config, proxy, roles.Chat), harness.Options{
+		Provider: claude.Provider, Model: roles.Chat, Dir: dir, HarnessTools: []string{"Read"},
 	}, prompt)
 	t.Logf("answer: %q", text)
 	if !strings.Contains(text, code) {
@@ -220,12 +246,12 @@ func TestClaudeThinkingRoundTrip(t *testing.T) {
 	}
 }
 
-// TestPiReasoningRoundTrip runs one Pi turn that calls its read tool, through a Recorder, and
-// reports whether the request after the tool call carries the assistant's reasoning back as
-// reasoning_content. Pi's answer is a finding, not a pass or fail. SPIKE_PI names Pi
-// (MISE_ENV=consumers mise which pi).
+// TestPiReasoningRoundTrip runs one Pi turn that calls its read tool, through a Recorder, at the
+// set's chat model's thinking level, as the passk cell sets it, and reports whether the request
+// after the tool call carries the assistant's reasoning back as reasoning_content. Pi's answer is a
+// finding, not a pass or fail. SPIKE_PI names Pi (MISE_ENV=consumers mise which pi).
 func TestPiReasoningRoundTrip(t *testing.T) {
-	rec, proxy := liveRouter(t)
+	rec, proxy, roles, reasoning := liveRouter(t)
 	command := os.Getenv("SPIKE_PI")
 	if command == "" {
 		t.Skip("SPIKE_PI is unset: set it to Pi (MISE_ENV=consumers mise which pi)")
@@ -233,7 +259,11 @@ func TestPiReasoningRoundTrip(t *testing.T) {
 	dir, prompt, code := toolTurn(t, "pi")
 	agent := t.TempDir()
 	defer save(t, rec, "pi")
-	text := send(t, consumers.Pi(command, proxy, agent), harness.Options{Provider: consumers.Provider, Model: consumers.ChatModel, Dir: dir, HarnessTools: []string{"read"}}, prompt)
+	d, err := consumers.Pi(command, proxy, agent, roles.Chat, reasoning.Pi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := send(t, d, harness.Options{Provider: consumers.Provider, Model: roles.Chat, Dir: dir, HarnessTools: []string{"read"}}, prompt)
 	t.Logf("answer: %q", text)
 	if !strings.Contains(text, code) {
 		t.Errorf("the answer %q doesn't carry the file's code %s", text, code)
@@ -245,10 +275,11 @@ func TestPiReasoningRoundTrip(t *testing.T) {
 }
 
 // TestOpenCodeReasoningRoundTrip runs one OpenCode turn that calls its read tool, through a
-// Recorder, once with gpt-oss-120b's interleaved setting naming reasoning_content, as the passk
-// cell sets it, and once without it, and reports whether the request after the tool call carries
-// the assistant's reasoning back. OpenCode's answer is a finding, not a pass or fail. SPIKE_OPENCODE
-// names OpenCode (MISE_ENV=consumers mise which opencode).
+// Recorder, once with the set's chat model's interleaved setting naming reasoning_content and its
+// options, as the passk cell sets them, and once without the file that holds both, and reports
+// whether the request after the tool call carries the assistant's reasoning back. OpenCode's answer
+// is a finding, not a pass or fail. SPIKE_OPENCODE names OpenCode (MISE_ENV=consumers mise which
+// opencode).
 func TestOpenCodeReasoningRoundTrip(t *testing.T) {
 	command := os.Getenv("SPIKE_OPENCODE")
 	if command == "" {
@@ -260,10 +291,14 @@ func TestOpenCodeReasoningRoundTrip(t *testing.T) {
 			name = "unset"
 		}
 		t.Run(name, func(t *testing.T) {
-			rec, proxy := liveRouter(t)
+			rec, proxy, roles, reasoning := liveRouter(t)
 			consumer := "opencode-" + name
 			dir, prompt, code := toolTurn(t, consumer)
-			d, err := consumers.OpenCode(command, proxy, filepath.Join(t.TempDir(), "opencode"), passk.VisionModel)
+			var images []string
+			if roles.Vision != "" {
+				images = append(images, roles.Vision)
+			}
+			d, err := consumers.OpenCode(command, proxy, filepath.Join(t.TempDir(), "opencode"), roles.Chat, reasoning.OpenCode, images...)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -271,7 +306,7 @@ func TestOpenCodeReasoningRoundTrip(t *testing.T) {
 				d.Env = nil
 			}
 			defer save(t, rec, consumer)
-			text := send(t, d, harness.Options{Provider: consumers.Provider, Model: consumers.ChatModel, Dir: dir, HarnessTools: []string{"read"}}, prompt)
+			text := send(t, d, harness.Options{Provider: consumers.Provider, Model: roles.Chat, Dir: dir, HarnessTools: []string{"read"}}, prompt)
 			t.Logf("answer: %q", text)
 			if !strings.Contains(text, code) {
 				t.Errorf("the answer %q doesn't carry the file's code %s", text, code)
