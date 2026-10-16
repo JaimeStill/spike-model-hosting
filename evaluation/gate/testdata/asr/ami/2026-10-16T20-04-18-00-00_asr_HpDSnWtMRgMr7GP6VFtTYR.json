@@ -1,0 +1,1141 @@
+{
+  "version": 2,
+  "status": "success",
+  "eval": {
+    "eval_id": "D2dLbtBz66GatkVLCHrXmp",
+    "run_id": "HavcJ24UNTiwj28WCfX4sR",
+    "created": "2026-10-16T20:04:18+00:00",
+    "task": "asr",
+    "task_id": "HpDSnWtMRgMr7GP6VFtTYR",
+    "task_version": 0,
+    "task_file": "evaluation/suites/asr_quality.py",
+    "task_display_name": "asr",
+    "task_registry_name": "asr",
+    "task_attribs": {},
+    "task_args": {
+      "name": "ami",
+      "tier": "/tmp/claude-1000/-home-jaime-experiments-spike-model-hosting/0a69af61-64ee-43be-b322-e0a065301ef7/scratchpad/ami10.txt",
+      "bar": null
+    },
+    "task_args_passed": {
+      "name": "ami",
+      "tier": "/tmp/claude-1000/-home-jaime-experiments-spike-model-hosting/0a69af61-64ee-43be-b322-e0a065301ef7/scratchpad/ami10.txt",
+      "bar": null
+    },
+    "dataset": {
+      "name": "ami",
+      "samples": 10,
+      "sample_ids": [
+        "AMI_TS3003c_H02_MTD0010ID_0130590_0130714",
+        "AMI_IS1009c_H02_FIO084_0169896_0169937",
+        "AMI_ES2004d_H01_FEE013_0184614_0184842",
+        "AMI_ES2004c_H01_FEE013_0185833_0186520",
+        "AMI_TS3003d_H03_MTD012ME_0199836_0199858",
+        "AMI_IS1009b_H03_FIO089_0017633_0018011",
+        "AMI_TS3003d_H00_MTD009PM_0194299_0194531",
+        "AMI_TS3003a_H01_MTD011UID_0098652_0098803",
+        "AMI_ES2004c_H03_FEE016_0222656_0223061",
+        "AMI_ES2004a_H00_MEO015_0030922_0031008"
+      ],
+      "shuffled": false
+    },
+    "model": "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+    "model_generate_config": {},
+    "model_base_url": "http://framework:8080/v1",
+    "model_args": {
+      "default_query": {
+        "autoload": "false"
+      }
+    },
+    "config": {
+      "epochs": 1,
+      "fail_on_error": true,
+      "continue_on_fail": false,
+      "score_on_error": false,
+      "max_samples": 1,
+      "sandbox_cleanup": true,
+      "sandbox_prebuilt": false,
+      "log_samples": true,
+      "log_realtime": true,
+      "log_images": false,
+      "score_display": true
+    },
+    "revision": {
+      "type": "git",
+      "origin": "https://github.com/JaimeStill/spike-model-hosting.git",
+      "commit": "e5952b2",
+      "dirty": true
+    },
+    "packages": {
+      "inspect_ai": "0.3.281"
+    },
+    "metadata": {
+      "set": "ami",
+      "dataset": "hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb ami/test-*.parquet",
+      "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+      "prompt": "Transcribe the following speech segment in English into English text."
+    },
+    "scorers": [
+      {
+        "name": "wer",
+        "options": {},
+        "metrics": [
+          {
+            "name": "corpus_wer",
+            "options": {}
+          }
+        ],
+        "metadata": {}
+      }
+    ]
+  },
+  "plan": {
+    "name": "plan",
+    "steps": [
+      {
+        "solver": "generate",
+        "params": {
+          "tool_calls": "loop"
+        },
+        "params_passed": {}
+      }
+    ],
+    "config": {
+      "max_connections": 1,
+      "max_tokens": 1024,
+      "temperature": 0.0,
+      "extra_body": {
+        "cache_prompt": false,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      }
+    }
+  },
+  "results": {
+    "total_samples": 10,
+    "completed_samples": 10,
+    "scores": [
+      {
+        "name": "wer",
+        "scorer": "wer",
+        "scored_samples": 10,
+        "unscored_samples": 0,
+        "params": {},
+        "metrics": {
+          "corpus_wer": {
+            "name": "corpus_wer",
+            "value": 0.14864864864864866,
+            "params": {}
+          }
+        }
+      }
+    ],
+    "headline": {
+      "scorer": "wer",
+      "score": "wer",
+      "metric": "corpus_wer"
+    }
+  },
+  "stats": {
+    "started_at": "2026-10-16T20:04:18+00:00",
+    "completed_at": "2026-10-16T20:04:23+00:00",
+    "model_usage": {
+      "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+        "input_tokens": 820,
+        "output_tokens": 94,
+        "total_tokens": 914,
+        "input_tokens_cache_read": 0
+      }
+    },
+    "role_usage": {},
+    "connection_limit_history": []
+  },
+  "invalidated": false,
+  "tags": [],
+  "metadata": {
+    "set": "ami",
+    "dataset": "hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb ami/test-*.parquet",
+    "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+    "prompt": "Transcribe the following speech segment in English into English text."
+  },
+  "samples": [
+    {
+      "id": "AMI_ES2004a_H00_MEO015_0030922_0031008",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "8kznF9rH9JCSnyRu26Bm8r",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "Yep.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "87M6rC6gmmH8cGcMCdfdyT",
+              "content": "Yep.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "Yep.",
+        "usage": {
+          "input_tokens": 45,
+          "output_tokens": 3,
+          "total_tokens": 48,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.22943532199133188,
+        "response_id": "chatcmpl-GYc2POCbgLBZgLwFK5KebGXaKhwz8ztD"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "Yep.",
+          "metadata": {
+            "errors": 0,
+            "words": 1,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "yep",
+            "hypothesis": "yep"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 0.86
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 45,
+          "output_tokens": 3,
+          "total_tokens": 48,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:04:22.992699+00:00",
+      "completed_at": "2026-10-16T20:04:23.228724+00:00",
+      "total_time": 0.236,
+      "working_time": 0.234,
+      "uuid": "hquhkM2XBb7gpeZaw9Gh4F",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "AMI_ES2004c_H01_FEE013_0185833_0186520",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "iWjas9yq3AGDLrsczUjpzy",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "but I think pretty much we've used cheap relatively cheap and simple things.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "nkFmxK88dWDHKMNDD327me",
+              "content": "but I think pretty much with is cheap better to be cheap and simple things",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "but I think pretty much with is cheap better to be cheap and simple things",
+        "usage": {
+          "input_tokens": 195,
+          "output_tokens": 16,
+          "total_tokens": 211,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.6456533290329389,
+        "response_id": "chatcmpl-pGKEB9P3VDHihSe1w7l33Ca96d8K2gNa"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.42857142857142855,
+          "answer": "but I think pretty much with is cheap better to be cheap and simple things",
+          "metadata": {
+            "errors": 6,
+            "words": 14,
+            "ins": 2,
+            "del": 1,
+            "sub": 3,
+            "reference": "but i think pretty much we have used cheap relatively cheap and simple things",
+            "hypothesis": "but i think pretty much with is cheap better to be cheap and simple things"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 6.87
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 195,
+          "output_tokens": 16,
+          "total_tokens": 211,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:04:19.993719+00:00",
+      "completed_at": "2026-10-16T20:04:20.647565+00:00",
+      "total_time": 0.654,
+      "working_time": 0.651,
+      "uuid": "msWGzxHGEiGsNZihysSuN4",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "AMI_ES2004c_H03_FEE016_0222656_0223061",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "DqNCQRfmgr8YFEALaMJVte",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "'Cause I took it from the feedback you gave in the last meeting from y from y your report,",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "MHUotYpzpqGpaBknPKW64H",
+              "content": "Because I took it from the feedback you gave in the last meeting from from your report.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "Because I took it from the feedback you gave in the last meeting from from your report.",
+        "usage": {
+          "input_tokens": 124,
+          "output_tokens": 19,
+          "total_tokens": 143,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.6876112800091505,
+        "response_id": "chatcmpl-erIbCgPOhtO2qMuX5E1SO4lQ3TkG85E2"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.15789473684210525,
+          "answer": "Because I took it from the feedback you gave in the last meeting from from your report.",
+          "metadata": {
+            "errors": 3,
+            "words": 19,
+            "ins": 0,
+            "del": 2,
+            "sub": 1,
+            "reference": "cause i took it from the feedback you gave in the last meeting from y from y your report",
+            "hypothesis": "because i took it from the feedback you gave in the last meeting from from your report"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 4.05
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 124,
+          "output_tokens": 19,
+          "total_tokens": 143,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:04:22.294765+00:00",
+      "completed_at": "2026-10-16T20:04:22.988577+00:00",
+      "total_time": 0.694,
+      "working_time": 0.692,
+      "uuid": "idNsFhxWaPysC4a7bfdqV9",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "AMI_ES2004d_H01_FEE013_0184614_0184842",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "A2GouVHXcJohtkVgje2Er2",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "rather than having to email it, yeah.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "R6FV6Tu7PBG8kkAcfaunZk",
+              "content": "rather than having to email it yeah",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "rather than having to email it yeah",
+        "usage": {
+          "input_tokens": 80,
+          "output_tokens": 8,
+          "total_tokens": 88,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.36926708597457036,
+        "response_id": "chatcmpl-7wP8AoULqcYUxuv2m4IIZLVzGaCvAsgb"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "rather than having to email it yeah",
+          "metadata": {
+            "errors": 0,
+            "words": 7,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "rather than having to email it yeah",
+            "hypothesis": "rather than having to email it yeah"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 2.28
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 80,
+          "output_tokens": 8,
+          "total_tokens": 88,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:04:19.604119+00:00",
+      "completed_at": "2026-10-16T20:04:19.981128+00:00",
+      "total_time": 0.377,
+      "working_time": 0.375,
+      "uuid": "KzRyNugxGkeDbrxTApRH4W",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "AMI_IS1009b_H03_FIO089_0017633_0018011",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "aNd9VUVFcoyWZuouTz8TWV",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "if it takes five years to develop this it's just something we can't do.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "EaLYGUPHW6MsigETXGFgt3",
+              "content": "is it takes five years to develop this it's just something we can't do",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "is it takes five years to develop this it's just something we can't do",
+        "usage": {
+          "input_tokens": 118,
+          "output_tokens": 19,
+          "total_tokens": 137,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.6829467810457572,
+        "response_id": "chatcmpl-xxQdTcnRpaD2RFW1HSBCzBhAwZSmxOpt"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0625,
+          "answer": "is it takes five years to develop this it's just something we can't do",
+          "metadata": {
+            "errors": 1,
+            "words": 16,
+            "ins": 0,
+            "del": 0,
+            "sub": 1,
+            "reference": "if it takes 5 years to develop this it is just something we can not do",
+            "hypothesis": "is it takes 5 years to develop this it is just something we can not do"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 3.78
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 118,
+          "output_tokens": 19,
+          "total_tokens": 137,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:04:20.862305+00:00",
+      "completed_at": "2026-10-16T20:04:21.551590+00:00",
+      "total_time": 0.689,
+      "working_time": 0.687,
+      "uuid": "DtEUtusG5ZqNyFE5Jz9CS3",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "AMI_IS1009c_H02_FIO084_0169896_0169937",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "3EyqbNAWPDKFq4XVSRo9mE",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "Mm yeah.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "mYUU9BLrBDds95uMZ9J7hH",
+              "content": "Oh,",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "Oh,",
+        "usage": {
+          "input_tokens": 33,
+          "output_tokens": 3,
+          "total_tokens": 36,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.22717795096104965,
+        "response_id": "chatcmpl-49LcsqE4qAbGzIOiV07uYSrYyR9VHh3Q"
+      },
+      "scores": {
+        "wer": {
+          "value": 1.0,
+          "answer": "Oh,",
+          "metadata": {
+            "errors": 1,
+            "words": 1,
+            "ins": 0,
+            "del": 0,
+            "sub": 1,
+            "reference": "yeah",
+            "hypothesis": "oh"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 0.41
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 33,
+          "output_tokens": 3,
+          "total_tokens": 36,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:04:19.365274+00:00",
+      "completed_at": "2026-10-16T20:04:19.599847+00:00",
+      "total_time": 0.235,
+      "working_time": 0.233,
+      "uuid": "e5pr6z4HEELTp3TTExtEMt",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "AMI_TS3003a_H01_MTD011UID_0098652_0098803",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "9vp72Dp8b29B85h9x33yP8",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "So uh",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "UJnerz7v8ZCJc3GuLjn4J2",
+              "content": "So, uh",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "So, uh",
+        "usage": {
+          "input_tokens": 61,
+          "output_tokens": 4,
+          "total_tokens": 65,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.2616977150319144,
+        "response_id": "chatcmpl-hjxJrSIyVxnoUELihSpE59NmAvlhBr6f"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "So, uh",
+          "metadata": {
+            "errors": 0,
+            "words": 1,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "so",
+            "hypothesis": "so"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 1.51
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 61,
+          "output_tokens": 4,
+          "total_tokens": 65,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:04:22.012021+00:00",
+      "completed_at": "2026-10-16T20:04:22.282410+00:00",
+      "total_time": 0.27,
+      "working_time": 0.268,
+      "uuid": "jUoe4NJCdSRnisWGMrk4W8",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "AMI_TS3003c_H02_MTD0010ID_0130590_0130714",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "GYsCim27QC9ChrS3qq85GK",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "And that's the best choice.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "kCotEfUbSLisi5Km4J3at8",
+              "content": "And that's the best choice.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "And that's the best choice.",
+        "usage": {
+          "input_tokens": 54,
+          "output_tokens": 9,
+          "total_tokens": 63,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.3956538930069655,
+        "response_id": "chatcmpl-H882fDO9NUue6EK3N7i5bw6JhnEivI76"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "And that's the best choice.",
+          "metadata": {
+            "errors": 0,
+            "words": 6,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "and that is the best choice",
+            "hypothesis": "and that is the best choice"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 1.24
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 54,
+          "output_tokens": 9,
+          "total_tokens": 63,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:04:18.825763+00:00",
+      "completed_at": "2026-10-16T20:04:19.361381+00:00",
+      "total_time": 0.536,
+      "working_time": 0.406,
+      "uuid": "ehALhMFJnRQ3iprJHhVUTN",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "AMI_TS3003d_H00_MTD009PM_0194299_0194531",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "73CUEAFH4ooAWrEgi9cTNU",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "I think that's a pretty nice score.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "2ckKCNCfMALhbQsf4YLSR4",
+              "content": "I think that's a pretty nice score.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "I think that's a pretty nice score.",
+        "usage": {
+          "input_tokens": 81,
+          "output_tokens": 11,
+          "total_tokens": 92,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.44575138500658795,
+        "response_id": "chatcmpl-i604WTcNrkoZKzyLyvQAbQnI0iqlaveN"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "I think that's a pretty nice score.",
+          "metadata": {
+            "errors": 0,
+            "words": 8,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "i think that is a pretty nice score",
+            "hypothesis": "i think that is a pretty nice score"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 2.32
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 81,
+          "output_tokens": 11,
+          "total_tokens": 92,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:04:21.554840+00:00",
+      "completed_at": "2026-10-16T20:04:22.009126+00:00",
+      "total_time": 0.454,
+      "working_time": 0.453,
+      "uuid": "LPKD5q7Mas4PekJtLFfKFP",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "AMI_TS3003d_H03_MTD012ME_0199836_0199858",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "YioRDcxnRbJWJnNwyVcuD5",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "Yeah.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "mt8heAF3tddzhQeLWEThYD",
+              "content": "yeah",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "yeah",
+        "usage": {
+          "input_tokens": 29,
+          "output_tokens": 2,
+          "total_tokens": 31,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.19316742400405928,
+        "response_id": "chatcmpl-MluFJ9k7iM0XSoZrzePaSYOGBN0syGAG"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "yeah",
+          "metadata": {
+            "errors": 0,
+            "words": 1,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "yeah",
+            "hypothesis": "yeah"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 0.22
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 29,
+          "output_tokens": 2,
+          "total_tokens": 31,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:04:20.650750+00:00",
+      "completed_at": "2026-10-16T20:04:20.851084+00:00",
+      "total_time": 0.2,
+      "working_time": 0.199,
+      "uuid": "haRSHZgXMswx4g4a26agqU",
+      "error_retries": [],
+      "turn_count": 1
+    }
+  ],
+  "reductions": [
+    {
+      "scorer": "wer",
+      "samples": [
+        {
+          "value": 0.0,
+          "answer": "And that's the best choice.",
+          "metadata": {
+            "errors": 0,
+            "words": 6,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "and that is the best choice",
+            "hypothesis": "and that is the best choice"
+          },
+          "history": [],
+          "sample_id": "AMI_TS3003c_H02_MTD0010ID_0130590_0130714"
+        },
+        {
+          "value": 1.0,
+          "answer": "Oh,",
+          "metadata": {
+            "errors": 1,
+            "words": 1,
+            "ins": 0,
+            "del": 0,
+            "sub": 1,
+            "reference": "yeah",
+            "hypothesis": "oh"
+          },
+          "history": [],
+          "sample_id": "AMI_IS1009c_H02_FIO084_0169896_0169937"
+        },
+        {
+          "value": 0.0,
+          "answer": "rather than having to email it yeah",
+          "metadata": {
+            "errors": 0,
+            "words": 7,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "rather than having to email it yeah",
+            "hypothesis": "rather than having to email it yeah"
+          },
+          "history": [],
+          "sample_id": "AMI_ES2004d_H01_FEE013_0184614_0184842"
+        },
+        {
+          "value": 0.42857142857142855,
+          "answer": "but I think pretty much with is cheap better to be cheap and simple things",
+          "metadata": {
+            "errors": 6,
+            "words": 14,
+            "ins": 2,
+            "del": 1,
+            "sub": 3,
+            "reference": "but i think pretty much we have used cheap relatively cheap and simple things",
+            "hypothesis": "but i think pretty much with is cheap better to be cheap and simple things"
+          },
+          "history": [],
+          "sample_id": "AMI_ES2004c_H01_FEE013_0185833_0186520"
+        },
+        {
+          "value": 0.0,
+          "answer": "yeah",
+          "metadata": {
+            "errors": 0,
+            "words": 1,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "yeah",
+            "hypothesis": "yeah"
+          },
+          "history": [],
+          "sample_id": "AMI_TS3003d_H03_MTD012ME_0199836_0199858"
+        },
+        {
+          "value": 0.0625,
+          "answer": "is it takes five years to develop this it's just something we can't do",
+          "metadata": {
+            "errors": 1,
+            "words": 16,
+            "ins": 0,
+            "del": 0,
+            "sub": 1,
+            "reference": "if it takes 5 years to develop this it is just something we can not do",
+            "hypothesis": "is it takes 5 years to develop this it is just something we can not do"
+          },
+          "history": [],
+          "sample_id": "AMI_IS1009b_H03_FIO089_0017633_0018011"
+        },
+        {
+          "value": 0.0,
+          "answer": "I think that's a pretty nice score.",
+          "metadata": {
+            "errors": 0,
+            "words": 8,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "i think that is a pretty nice score",
+            "hypothesis": "i think that is a pretty nice score"
+          },
+          "history": [],
+          "sample_id": "AMI_TS3003d_H00_MTD009PM_0194299_0194531"
+        },
+        {
+          "value": 0.0,
+          "answer": "So, uh",
+          "metadata": {
+            "errors": 0,
+            "words": 1,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "so",
+            "hypothesis": "so"
+          },
+          "history": [],
+          "sample_id": "AMI_TS3003a_H01_MTD011UID_0098652_0098803"
+        },
+        {
+          "value": 0.15789473684210525,
+          "answer": "Because I took it from the feedback you gave in the last meeting from from your report.",
+          "metadata": {
+            "errors": 3,
+            "words": 19,
+            "ins": 0,
+            "del": 2,
+            "sub": 1,
+            "reference": "cause i took it from the feedback you gave in the last meeting from y from y your report",
+            "hypothesis": "because i took it from the feedback you gave in the last meeting from from your report"
+          },
+          "history": [],
+          "sample_id": "AMI_ES2004c_H03_FEE016_0222656_0223061"
+        },
+        {
+          "value": 0.0,
+          "answer": "Yep.",
+          "metadata": {
+            "errors": 0,
+            "words": 1,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "yep",
+            "hypothesis": "yep"
+          },
+          "history": [],
+          "sample_id": "AMI_ES2004a_H00_MEO015_0030922_0031008"
+        }
+      ]
+    }
+  ]
+}

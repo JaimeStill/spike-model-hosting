@@ -1,0 +1,6 @@
+# tier asr-librispeech-clean
+# dataset hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb librispeech/test.clean-*.parquet
+# seed 20261016
+3729-6852-0025
+4446-2273-0024
+2094-142345-0023

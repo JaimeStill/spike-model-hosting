@@ -11,17 +11,34 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/JaimeStill/spike-model-hosting/evaluation/suites"
 )
 
 // EmbeddingTasks are the MTEB tasks the quality stage runs on the embedding role, each in full:
 // one a task type the role serves (similarity, classification, retrieval twice).
 var EmbeddingTasks = []string{"STSBenchmark", "Banking77Classification", "SciFact", "NFCorpus"}
 
-// MTEBVersion is the MTEB release the suites project (evaluation/suites) pins; a result written
-// by another fails its check.
-const MTEBVersion = "2.26.3"
+// MTEBVersion and InspectVersion are the MTEB and Inspect AI releases the suites project
+// (evaluation/suites) pins, read from its pyproject.toml; a result written by another fails its
+// check.
+var (
+	MTEBVersion    = mustPin("mteb")
+	InspectVersion = mustPin("inspect-ai")
+)
+
+// mustPin returns the suites project's pin of name; the pyproject.toml it reads is embedded, so
+// a pin missing from it is a fault of the build, and panics.
+func mustPin(name string) string {
+	v, err := suites.Pin(name)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
 
 // SuitesDir is the uv project, under the module root, that holds the quality suites and the
 // encoder the embedding tasks run through.
@@ -33,32 +50,56 @@ type MTEB interface {
 	Task(ctx context.Context, router, model, task, out string) error
 }
 
-// UV runs the suites project's mteb_quality.py with uv: `uv run --project <Project> --locked
-// --no-python-downloads --python <Python> python <Project>/mteb_quality.py ...`, which syncs the
+// ASR runs one tier of an ASR set on a router's audio model, the tier's list at tierPath, and
+// leaves Inspect AI's JSON log in out (ReadASR). A bar, a WER ceiling, stops the set early once
+// its WER can't come under the bar (asr_quality.py's WERStop); nil runs the whole tier.
+type ASR interface {
+	ASR(ctx context.Context, router, model, set, tierPath, out string, bar *float64) error
+}
+
+// UV runs the suites project's scripts with uv: `uv run --project <Project> --locked
+// --no-python-downloads --python <Python> python <Project>/<script> ...`, which syncs the
 // project's .venv from its lock on first use. The datasets download from Hugging Face under
-// Cache, which the gated run keeps under the state directory: HF_HOME is its huggingface/, and
-// MTEB_CACHE its mteb/.
+// Cache, which the gated run keeps under the state directory: HF_HOME is its huggingface/,
+// MTEB_CACHE its mteb/, and ASR_CACHE, where asr_quality.py keeps each tier's clips as WAV, its
+// asr/.
 type UV struct {
 	// Exe is uv, and Python the interpreter it runs: the consumers mise environment's.
 	Exe, Python string
 	// Project is the suites project's directory; Cache, the root of the caches.
 	Project, Cache string
-	// Log takes the run's output, MTEB's progress; nil discards it.
+	// Log takes the run's output, MTEB's and Inspect's progress; nil discards it.
 	Log io.Writer
 }
 
-// Task runs task through uv and fails when uv does.
+// Task runs the MTEB task through mteb_quality.py, and fails when uv does.
 func (u UV) Task(ctx context.Context, router, model, task, out string) error {
-	cmd := exec.CommandContext(ctx, u.Exe, "run", "--project", u.Project, "--locked", "--no-python-downloads",
-		"--python", u.Python, "python", filepath.Join(u.Project, "mteb_quality.py"),
-		"--router", router, "--model", model, "--task", task, "--output", out)
-	cmd.Env = append(os.Environ(),
-		"HF_HOME="+filepath.Join(u.Cache, "huggingface"), "MTEB_CACHE="+filepath.Join(u.Cache, "mteb"))
-	cmd.Stdout, cmd.Stderr = u.Log, u.Log
-	if err := cmd.Run(); err != nil {
+	if err := u.run(ctx, "mteb_quality.py", "--router", router, "--model", model, "--task", task, "--output", out); err != nil {
 		return fmt.Errorf("uv run mteb_quality.py --task %s: %w", task, err)
 	}
 	return nil
+}
+
+// ASR runs the set's tier through asr_quality.py eval, and fails when uv does.
+func (u UV) ASR(ctx context.Context, router, model, set, tierPath, out string, bar *float64) error {
+	args := []string{"eval", "--router", router, "--model", model, "--set", set, "--tier", tierPath, "--output", out}
+	if bar != nil {
+		args = append(args, "--bar", strconv.FormatFloat(*bar, 'g', -1, 64))
+	}
+	if err := u.run(ctx, "asr_quality.py", args...); err != nil {
+		return fmt.Errorf("uv run asr_quality.py eval --set %s: %w", set, err)
+	}
+	return nil
+}
+
+// run runs the project's script with args through uv.
+func (u UV) run(ctx context.Context, script string, args ...string) error {
+	cmd := exec.CommandContext(ctx, u.Exe, append([]string{"run", "--project", u.Project, "--locked", "--no-python-downloads",
+		"--python", u.Python, "python", filepath.Join(u.Project, script)}, args...)...)
+	cmd.Env = append(os.Environ(), "HF_HOME="+filepath.Join(u.Cache, "huggingface"),
+		"MTEB_CACHE="+filepath.Join(u.Cache, "mteb"), "ASR_CACHE="+filepath.Join(u.Cache, "asr"))
+	cmd.Stdout, cmd.Stderr = u.Log, u.Log
+	return cmd.Run()
 }
 
 // MTEBResult is one task's result, read from MTEB's result JSON and the encoder's account.
@@ -137,19 +178,29 @@ func readJSON(path string, v any, python bool) error {
 }
 
 // qualityBuilt reports whether the quality stage has a suite for any of the run's roles: so far,
-// the embedding role's MTEB tasks.
-func qualityBuilt(rep *Report) bool { return slices.Contains(rep.Roles, RoleEmbedding) }
+// the embedding role's MTEB tasks and the audio role's ASR sets.
+func qualityBuilt(rep *Report) bool {
+	return slices.Contains(rep.Roles, RoleEmbedding) || slices.Contains(rep.Roles, RoleAudio)
+}
 
-// quality runs each role's quality suite that is built. The embedding role runs EmbeddingTasks
-// through r.MTEB, one check a task: its main score judged against the task's bar, by the task's
-// name, in r.Bars, and recorded, passed, when there is none.
+// quality runs each role's quality suite that is built, one check a task or set, each judged
+// against its bar, by name, in r.Bars, and recorded, passed, when there is none. The embedding
+// role runs EmbeddingTasks through r.MTEB; the audio role, AudioSets through r.ASR.
 func (r *Runner) quality(ctx context.Context, rep *Report) []Check {
 	var checks []Check
 	if slices.Contains(rep.Roles, RoleEmbedding) {
 		for _, task := range EmbeddingTasks {
 			checks = append(checks, r.mtebTask(ctx, task))
 			if ctx.Err() != nil {
-				break
+				return checks
+			}
+		}
+	}
+	if slices.Contains(rep.Roles, RoleAudio) {
+		for _, set := range AudioSets {
+			checks = append(checks, r.asrSet(ctx, set))
+			if ctx.Err() != nil {
+				return checks
 			}
 		}
 	}
@@ -160,6 +211,10 @@ func (r *Runner) quality(ctx context.Context, rep *Report) []Check {
 func (r *Runner) mtebTask(ctx context.Context, task string) Check {
 	if r.MTEB == nil || r.Dir == "" {
 		return broken(task, RoleEmbedding, errors.New("the runner has no MTEB runner or no run directory"))
+	}
+	bar, hasBar := r.Bars.Bar(task)
+	if hasBar && bar.AtMost {
+		return broken(task, RoleEmbedding, errors.New("a main score is higher-is-better, so its bar belongs under [bars], not [bars_at_most]"))
 	}
 	out := filepath.Join(r.Dir, "mteb", task)
 	// A rerun into the same run directory (a resumed run) must not read the last run's result.
@@ -189,8 +244,8 @@ func (r *Runner) mtebTask(ctx context.Context, task string) Check {
 		notes = append(notes, fmt.Sprintf("mean of %d split/subset scores", res.Entries))
 	}
 	var ch Check
-	if bar, ok := r.Bars.Bar(task); ok {
-		ch = measure(task, RoleEmbedding, res.MainScore, res.Metric, AtLeast, bar)
+	if hasBar {
+		ch = measure(task, RoleEmbedding, res.MainScore, res.Metric, AtLeast, bar.Value)
 	} else {
 		score := res.MainScore
 		ch = Check{Name: task, Role: RoleEmbedding, Measured: &score, Unit: res.Metric, Passed: true}

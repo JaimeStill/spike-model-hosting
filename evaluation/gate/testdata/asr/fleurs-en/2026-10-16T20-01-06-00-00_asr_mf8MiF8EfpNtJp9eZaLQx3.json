@@ -1,0 +1,455 @@
+{
+  "version": 2,
+  "status": "success",
+  "eval": {
+    "eval_id": "fCTj3TrgZbfawppVcC953y",
+    "run_id": "gXtgFtTqgnepzQXYcvVA26",
+    "created": "2026-10-16T20:01:06+00:00",
+    "task": "asr",
+    "task_id": "mf8MiF8EfpNtJp9eZaLQx3",
+    "task_version": 0,
+    "task_file": "evaluation/suites/asr_quality.py",
+    "task_display_name": "asr",
+    "task_registry_name": "asr",
+    "task_attribs": {},
+    "task_args": {
+      "name": "fleurs-en",
+      "tier": "/home/jaime/experiments/spike-model-hosting/evaluation/tiers/asr-fleurs-en.txt",
+      "bar": null
+    },
+    "task_args_passed": {
+      "name": "fleurs-en",
+      "tier": "/home/jaime/experiments/spike-model-hosting/evaluation/tiers/asr-fleurs-en.txt",
+      "bar": null
+    },
+    "dataset": {
+      "name": "fleurs-en",
+      "samples": 150,
+      "sample_ids": [
+        "384435163157965470",
+        "17535235071289984666",
+        "2187541533417725553"
+      ],
+      "shuffled": false
+    },
+    "model": "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+    "model_generate_config": {},
+    "model_base_url": "http://framework:8080/v1",
+    "model_args": {
+      "default_query": {
+        "autoload": "false"
+      }
+    },
+    "config": {
+      "epochs": 1,
+      "fail_on_error": true,
+      "continue_on_fail": false,
+      "score_on_error": false,
+      "max_samples": 1,
+      "sandbox_cleanup": true,
+      "sandbox_prebuilt": false,
+      "log_samples": true,
+      "log_realtime": true,
+      "log_images": false,
+      "score_display": true
+    },
+    "revision": {
+      "type": "git",
+      "origin": "https://github.com/JaimeStill/spike-model-hosting.git",
+      "commit": "e5952b2",
+      "dirty": true
+    },
+    "packages": {
+      "inspect_ai": "0.3.281"
+    },
+    "metadata": {
+      "set": "fleurs-en",
+      "dataset": "google/fleurs@70bb2e84b976b7e960aa89f1c648e09c59f894dd parquet-data/en_us/test-*.parquet",
+      "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+      "prompt": "Transcribe the following speech segment in English into English text."
+    },
+    "scorers": [
+      {
+        "name": "wer",
+        "options": {},
+        "metrics": [
+          {
+            "name": "corpus_wer",
+            "options": {}
+          }
+        ],
+        "metadata": {}
+      }
+    ]
+  },
+  "plan": {
+    "name": "plan",
+    "steps": [
+      {
+        "solver": "generate",
+        "params": {
+          "tool_calls": "loop"
+        },
+        "params_passed": {}
+      }
+    ],
+    "config": {
+      "max_connections": 1,
+      "max_tokens": 1024,
+      "temperature": 0.0,
+      "extra_body": {
+        "cache_prompt": false,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      }
+    }
+  },
+  "results": {
+    "total_samples": 150,
+    "completed_samples": 150,
+    "scores": [
+      {
+        "name": "wer",
+        "scorer": "wer",
+        "scored_samples": 150,
+        "unscored_samples": 0,
+        "params": {},
+        "metrics": {
+          "corpus_wer": {
+            "name": "corpus_wer",
+            "value": 0.07487468671679198,
+            "params": {}
+          }
+        }
+      }
+    ],
+    "headline": {
+      "scorer": "wer",
+      "score": "wer",
+      "metric": "corpus_wer"
+    }
+  },
+  "stats": {
+    "started_at": "2026-10-16T20:01:06+00:00",
+    "completed_at": "2026-10-16T20:03:34+00:00",
+    "model_usage": {
+      "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+        "input_tokens": 39691,
+        "output_tokens": 4013,
+        "total_tokens": 43704,
+        "input_tokens_cache_read": 0
+      }
+    },
+    "role_usage": {},
+    "connection_limit_history": []
+  },
+  "invalidated": false,
+  "tags": [],
+  "metadata": {
+    "set": "fleurs-en",
+    "dataset": "google/fleurs@70bb2e84b976b7e960aa89f1c648e09c59f894dd parquet-data/en_us/test-*.parquet",
+    "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+    "prompt": "Transcribe the following speech segment in English into English text."
+  },
+  "samples": [
+    {
+      "id": "17535235071289984666",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "J5iai9KjgtZVWPMLD8Zjxu",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "Cancellation policies vary, but as of late March most coronavirus-based cancellation policies don't extend to July 2020, when the Olympics had been scheduled.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "mhZxr5HnmZtuwpFdLzcWR8",
+              "content": "Cancellation policies vary, but as of late March, most coronavirus-based cancellation policies don't extend to July 2020 when the Olympics happen scheduled.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "Cancellation policies vary, but as of late March, most coronavirus-based cancellation policies don't extend to July 2020 when the Olympics happen scheduled.",
+        "usage": {
+          "input_tokens": 256,
+          "output_tokens": 34,
+          "total_tokens": 290,
+          "input_tokens_cache_read": 0
+        },
+        "time": 1.1246511799981818,
+        "response_id": "chatcmpl-GCcKCQRUVf3FS3pWSRG0EHz8tFgObGPi"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.08,
+          "answer": "Cancellation policies vary, but as of late March, most coronavirus-based cancellation policies don't extend to July 2020 when the Olympics happen scheduled.",
+          "metadata": {
+            "errors": 2,
+            "words": 25,
+            "ins": 0,
+            "del": 1,
+            "sub": 1,
+            "reference": "cancelation policies vary but as of late march most coronavirus based cancelation policies do not extend to july 2020 when the olympics had been scheduled",
+            "hypothesis": "cancelation policies vary but as of late march most coronavirus based cancelation policies do not extend to july 2020 when the olympics happen scheduled"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 9.3
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 256,
+          "output_tokens": 34,
+          "total_tokens": 290,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:01:07.849725+00:00",
+      "completed_at": "2026-10-16T20:01:08.984316+00:00",
+      "total_time": 1.135,
+      "working_time": 1.131,
+      "uuid": "HZWQVzmWGTywZeNR9WQS2z",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "2187541533417725553",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "K6Xs5c3bVxR5kJwownRhjq",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "Ancient cultures and tribes began to keep them for easy access to milk, hair, meat, and skins.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "GSryGdZfEgPDXhSRUgYoGh",
+              "content": "Ancient cultures and tribes began to keep them for easy access to milk, hair, meat, and skins.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "Ancient cultures and tribes began to keep them for easy access to milk, hair, meat, and skins.",
+        "usage": {
+          "input_tokens": 194,
+          "output_tokens": 22,
+          "total_tokens": 216,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.8007523830165155,
+        "response_id": "chatcmpl-9H3lfVVSINCqZk6ysZ00O7rOMoyZ5gCs"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "Ancient cultures and tribes began to keep them for easy access to milk, hair, meat, and skins.",
+          "metadata": {
+            "errors": 0,
+            "words": 17,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "ancient cultures and tribes began to keep them for easy access to milk hair meat and skins",
+            "hypothesis": "ancient cultures and tribes began to keep them for easy access to milk hair meat and skins"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 6.84
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 194,
+          "output_tokens": 22,
+          "total_tokens": 216,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:01:08.998113+00:00",
+      "completed_at": "2026-10-16T20:01:09.808216+00:00",
+      "total_time": 0.81,
+      "working_time": 0.805,
+      "uuid": "ekRRp5MvMm4Nzzk8aae5sg",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "384435163157965470",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "ZxfeS34tHWgsah86m2m7HU",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "While he was working at the hospital Liggins began to investigate premature labor during his spare time.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "9MLk7yXRZ2bcv4XbEL3K3t",
+              "content": "while he was working at the hospital liggins began to investigate premature labor during his spare time",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "while he was working at the hospital liggins began to investigate premature labor during his spare time",
+        "usage": {
+          "input_tokens": 160,
+          "output_tokens": 19,
+          "total_tokens": 179,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.7153437850065529,
+        "response_id": "chatcmpl-Jvtah2c6pSpjIMkdoakHcxwtgj4G3TyB"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "while he was working at the hospital liggins began to investigate premature labor during his spare time",
+          "metadata": {
+            "errors": 0,
+            "words": 17,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "while he was working at the hospital liggins began to investigate premature labor during his spare time",
+            "hypothesis": "while he was working at the hospital liggins began to investigate premature labor during his spare time"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 5.46
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 160,
+          "output_tokens": 19,
+          "total_tokens": 179,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T20:01:06.982371+00:00",
+      "completed_at": "2026-10-16T20:01:07.836567+00:00",
+      "total_time": 0.854,
+      "working_time": 0.725,
+      "uuid": "SwGAjgspyD62fcMrmSfYLK",
+      "error_retries": [],
+      "turn_count": 1
+    }
+  ],
+  "reductions": [
+    {
+      "scorer": "wer",
+      "samples": [
+        {
+          "value": 0.0,
+          "answer": "while he was working at the hospital liggins began to investigate premature labor during his spare time",
+          "metadata": {
+            "errors": 0,
+            "words": 17,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "while he was working at the hospital liggins began to investigate premature labor during his spare time",
+            "hypothesis": "while he was working at the hospital liggins began to investigate premature labor during his spare time"
+          },
+          "history": [],
+          "sample_id": "384435163157965470"
+        },
+        {
+          "value": 0.08,
+          "answer": "Cancellation policies vary, but as of late March, most coronavirus-based cancellation policies don't extend to July 2020 when the Olympics happen scheduled.",
+          "metadata": {
+            "errors": 2,
+            "words": 25,
+            "ins": 0,
+            "del": 1,
+            "sub": 1,
+            "reference": "cancelation policies vary but as of late march most coronavirus based cancelation policies do not extend to july 2020 when the olympics had been scheduled",
+            "hypothesis": "cancelation policies vary but as of late march most coronavirus based cancelation policies do not extend to july 2020 when the olympics happen scheduled"
+          },
+          "history": [],
+          "sample_id": "17535235071289984666"
+        },
+        {
+          "value": 0.0,
+          "answer": "Ancient cultures and tribes began to keep them for easy access to milk, hair, meat, and skins.",
+          "metadata": {
+            "errors": 0,
+            "words": 17,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "ancient cultures and tribes began to keep them for easy access to milk hair meat and skins",
+            "hypothesis": "ancient cultures and tribes began to keep them for easy access to milk hair meat and skins"
+          },
+          "history": [],
+          "sample_id": "2187541533417725553"
+        }
+      ]
+    }
+  ]
+}

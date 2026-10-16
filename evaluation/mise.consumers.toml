@@ -23,3 +23,9 @@ uv = "0.13.1"
 description = "Run the GuideLLM baseline grid (client beside engine figures) against SPIKE_ROUTER_URL"
 dir = "{{cwd}}"
 run = "{{config_root}}/scripts/baseline.sh"
+
+# The audio role's tier lists, evaluation/tiers/asr-<set>.txt, drawn again from their seed and
+# the sets' pinned revisions. It reads the network and rewrites the committed lists.
+[tasks.asr-tiers]
+description = "Draw the audio role's ASR tier lists from the sets' IDs with their seed"
+run = "{{config_root}}/scripts/asr-tiers.sh"

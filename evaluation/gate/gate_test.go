@@ -55,11 +55,16 @@ func newHarness(t *testing.T, model string) *harness {
 		footprint: &fakeFootprint{free: []int{3333}},
 	}
 	h.uv = newFakeUV(t)
+	tiers, err := filepath.Abs("testdata/tiers")
+	if err != nil {
+		t.Fatal(err)
+	}
+	uv := h.uv.runner()
 	h.runner = &gate.Runner{
 		Router: h.router.srv.URL, Profile: p, Set: set, Model: model, Floors: floors,
 		Footprint: h.footprint, SampleEvery: 5 * time.Millisecond,
 		Media: gate.Media{PNG: []byte("png"), WAV: []byte("wav"), AudioSeconds: 6},
-		MTEB:  h.uv.runner(), Dir: t.TempDir(),
+		MTEB:  uv, ASR: uv, Dir: t.TempDir(), Tiers: tiers,
 	}
 	return h
 }
@@ -121,7 +126,7 @@ func TestRunAgentPasses(t *testing.T) {
 }
 
 // TestRunOtherRoles runs each other role's model of set A through the built stages: quality is
-// built for the embedding role alone, and runs MTEB for it only.
+// built for the embedding and audio roles, and runs MTEB's tasks or the ASR sets for them only.
 func TestRunOtherRoles(t *testing.T) {
 	for model, role := range map[string]string{gemma26B: gate.RoleVision, gemmaE4B: gate.RoleAudio, embedding: gate.RoleEmbedding} {
 		t.Run(role, func(t *testing.T) {
@@ -131,8 +136,11 @@ func TestRunOtherRoles(t *testing.T) {
 				t.Errorf("passed %v roles %q; want passed, %s\n%+v", rep.Passed, rep.Roles, role, rep.Stages)
 			}
 			quality, reached, runs := gate.StatusNotBuilt, gate.StageCapacity, 0
-			if role == gate.RoleEmbedding {
+			switch role {
+			case gate.RoleEmbedding:
 				quality, reached, runs = gate.StatusPass, gate.StageQuality, len(gate.EmbeddingTasks)
+			case gate.RoleAudio:
+				quality, reached, runs = gate.StatusPass, gate.StageQuality, len(gate.AudioSets)
 			}
 			if s := rep.Stage(gate.StageQuality).Status; s != quality || rep.Reached != reached {
 				t.Errorf("quality %s, reached %s; want %s, %s", s, rep.Reached, quality, reached)

@@ -1,0 +1,455 @@
+{
+  "version": 2,
+  "status": "success",
+  "eval": {
+    "eval_id": "jSsFVH4Q2huqdxriscZoXh",
+    "run_id": "G7g8ndRLb8PyommPosGwv7",
+    "created": "2026-10-16T19:55:11+00:00",
+    "task": "asr",
+    "task_id": "78tQxg8QUZiE7HSQw8xxS5",
+    "task_version": 0,
+    "task_file": "evaluation/suites/asr_quality.py",
+    "task_display_name": "asr",
+    "task_registry_name": "asr",
+    "task_attribs": {},
+    "task_args": {
+      "name": "voxpopuli",
+      "tier": "/home/jaime/experiments/spike-model-hosting/evaluation/tiers/asr-voxpopuli.txt",
+      "bar": null
+    },
+    "task_args_passed": {
+      "name": "voxpopuli",
+      "tier": "/home/jaime/experiments/spike-model-hosting/evaluation/tiers/asr-voxpopuli.txt",
+      "bar": null
+    },
+    "dataset": {
+      "name": "voxpopuli",
+      "samples": 150,
+      "sample_ids": [
+        "20150708-0900-PLENARY-12-en_20150708-19:27:47_3",
+        "20171116-0900-PLENARY-4-en_20171116-10:04:11_6",
+        "20180613-0900-PLENARY-6-en_20180613-11:56:15_2"
+      ],
+      "shuffled": false
+    },
+    "model": "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+    "model_generate_config": {},
+    "model_base_url": "http://framework:8080/v1",
+    "model_args": {
+      "default_query": {
+        "autoload": "false"
+      }
+    },
+    "config": {
+      "epochs": 1,
+      "fail_on_error": true,
+      "continue_on_fail": false,
+      "score_on_error": false,
+      "max_samples": 1,
+      "sandbox_cleanup": true,
+      "sandbox_prebuilt": false,
+      "log_samples": true,
+      "log_realtime": true,
+      "log_images": false,
+      "score_display": true
+    },
+    "revision": {
+      "type": "git",
+      "origin": "https://github.com/JaimeStill/spike-model-hosting.git",
+      "commit": "e5952b2",
+      "dirty": true
+    },
+    "packages": {
+      "inspect_ai": "0.3.281"
+    },
+    "metadata": {
+      "set": "voxpopuli",
+      "dataset": "hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb voxpopuli/test-*.parquet",
+      "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+      "prompt": "Transcribe the following speech segment in English into English text."
+    },
+    "scorers": [
+      {
+        "name": "wer",
+        "options": {},
+        "metrics": [
+          {
+            "name": "corpus_wer",
+            "options": {}
+          }
+        ],
+        "metadata": {}
+      }
+    ]
+  },
+  "plan": {
+    "name": "plan",
+    "steps": [
+      {
+        "solver": "generate",
+        "params": {
+          "tool_calls": "loop"
+        },
+        "params_passed": {}
+      }
+    ],
+    "config": {
+      "max_connections": 1,
+      "max_tokens": 1024,
+      "temperature": 0.0,
+      "extra_body": {
+        "cache_prompt": false,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      }
+    }
+  },
+  "results": {
+    "total_samples": 150,
+    "completed_samples": 150,
+    "scores": [
+      {
+        "name": "wer",
+        "scorer": "wer",
+        "scored_samples": 150,
+        "unscored_samples": 0,
+        "params": {},
+        "metrics": {
+          "corpus_wer": {
+            "name": "corpus_wer",
+            "value": 0.07889955878536206,
+            "params": {}
+          }
+        }
+      }
+    ],
+    "headline": {
+      "scorer": "wer",
+      "score": "wer",
+      "metric": "corpus_wer"
+    }
+  },
+  "stats": {
+    "started_at": "2026-10-16T19:55:11+00:00",
+    "completed_at": "2026-10-16T19:57:45+00:00",
+    "model_usage": {
+      "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+        "input_tokens": 40919,
+        "output_tokens": 4219,
+        "total_tokens": 45138,
+        "input_tokens_cache_read": 0
+      }
+    },
+    "role_usage": {},
+    "connection_limit_history": []
+  },
+  "invalidated": false,
+  "tags": [],
+  "metadata": {
+    "set": "voxpopuli",
+    "dataset": "hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb voxpopuli/test-*.parquet",
+    "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+    "prompt": "Transcribe the following speech segment in English into English text."
+  },
+  "samples": [
+    {
+      "id": "20150708-0900-PLENARY-12-en_20150708-19:27:47_3",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "abhFNmWRzdsxU3BKrRqQje",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "it was too difficult for this parliament to commemorate this event.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "PwZ2SxopouvpWpXpyp9CWx",
+              "content": "it was too difficult for this parliament to commemorate this event.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "it was too difficult for this parliament to commemorate this event.",
+        "usage": {
+          "input_tokens": 188,
+          "output_tokens": 13,
+          "total_tokens": 201,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.5741994840209372,
+        "response_id": "chatcmpl-dvr6lXdAKO4IWPrASxz3PodyLM9ifIJE"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "it was too difficult for this parliament to commemorate this event.",
+          "metadata": {
+            "errors": 0,
+            "words": 11,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "it was too difficult for this parliament to commemorate this event",
+            "hypothesis": "it was too difficult for this parliament to commemorate this event"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 6.5994375
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 188,
+          "output_tokens": 13,
+          "total_tokens": 201,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:55:11.680902+00:00",
+      "completed_at": "2026-10-16T19:55:12.380690+00:00",
+      "total_time": 0.7,
+      "working_time": 0.589,
+      "uuid": "H8JGPw6utFvicDKLvj5ixv",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "20171116-0900-PLENARY-4-en_20171116-10:04:11_6",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "5UmGMrGP6XELHuWjbcK9w3",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "this is why we will support this resolution by which we urge the sudanese government to stop its heinous practices against journalists and editors in order to start to build a democratic environment where both the rule of law and human rights are respected.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "LnzZrFpfwdEYQ7bLRkhJrM",
+              "content": "this is why we will support this resolution by which we urge the sudanese government to stop its heinous practices against journalists and editors in order to start to build a democratic environment where both the rule of law and human rights are respected.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "this is why we will support this resolution by which we urge the sudanese government to stop its heinous practices against journalists and editors in order to start to build a democratic environment where both the rule of law and human rights are respected.",
+        "usage": {
+          "input_tokens": 439,
+          "output_tokens": 47,
+          "total_tokens": 486,
+          "input_tokens_cache_read": 0
+        },
+        "time": 1.5671556410379708,
+        "response_id": "chatcmpl-iwt7ZXvlL9o0Jj5wAGTy0mgra37hJbNV"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "this is why we will support this resolution by which we urge the sudanese government to stop its heinous practices against journalists and editors in order to start to build a democratic environment where both the rule of law and human rights are respected.",
+          "metadata": {
+            "errors": 0,
+            "words": 44,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "this is why we will support this resolution by which we urge the sudanese government to stop its heinous practices against journalists and editors in order to start to build a democratic environment where both the rule of law and human rights are respected",
+            "hypothesis": "this is why we will support this resolution by which we urge the sudanese government to stop its heinous practices against journalists and editors in order to start to build a democratic environment where both the rule of law and human rights are respected"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 16.6399375
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 439,
+          "output_tokens": 47,
+          "total_tokens": 486,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:55:12.399307+00:00",
+      "completed_at": "2026-10-16T19:55:13.976683+00:00",
+      "total_time": 1.577,
+      "working_time": 1.572,
+      "uuid": "55JtBLg2fu6jRC8hs68VPe",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "20180613-0900-PLENARY-6-en_20180613-11:56:15_2",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "Q82vtpBmeoCocAcF2JqS8P",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "from my point of view it means we need a more common political interest all over the european union in being stronger.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "6njgnufNWCVkZ2JNfyrg4e",
+              "content": "the point it does mean we need a more common political interest all over the european union to be stronger.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "the point it does mean we need a more common political interest all over the european union to be stronger.",
+        "usage": {
+          "input_tokens": 173,
+          "output_tokens": 22,
+          "total_tokens": 195,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.7877264689886943,
+        "response_id": "chatcmpl-QI1e1Hmv7ZxBJH1VrkwHnO0TMSzGUgwK"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.36363636363636365,
+          "answer": "the point it does mean we need a more common political interest all over the european union to be stronger.",
+          "metadata": {
+            "errors": 8,
+            "words": 22,
+            "ins": 1,
+            "del": 3,
+            "sub": 4,
+            "reference": "from my point of view it means we need a more common political interest all over the european union in being stronger",
+            "hypothesis": "the point it does mean we need a more common political interest all over the european union to be stronger"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 5.9999375
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 173,
+          "output_tokens": 22,
+          "total_tokens": 195,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:55:13.988449+00:00",
+      "completed_at": "2026-10-16T19:55:14.784850+00:00",
+      "total_time": 0.796,
+      "working_time": 0.794,
+      "uuid": "GLEB4qKJesPVSxotHwcxZH",
+      "error_retries": [],
+      "turn_count": 1
+    }
+  ],
+  "reductions": [
+    {
+      "scorer": "wer",
+      "samples": [
+        {
+          "value": 0.0,
+          "answer": "it was too difficult for this parliament to commemorate this event.",
+          "metadata": {
+            "errors": 0,
+            "words": 11,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "it was too difficult for this parliament to commemorate this event",
+            "hypothesis": "it was too difficult for this parliament to commemorate this event"
+          },
+          "history": [],
+          "sample_id": "20150708-0900-PLENARY-12-en_20150708-19:27:47_3"
+        },
+        {
+          "value": 0.0,
+          "answer": "this is why we will support this resolution by which we urge the sudanese government to stop its heinous practices against journalists and editors in order to start to build a democratic environment where both the rule of law and human rights are respected.",
+          "metadata": {
+            "errors": 0,
+            "words": 44,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "this is why we will support this resolution by which we urge the sudanese government to stop its heinous practices against journalists and editors in order to start to build a democratic environment where both the rule of law and human rights are respected",
+            "hypothesis": "this is why we will support this resolution by which we urge the sudanese government to stop its heinous practices against journalists and editors in order to start to build a democratic environment where both the rule of law and human rights are respected"
+          },
+          "history": [],
+          "sample_id": "20171116-0900-PLENARY-4-en_20171116-10:04:11_6"
+        },
+        {
+          "value": 0.36363636363636365,
+          "answer": "the point it does mean we need a more common political interest all over the european union to be stronger.",
+          "metadata": {
+            "errors": 8,
+            "words": 22,
+            "ins": 1,
+            "del": 3,
+            "sub": 4,
+            "reference": "from my point of view it means we need a more common political interest all over the european union in being stronger",
+            "hypothesis": "the point it does mean we need a more common political interest all over the european union to be stronger"
+          },
+          "history": [],
+          "sample_id": "20180613-0900-PLENARY-6-en_20180613-11:56:15_2"
+        }
+      ]
+    }
+  ]
+}

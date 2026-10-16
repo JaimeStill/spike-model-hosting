@@ -1,6 +1,6 @@
 // Package gatestep is evaluate's gated run, which takes one model through the evaluation
-// package gate's stages: admission, fitness, capacity, quality (built for the embedding role),
-// then set and deep, which are not built yet.
+// package gate's stages: admission, fitness, capacity, quality (built for the embedding and
+// audio roles), then set and deep, which are not built yet.
 //
 // Usage:
 //
@@ -24,10 +24,12 @@
 // root's evaluation/bars.toml by default. The pool is read over ssh with amdgpu_top, on -ssh,
 // by default the router URL's host.
 //
-// The embedding role's quality stage runs MTEB through the uv project evaluation/suites, with uv
-// and Python from -uv and -python, or SPIKE_UV and SPIKE_PYTHON, or else the consumers mise
-// environment's pins; MTEB's output for each task goes in the run directory's mteb/<task>, and
-// the datasets download into the state directory's cache/.
+// The embedding role's quality stage runs MTEB, and the audio role's runs Inspect AI on the ASR
+// sets' tier lists (evaluation/tiers), through the uv project evaluation/suites, with uv and
+// Python from -uv and -python, or SPIKE_UV and SPIKE_PYTHON, or else the consumers mise
+// environment's pins. MTEB's output for each task goes in the run directory's mteb/<task>, and
+// Inspect's JSON log for each set in its asr/<set>; the datasets download into the state
+// directory's cache/.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. The model must be loaded already: the run
 // checks GET /models first, and refuses an unloaded model before any stage; every request
@@ -209,7 +211,8 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 		Router: o.router, Profile: p, Set: set, Model: model, Floors: floors,
 		Footprint: gate.SSH{Dest: o.ssh}, Media: media, Log: stderr, Bars: bars, Dir: dir,
 	}
-	if slices.Contains(r.Roles(), gate.RoleEmbedding) {
+	roles := r.Roles()
+	if slices.Contains(roles, gate.RoleEmbedding) || slices.Contains(roles, gate.RoleAudio) {
 		uv, err := consumers.Executable(ctx, o.uv, "uv")
 		if err != nil {
 			return false, err
@@ -218,10 +221,11 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 		if err != nil {
 			return false, err
 		}
-		r.MTEB = gate.UV{
+		suites := gate.UV{
 			Exe: uv, Python: python, Project: filepath.Join(root, gate.SuitesDir),
 			Cache: filepath.Join(state, "cache"), Log: stderr,
 		}
+		r.MTEB, r.ASR, r.Tiers = suites, suites, filepath.Join(root, gate.TiersDir)
 	}
 	rep, err := r.Run(ctx, o.from, prior)
 	if rep == nil {

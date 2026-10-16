@@ -2,6 +2,8 @@ package gate_test
 
 import (
 	"bytes"
+	"cmp"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,14 +14,19 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/evaluation/tier"
 )
 
-// fakeUV is a uv executable that records each call and answers an MTEB task with its recorded
-// result, testdata/mteb/<task>: MTEB 2.26.3's <task>.json and the encoder's encoder.json from a
-// live run of EmbeddingGemma 2 on the Framework.
+// fakeUV is a uv executable that records each call and answers it from recorded results. An
+// MTEB task is answered with testdata/mteb/<task>: the <task>.json and encoder.json of a live
+// run of EmbeddingGemma 2 on the Framework, under MTEB 2.26.3. An ASR set is answered with
+// testdata/asr/<set>: Inspect's JSON log of a live run of gemma-4-E4B on the Framework, trimmed
+// to the utterances of testdata/tiers/asr-<set>.txt, and, given a bar, testdata/asr/<set>-stopped
+// where there is one, a run early stopping ended. Each result is stamped with the suites
+// project's pin of MTEB or Inspect AI, since the check refuses another's and a pin moves on
+// while the recording stays the same.
 type fakeUV struct {
 	dir string
-	// fail names a task the fake exits 1 on, writing nothing; version, when set, replaces the
-	// result's mteb_version.
-	fail, version string
+	// fail names a task or set the fake exits 1 on, writing nothing; mteb and inspect, when
+	// set, are the versions stamped in place of the pins.
+	fail, mteb, inspect string
 }
 
 func newFakeUV(t *testing.T) *fakeUV {
@@ -28,28 +35,38 @@ func newFakeUV(t *testing.T) *fakeUV {
 
 // runner writes the fake's script as it is configured, and returns the UV that runs it.
 func (f *fakeUV) runner() gate.UV {
-	fixtures, err := filepath.Abs("testdata/mteb")
+	testdata, err := filepath.Abs("testdata")
 	if err != nil {
 		panic(err)
 	}
-	version := ""
-	if f.version != "" {
-		version = fmt.Sprintf(`sed -i 's/"mteb_version": "2.26.3"/"mteb_version": "%s"/' "$out/$task.json"`, f.version)
-	}
 	script := fmt.Sprintf(`#!/bin/sh
-printf '%%s|%%s|%%s\n' "$*" "$HF_HOME" "$MTEB_CACHE" >> %[1]q
-task= out=
+printf '%%s|%%s|%%s|%%s\n' "$*" "$HF_HOME" "$MTEB_CACHE" "$ASR_CACHE" >> %[1]q
+kind= task= set= out= bar=
 while [ $# -gt 0 ]; do
 	case $1 in
+	*/mteb_quality.py) kind=mteb ;;
+	*/asr_quality.py) kind=asr ;;
 	--task) task=$2; shift ;;
+	--set) set=$2; shift ;;
 	--output) out=$2; shift ;;
+	--bar) bar=$2; shift ;;
 	esac
 	shift
 done
-[ "$task" = %[2]q ] && exit 1
-mkdir -p "$out" && cp %[3]q/"$task"/* "$out"/ || exit 1
-%[4]s
-`, filepath.Join(f.dir, "calls"), f.fail, fixtures, version)
+case $kind in
+mteb)
+	[ "$task" = %[2]q ] && exit 1
+	mkdir -p "$out" && cp %[3]q/mteb/"$task"/* "$out"/ || exit 1
+	sed -i 's/"mteb_version": "[^"]*"/"mteb_version": "%[4]s"/' "$out/$task.json" ;;
+asr)
+	[ "$set" = %[2]q ] && exit 1
+	src=%[3]q/asr/"$set"
+	[ -n "$bar" ] && [ -d "$src-stopped" ] && src=$src-stopped
+	mkdir -p "$out" && cp "$src"/*.json "$out"/ || exit 1
+	sed -i 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' "$out"/*.json ;;
+*) exit 2 ;;
+esac
+`, filepath.Join(f.dir, "calls"), f.fail, testdata, cmp.Or(f.mteb, gate.MTEBVersion), cmp.Or(f.inspect, gate.InspectVersion))
 	exe := filepath.Join(f.dir, "uv")
 	if err := os.WriteFile(exe, []byte(script), 0o700); err != nil {
 		panic(err)
@@ -57,7 +74,8 @@ mkdir -p "$out" && cp %[3]q/"$task"/* "$out"/ || exit 1
 	return gate.UV{Exe: exe, Python: "/pinned/python", Project: "/module/evaluation/suites", Cache: "/state/cache"}
 }
 
-// calls returns each call's arguments, HF_HOME and MTEB_CACHE, '|'-separated, in order.
+// calls returns each call's arguments, HF_HOME, MTEB_CACHE and ASR_CACHE, '|'-separated, in
+// order.
 func (f *fakeUV) calls(t *testing.T) []string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(f.dir, "calls"))
@@ -84,7 +102,8 @@ var recorded = map[string]struct {
 
 // TestQualityEmbedding runs the embedding model's quality stage with no bars: each MTEB task
 // runs in full through uv, its main score is read from MTEB's result and recorded with its
-// version, the prompts the encoder applied and its wall time, and, with no bar, it passes.
+// version (the pinned one, which the fake stamps), the prompts the encoder applied and its wall
+// time, and, with no bar, it passes.
 func TestQualityEmbedding(t *testing.T) {
 	h := newHarness(t, embedding)
 	rep := h.run(t, "", nil)
@@ -105,7 +124,7 @@ func TestQualityEmbedding(t *testing.T) {
 		if c.Floor != nil || c.Op != "" || !c.Passed {
 			t.Errorf("%s: floor %v op %q passed %v; want no bar, recorded, passed", task, c.Floor, c.Op, c.Passed)
 		}
-		for _, want := range []string{"mteb 2.26.3", "early stop n/a", "no bar: recorded, never fails"} {
+		for _, want := range []string{"mteb " + gate.MTEBVersion, "early stop n/a", "no bar: recorded, never fails"} {
 			if !strings.Contains(c.Detail, want) {
 				t.Errorf("%s: detail %q lacks %q", task, c.Detail, want)
 			}
@@ -130,7 +149,7 @@ func TestQualityEmbedding(t *testing.T) {
 	}
 	for i, task := range gate.EmbeddingTasks {
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
-			"/module/evaluation/suites/mteb_quality.py --router %s --model %s --task %s --output %s|/state/cache/huggingface|/state/cache/mteb",
+			"/module/evaluation/suites/mteb_quality.py --router %s --model %s --task %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr",
 			h.router.srv.URL, embedding, task, filepath.Join(h.runner.Dir, "mteb", task))
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)
@@ -150,7 +169,7 @@ func TestQualityEmbedding(t *testing.T) {
 // under its bar fails the stage, and the run stops there.
 func TestQualityBars(t *testing.T) {
 	h := newHarness(t, embedding)
-	h.runner.Bars = tier.Bars{"SciFact": 0.9, "STSBenchmark": 0.8}
+	h.runner.Bars = tier.Bars{"SciFact": {Value: 0.9}, "STSBenchmark": {Value: 0.8}}
 	rep := h.run(t, "", nil)
 	want := []string{"admission pass", "fitness pass", "capacity pass", "quality fail", "set not run", "deep not run"}
 	if got := statuses(rep); !equal(got, want) {
@@ -168,20 +187,22 @@ func TestQualityBars(t *testing.T) {
 	}
 }
 
-// TestQualityBroken shows a task uv fails on, or whose result another MTEB wrote, fails its
-// check, naming why, and the other tasks still run.
+// TestQualityBroken shows a task uv fails on, whose result another MTEB wrote, or whose bar is a
+// ceiling, fails its check, naming why, and the other tasks still run.
 func TestQualityBroken(t *testing.T) {
 	cases := map[string]struct {
 		fail, version, want string
+		bars                tier.Bars
 	}{
 		"uv fails":      {fail: "SciFact", want: "uv run mteb_quality.py --task SciFact"},
-		"other version": {version: "2.25.0", want: "MTEB 2.25.0's, not the pinned 2.26.3's"},
+		"other version": {version: "2.25.0", want: "MTEB 2.25.0's, not the pinned " + gate.MTEBVersion + "'s"},
+		"a ceiling":     {bars: tier.Bars{"SciFact": {Value: 0.9, AtMost: true}}, want: "its bar belongs under [bars]"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness(t, embedding)
-			h.uv.fail, h.uv.version = tc.fail, tc.version
-			h.runner.MTEB = h.uv.runner()
+			h.uv.fail, h.uv.mteb = tc.fail, tc.version
+			h.runner.MTEB, h.runner.Bars = h.uv.runner(), tc.bars
 			rep := h.run(t, "", nil)
 			if s := rep.Stage(gate.StageQuality); s.Status != gate.StatusFail || len(s.Checks) != len(gate.EmbeddingTasks) {
 				t.Fatalf("quality %+v; want failed, every task checked", s)
@@ -209,11 +230,11 @@ func TestReadMTEB(t *testing.T) {
 		}
 		return dir
 	}
-	dir := write(t, "T", `{"task_name": "T", "mteb_version": "2.26.3", "scores": {
+	dir := write(t, "T", `{"task_name": "T", "mteb_version": "2.26.4", "scores": {
 		"test": [{"main_score": 0.5, "hf_subset": "a"}, {"main_score": 0.7, "hf_subset": "b"}],
 		"dev": [{"main_score": 0.9, "hf_subset": "a"}]}}`)
 	res, err := gate.ReadMTEB(dir, "T")
-	if err != nil || res.Entries != 3 || res.MainScore < 0.6999 || res.MainScore > 0.7001 || res.Metric != "accuracy" || res.Version != "2.26.3" {
+	if err != nil || res.Entries != 3 || res.MainScore < 0.6999 || res.MainScore > 0.7001 || res.Metric != "accuracy" || res.Version != "2.26.4" {
 		t.Errorf("ReadMTEB = %+v, %v; want the mean 0.7 of 3 entries", res, err)
 	}
 	for name, result := range map[string]string{
@@ -224,5 +245,250 @@ func TestReadMTEB(t *testing.T) {
 		if _, err := gate.ReadMTEB(write(t, "T", result), "T"); err == nil {
 			t.Errorf("%s: read without error", name)
 		}
+	}
+}
+
+// recordedASR are each ASR fixture's scored utterances, word errors and reference words, as
+// testdata/asr/<set>'s Inspect log holds them; its utterances are testdata/tiers/asr-<set>.txt's.
+// Each log is a live run's with the events, messages and attachments dropped from its samples
+// and every sample but the tier's taken out: the first three of the committed tier list, from the
+// gated run's, and AMI's ten from a run of their own, beside the same ten with a bar of 0.001,
+// testdata/asr/ami-stopped, which early stopping ended after four. The logs' results keep the
+// whole run's metrics, which ReadASR doesn't read.
+var recordedASR = map[string]struct{ utterances, errors, words int }{
+	"librispeech-clean": {3, 2, 44},
+	"librispeech-other": {3, 3, 101},
+	"voxpopuli":         {3, 8, 77},
+	"ami":               {10, 11, 74},
+	"earnings22":        {3, 9, 53},
+	"fleurs-en":         {3, 2, 59},
+}
+
+// The fixtures' datasets and normalizer, as asr_quality.py records them.
+const (
+	esbDataset = "dataset hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb "
+	normalizer = "normalizer huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd"
+)
+
+// TestQualityAudio runs the audio model's quality stage with no bars: each ASR set's tier runs
+// whole through uv, its corpus WER is read from Inspect's log, every word error over every
+// reference word, and recorded with its RTFx, counts, dataset, normalizer and Inspect release,
+// and, with no bar, it passes. FLEURS English records the card's FLEURS figure beside it.
+func TestQualityAudio(t *testing.T) {
+	h := newHarness(t, gemmaE4B)
+	rep := h.run(t, "", nil)
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set not built", "deep not built"}
+	if got := statuses(rep); !equal(got, want) {
+		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
+	}
+	q := rep.Stage(gate.StageQuality)
+	if len(q.Checks) != len(gate.AudioSets) {
+		t.Fatalf("%d quality checks; want one a set, %d", len(q.Checks), len(gate.AudioSets))
+	}
+	for i, set := range gate.AudioSets {
+		c, r := q.Checks[i], recordedASR[set]
+		wer := float64(r.errors) / float64(r.words)
+		if c.Name != gate.ASRTier(set) || c.Role != gate.RoleAudio || c.Measured == nil || *c.Measured != wer || c.Unit != "WER" {
+			t.Errorf("check %d %+v; want %s's WER %v", i, c, gate.ASRTier(set), wer)
+		}
+		if c.Floor != nil || c.Op != "" || !c.Passed {
+			t.Errorf("%s: floor %v op %q passed %v; want no bar, recorded, passed", set, c.Floor, c.Op, c.Passed)
+		}
+		if c.Values["utterances"] != float64(r.utterances) || c.Values["errors"] != float64(r.errors) || c.Values["words"] != float64(r.words) {
+			t.Errorf("%s: values %v; want %d utterances, %d errors over %d words", set, c.Values, r.utterances, r.errors, r.words)
+		}
+		if rtfx := c.Values["rtfx"]; rtfx <= 0 || rtfx != c.Values["audio_s"]/c.Values["request_s"] {
+			t.Errorf("%s: rtfx %v; want the audio's seconds over the requests' in %v", set, rtfx, c.Values)
+		}
+		for _, want := range []string{"no bar: recorded, never fails", "inspect " + gate.InspectVersion, normalizer, "dataset "} {
+			if !strings.Contains(c.Detail, want) {
+				t.Errorf("%s: detail %q lacks %q", set, c.Detail, want)
+			}
+		}
+		_, card := c.Values["card_wer"]
+		if card != (set == "fleurs-en") {
+			t.Errorf("%s: card_wer recorded %v; want it on fleurs-en alone", set, card)
+		}
+	}
+	if d := q.Checks[0].Detail; !strings.Contains(d, esbDataset+"librispeech/test.clean-*.parquet") {
+		t.Errorf("librispeech-clean detail %q; want its dataset and revision", d)
+	}
+	fleurs := check(t, rep, gate.StageQuality, gate.RoleAudio, "asr-fleurs-en")
+	if fleurs.Values["card_wer"] != 0.08 || !strings.Contains(fleurs.Detail, `"FLEURS (lower is better)" 0.08`) ||
+		!strings.Contains(fleurs.Detail, "google/fleurs@70bb2e84b976b7e960aa89f1c648e09c59f894dd") {
+		t.Errorf("fleurs-en %+v; want the card's 0.08 beside ours, and FLEURS's revision", fleurs)
+	}
+
+	// Each set ran once, in order, through the suites project at the pinned Python, with its
+	// tier list, no bar, its log in the run directory's asr/<set>, the caches under the state
+	// directory's.
+	calls := h.uv.calls(t)
+	if len(calls) != len(gate.AudioSets) {
+		t.Fatalf("uv calls %q; want one a set", calls)
+	}
+	for i, set := range gate.AudioSets {
+		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
+			"/module/evaluation/suites/asr_quality.py eval --router %s --model %s --set %s --tier %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr",
+			h.router.srv.URL, gemmaE4B, set, filepath.Join(h.runner.Tiers, gate.ASRTier(set)+".txt"), filepath.Join(h.runner.Dir, "asr", set))
+		if calls[i] != want {
+			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)
+		}
+	}
+}
+
+// TestQualityAudioBars judges each set's WER against its ceiling: a set with a bar passes it to
+// asr_quality.py, whose early stop ends the set once the WER's lower bound is above it, failing
+// the check and the stage; a set under its bar runs in full and passes.
+func TestQualityAudioBars(t *testing.T) {
+	h := newHarness(t, gemmaE4B)
+	h.runner.Bars = tier.Bars{"asr-ami": {Value: 0.001, AtMost: true}, "asr-librispeech-clean": {Value: 0.5, AtMost: true}}
+	rep := h.run(t, "", nil)
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality fail", "set not run", "deep not run"}
+	if got := statuses(rep); !equal(got, want) {
+		t.Fatalf("stages %q; want %q", got, want)
+	}
+	ami := check(t, rep, gate.StageQuality, gate.RoleAudio, "asr-ami")
+	if ami.Passed || ami.Op != gate.AtMost || *ami.Floor != 0.001 || !strings.Contains(ami.Detail, "early stop after 4: the 95% lower bound") {
+		t.Errorf("asr-ami %+v; want stopped early, failed against <= 0.001", ami)
+	}
+	if _, ok := ami.Values["wer_lower_bound"]; !ok || ami.Values["utterances"] != 4 {
+		t.Errorf("asr-ami values %v; want the bound and the 4 utterances run", ami.Values)
+	}
+	clean := check(t, rep, gate.StageQuality, gate.RoleAudio, "asr-librispeech-clean")
+	if !clean.Passed || clean.Op != gate.AtMost || *clean.Floor != 0.5 || !strings.Contains(clean.Detail, "early stop: ran in full") {
+		t.Errorf("asr-librispeech-clean %+v; want a pass against <= 0.5, run in full", clean)
+	}
+	if c := check(t, rep, gate.StageQuality, gate.RoleAudio, "asr-voxpopuli"); !c.Passed || c.Floor != nil {
+		t.Errorf("asr-voxpopuli %+v; want recorded with no bar", c)
+	}
+	var barred []string
+	for _, c := range h.uv.calls(t) {
+		if strings.Contains(c, "--bar") {
+			barred = append(barred, c)
+		}
+	}
+	if len(barred) != 2 || !strings.Contains(barred[0], "--set librispeech-clean ") || !strings.HasSuffix(strings.Split(barred[0], "|")[0], "--bar 0.5") ||
+		!strings.Contains(barred[1], "--set ami ") || !strings.HasSuffix(strings.Split(barred[1], "|")[0], "--bar 0.001") {
+		t.Errorf("calls with a bar %q; want librispeech-clean's 0.5 and ami's 0.001", barred)
+	}
+}
+
+// TestQualityAudioBroken shows a set uv fails on, whose log another Inspect wrote or doesn't
+// match its tier list, or whose bar is a floor, fails its check, naming why, and the other sets
+// still run.
+func TestQualityAudioBroken(t *testing.T) {
+	cases := map[string]struct {
+		fail, inspect, want string
+		bars                tier.Bars
+		extraID             bool
+	}{
+		"uv fails":      {fail: "ami", want: "uv run asr_quality.py eval --set ami"},
+		"other inspect": {inspect: "0.3.200", want: "Inspect 0.3.200's, not the pinned " + gate.InspectVersion + "'s"},
+		"a floor":       {bars: tier.Bars{"asr-ami": {Value: 0.2}}, want: "its bar belongs under [bars_at_most]"},
+		"list differs":  {extraID: true, want: "aren't the tier list's 11"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t, gemmaE4B)
+			h.uv.fail, h.uv.inspect = tc.fail, tc.inspect
+			h.runner.ASR, h.runner.Bars = h.uv.runner(), tc.bars
+			if tc.extraID {
+				h.runner.Tiers = withExtraID(t, h.runner.Tiers, "asr-ami")
+			}
+			rep := h.run(t, "", nil)
+			if s := rep.Stage(gate.StageQuality); s.Status != gate.StatusFail || len(s.Checks) != len(gate.AudioSets) {
+				t.Fatalf("quality %+v; want failed, every set checked", s)
+			}
+			c := check(t, rep, gate.StageQuality, gate.RoleAudio, "asr-ami")
+			if c.Passed || !strings.Contains(c.Detail, tc.want) {
+				t.Errorf("asr-ami %+v; want a failure naming %q", c, tc.want)
+			}
+			if tc.bars != nil {
+				for _, call := range h.uv.calls(t) {
+					if strings.Contains(call, "--set ami ") {
+						t.Errorf("ami ran with a floor for a bar: %s", call)
+					}
+				}
+			}
+		})
+	}
+}
+
+// withExtraID copies the tier lists in dir to a new directory, adding an ID to the named list.
+func withExtraID(t *testing.T, dir, name string) string {
+	t.Helper()
+	out := t.TempDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		b, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if e.Name() == name+".txt" {
+			b = append(b, "AMI_extra_utterance\n"...)
+		}
+		if err := os.WriteFile(filepath.Join(out, e.Name()), b, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return out
+}
+
+// TestReadASR sums a log's utterances, and refuses a log of a run that didn't succeed, with an
+// utterance that errored or went unscored, or beside another log.
+func TestReadASR(t *testing.T) {
+	src := filepath.Join("testdata", "asr", "ami")
+	entries, err := os.ReadDir(src)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("testdata/asr/ami: %v, %d entries; want one log", err, len(entries))
+	}
+	logName := entries[0].Name()
+	b, err := os.ReadFile(filepath.Join(src, logName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// write writes the fixture's log, edited by edit, into a new directory.
+	write := func(t *testing.T, edit func(log map[string]any)) string {
+		t.Helper()
+		var log map[string]any
+		if err := json.Unmarshal(b, &log); err != nil {
+			t.Fatal(err)
+		}
+		edit(log)
+		out, err := json.Marshal(log)
+		if err != nil {
+			t.Fatal(err)
+		}
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, logName), out, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	r := recordedASR["ami"]
+	res, err := gate.ReadASR(write(t, func(map[string]any) {}))
+	if err != nil || len(res.IDs) != r.utterances || res.Errors != r.errors || res.Words != r.words || res.Set != "ami" || res.Stopped != nil {
+		t.Errorf("ReadASR = %+v, %v; want ami's %d utterances, %d errors over %d words", res, err, r.utterances, r.errors, r.words)
+	}
+	sample := func(log map[string]any) map[string]any { return log["samples"].([]any)[0].(map[string]any) }
+	for name, edit := range map[string]func(map[string]any){
+		"run errored":     func(log map[string]any) { log["status"] = "error" },
+		"utterance error": func(log map[string]any) { sample(log)["error"] = map[string]any{"message": "boom"} },
+		"unscored":        func(log map[string]any) { delete(sample(log), "scores") },
+		"no time":         func(log map[string]any) { delete(sample(log)["output"].(map[string]any), "time") },
+	} {
+		if _, err := gate.ReadASR(write(t, edit)); err == nil {
+			t.Errorf("%s: read without error", name)
+		}
+	}
+	two := write(t, func(map[string]any) {})
+	if err := os.WriteFile(filepath.Join(two, "2026-01-01T00-00-00-00-00_asr_x.json"), b, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gate.ReadASR(two); err == nil {
+		t.Error("two logs: read without error")
 	}
 }

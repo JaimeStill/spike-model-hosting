@@ -20,8 +20,10 @@
 //     the same list for the same IDs and seed in any order. ReadList, ReadListFile and List.Write
 //     read and write its text format: three header lines, "# tier <name>", "# dataset <name>" and
 //     "# seed <n>", then one sample ID a line. The committed lists are evaluation/tiers/<tier>.txt.
-//   - Bars are each tier's bar, a pass rate in [0, 1]; LoadBars reads them from a TOML file of
-//     tier = bar keys under [bars], evaluation/bars.toml, which the baseline fills: a bar is set
-//     A's score less its two-run spread.
+//   - Bar is a tier's or task's bar in [0, 1] and its direction: a floor a pass rate or score
+//     must reach, or, AtMost, a ceiling a lower-is-better measure such as a WER must not exceed.
+//     Bars are them by name; LoadBars reads them from a TOML file of name = bar keys, floors under
+//     [bars] and ceilings under [bars_at_most], evaluation/bars.toml, which the baseline fills: a
+//     bar is set A's score less (or, for a ceiling, plus) its two-run spread.
 //   - Run runs a List against a bar, sending each sample to a Judge, and returns its Result.
 package tier

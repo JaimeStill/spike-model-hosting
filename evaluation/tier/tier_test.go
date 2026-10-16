@@ -189,8 +189,9 @@ func TestReadListRefuses(t *testing.T) {
 	}
 }
 
-// TestLoadBars reads a bar, refuses one outside [0, 1] and an undefined key, and reads the
-// committed bars file, which may be empty until the baseline fills it.
+// TestLoadBars reads a floor and a ceiling, refuses a bar outside [0, 1], a name with both and
+// an undefined key, and reads the committed bars file, which may be empty until the baseline
+// fills it.
 func TestLoadBars(t *testing.T) {
 	dir := t.TempDir()
 	write := func(text string) string {
@@ -200,15 +201,24 @@ func TestLoadBars(t *testing.T) {
 		}
 		return p
 	}
-	bars, err := tier.LoadBars(write("[bars]\ncode = 0.62\n"))
-	if b, ok := bars.Bar("code"); err != nil || !ok || b != 0.62 {
-		t.Errorf("LoadBars = %v, %v; want code 0.62", bars, err)
+	bars, err := tier.LoadBars(write("[bars]\ncode = 0.62\n\n[bars_at_most]\nasr-ami = 0.2\n"))
+	if b, ok := bars.Bar("code"); err != nil || !ok || b != (tier.Bar{Value: 0.62}) {
+		t.Errorf("LoadBars = %v, %v; want code at least 0.62", bars, err)
+	}
+	if b, ok := bars.Bar("asr-ami"); !ok || b != (tier.Bar{Value: 0.2, AtMost: true}) {
+		t.Errorf("LoadBars = %v; want asr-ami at most 0.2", bars)
 	}
 	if _, ok := bars.Bar("missing"); ok {
 		t.Error("a missing tier has a bar")
 	}
 	if _, err := tier.LoadBars(write("[bars]\ncode = 1.5\n")); err == nil {
 		t.Error("a bar of 1.5 loaded")
+	}
+	if _, err := tier.LoadBars(write("[bars]\nx = 0.5\n[bars_at_most]\nx = 0.5\n")); err == nil {
+		t.Error("a name under both tables loaded")
+	}
+	if _, err := tier.LoadBars(write("[bars_at_most]\nx = -0.1\n")); err == nil {
+		t.Error("a ceiling of -0.1 loaded")
 	}
 	if _, err := tier.LoadBars(write("colour = \"red\"\n")); err == nil {
 		t.Error("an undefined key loaded")

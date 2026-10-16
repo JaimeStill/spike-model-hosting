@@ -109,14 +109,23 @@ func ReadList(r io.Reader) (List, error) {
 	return l, nil
 }
 
-// Bars are each tier's bar, a pass rate in [0, 1], by tier name.
-type Bars map[string]float64
+// Bar is what a tier or task is judged against: a floor that a pass rate or a higher-is-better
+// score must reach, or, AtMost, a ceiling that a lower-is-better measure, such as a word error
+// rate, must not exceed. Either is in [0, 1].
+type Bar struct {
+	Value  float64
+	AtMost bool
+}
 
-// LoadBars reads the bars file at path: tier = bar keys under [bars]. A key outside [bars], or
-// a bar outside [0, 1], fails.
+// Bars are the bars by tier or task name.
+type Bars map[string]Bar
+
+// LoadBars reads the bars file at path: name = bar keys, floors under [bars] and ceilings under
+// [bars_at_most]. A key outside the two tables, a name in both, or a bar outside [0, 1] fails.
 func LoadBars(path string) (Bars, error) {
 	var f struct {
-		Bars Bars `toml:"bars"`
+		Floors   map[string]float64 `toml:"bars"`
+		Ceilings map[string]float64 `toml:"bars_at_most"`
 	}
 	md, err := toml.DecodeFile(path, &f)
 	if err != nil {
@@ -126,23 +135,27 @@ func LoadBars(path string) (Bars, error) {
 	for _, k := range md.Undecoded() {
 		errs = append(errs, fmt.Errorf("bars %s: %s: not a key the file defines", path, k))
 	}
-	for name, b := range f.Bars {
-		if b < 0 || b > 1 || math.IsNaN(b) {
-			errs = append(errs, fmt.Errorf("bars %s: %s: %v is outside [0, 1]", path, name, b))
+	bars := Bars{}
+	for table, values := range map[string]map[string]float64{"bars": f.Floors, "bars_at_most": f.Ceilings} {
+		for name, v := range values {
+			if v < 0 || v > 1 || math.IsNaN(v) {
+				errs = append(errs, fmt.Errorf("bars %s: %s.%s: %v is outside [0, 1]", path, table, name, v))
+			}
+			if _, dup := bars[name]; dup {
+				errs = append(errs, fmt.Errorf("bars %s: %s is under both [bars] and [bars_at_most]", path, name))
+			}
+			bars[name] = Bar{Value: v, AtMost: table == "bars_at_most"}
 		}
 	}
 	if err := errors.Join(errs...); err != nil {
 		return nil, err
 	}
-	if f.Bars == nil {
-		f.Bars = Bars{}
-	}
-	return f.Bars, nil
+	return bars, nil
 }
 
-// Bar returns the tier's bar, and false when the bars hold none for it.
-func (b Bars) Bar(tierName string) (float64, bool) {
-	v, ok := b[tierName]
+// Bar returns the bar for name, a tier or task, and false when the bars hold none for it.
+func (b Bars) Bar(name string) (Bar, bool) {
+	v, ok := b[name]
 	return v, ok
 }
 

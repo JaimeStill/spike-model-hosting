@@ -70,7 +70,7 @@ func main() {
 func usage() string {
 	var b strings.Builder
 	b.WriteString("usage:\n  " + gatestep.Usage + "\n  evaluate <step> [flags]\n  evaluate <step> -h\n\n")
-	b.WriteString("Flags first run one model through the gated stages: admission, fitness, capacity,\nquality (built for the embedding role), then set and deep (not built yet).\n\nsteps:\n")
+	b.WriteString("Flags first run one model through the gated stages: admission, fitness, capacity,\nquality (built for the embedding and audio roles), then set and deep (not built yet).\n\nsteps:\n")
 	for _, s := range steps {
 		fmt.Fprintf(&b, "  %-11s %s\n", s.name, s.summary)
 	}

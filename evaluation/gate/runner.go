@@ -17,8 +17,8 @@ import (
 )
 
 // The stages, in the order a run takes them. Admission, fitness and capacity are built; quality
-// is built for the embedding role; set and deep, and quality for the other roles, are named so a
-// run reports them, and later work fills them in.
+// is built for the embedding and audio roles; set and deep, and quality for the other roles, are
+// named so a run reports them, and later work fills them in.
 const (
 	StageAdmission = "admission"
 	StageFitness   = "fitness"
@@ -55,10 +55,15 @@ type Runner struct {
 	// Bars are the quality stage's bars, by tier or task name (evaluation/bars.toml); a task
 	// without one is recorded and never fails.
 	Bars tier.Bars
-	// MTEB runs the embedding role's MTEB tasks; Dir is the run's directory, under which each
-	// task's MTEB output is kept, in mteb/<task>.
+	// MTEB runs the embedding role's MTEB tasks, and ASR the audio role's ASR sets; Dir is the
+	// run's directory, under which each task's MTEB output is kept, in mteb/<task>, and each
+	// set's Inspect log, in asr/<set>.
 	MTEB MTEB
+	ASR  ASR
 	Dir  string
+	// Tiers is the directory of the tier lists the ASR sets run (TiersDir, under the module
+	// root).
+	Tiers string
 }
 
 // Roles returns the roles the set assigns Model, in the order Roles lists them.

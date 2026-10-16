@@ -8,6 +8,15 @@
 #
 #   SciFact = <ndcg_at_10 in [0, 1]>
 #
-# A tier or task with no bar here runs to completion and records its rate or score; it never
-# fails.
+# A lower-is-better measure takes a ceiling instead, under [bars_at_most]: the audio role's ASR
+# sets, keyed by their tier's name, the bar being the set's corpus WER as a fraction, set A's WER
+# plus its two-run spread. A ceiling also stops the set early, once the WER's 95% lower bound is
+# above it:
+#
+#   asr-librispeech-clean = <WER in [0, 1]>
+#
+# A tier, task or set with no bar here runs to completion and records its rate, score or WER;
+# it never fails.
 [bars]
+
+[bars_at_most]

@@ -1,0 +1,455 @@
+{
+  "version": 2,
+  "status": "success",
+  "eval": {
+    "eval_id": "5BHHQV2SCFdtVoBnXgvEu9",
+    "run_id": "JeT57WgQsZ8KhnJMSfsZeh",
+    "created": "2026-10-16T19:53:08+00:00",
+    "task": "asr",
+    "task_id": "PDqkKNwqGv6jCiiTu54GYN",
+    "task_version": 0,
+    "task_file": "evaluation/suites/asr_quality.py",
+    "task_display_name": "asr",
+    "task_registry_name": "asr",
+    "task_attribs": {},
+    "task_args": {
+      "name": "librispeech-other",
+      "tier": "/home/jaime/experiments/spike-model-hosting/evaluation/tiers/asr-librispeech-other.txt",
+      "bar": null
+    },
+    "task_args_passed": {
+      "name": "librispeech-other",
+      "tier": "/home/jaime/experiments/spike-model-hosting/evaluation/tiers/asr-librispeech-other.txt",
+      "bar": null
+    },
+    "dataset": {
+      "name": "librispeech-other",
+      "samples": 150,
+      "sample_ids": [
+        "6432-63722-0010",
+        "5484-24317-0003",
+        "3331-159609-0014"
+      ],
+      "shuffled": false
+    },
+    "model": "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+    "model_generate_config": {},
+    "model_base_url": "http://framework:8080/v1",
+    "model_args": {
+      "default_query": {
+        "autoload": "false"
+      }
+    },
+    "config": {
+      "epochs": 1,
+      "fail_on_error": true,
+      "continue_on_fail": false,
+      "score_on_error": false,
+      "max_samples": 1,
+      "sandbox_cleanup": true,
+      "sandbox_prebuilt": false,
+      "log_samples": true,
+      "log_realtime": true,
+      "log_images": false,
+      "score_display": true
+    },
+    "revision": {
+      "type": "git",
+      "origin": "https://github.com/JaimeStill/spike-model-hosting.git",
+      "commit": "e5952b2",
+      "dirty": true
+    },
+    "packages": {
+      "inspect_ai": "0.3.281"
+    },
+    "metadata": {
+      "set": "librispeech-other",
+      "dataset": "hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb librispeech/test.other-*.parquet",
+      "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+      "prompt": "Transcribe the following speech segment in English into English text."
+    },
+    "scorers": [
+      {
+        "name": "wer",
+        "options": {},
+        "metrics": [
+          {
+            "name": "corpus_wer",
+            "options": {}
+          }
+        ],
+        "metadata": {}
+      }
+    ]
+  },
+  "plan": {
+    "name": "plan",
+    "steps": [
+      {
+        "solver": "generate",
+        "params": {
+          "tool_calls": "loop"
+        },
+        "params_passed": {}
+      }
+    ],
+    "config": {
+      "max_connections": 1,
+      "max_tokens": 1024,
+      "temperature": 0.0,
+      "extra_body": {
+        "cache_prompt": false,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      }
+    }
+  },
+  "results": {
+    "total_samples": 150,
+    "completed_samples": 150,
+    "scores": [
+      {
+        "name": "wer",
+        "scorer": "wer",
+        "scored_samples": 150,
+        "unscored_samples": 0,
+        "params": {},
+        "metrics": {
+          "corpus_wer": {
+            "name": "corpus_wer",
+            "value": 0.06127538297114357,
+            "params": {}
+          }
+        }
+      }
+    ],
+    "headline": {
+      "scorer": "wer",
+      "score": "wer",
+      "metric": "corpus_wer"
+    }
+  },
+  "stats": {
+    "started_at": "2026-10-16T19:53:08+00:00",
+    "completed_at": "2026-10-16T19:55:08+00:00",
+    "model_usage": {
+      "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+        "input_tokens": 28568,
+        "output_tokens": 3190,
+        "total_tokens": 31758,
+        "input_tokens_cache_read": 0
+      }
+    },
+    "role_usage": {},
+    "connection_limit_history": []
+  },
+  "invalidated": false,
+  "tags": [],
+  "metadata": {
+    "set": "librispeech-other",
+    "dataset": "hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb librispeech/test.other-*.parquet",
+    "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+    "prompt": "Transcribe the following speech segment in English into English text."
+  },
+  "samples": [
+    {
+      "id": "3331-159609-0014",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "BCqBTBmDfYwK3oWtY7tKDc",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "it was so tender earnest and defiant that fanny forgot the defence of her own lover in admiration of polly's loyalty to hers for this faithful all absorbing love was a new revelation to fanny who was used to hearing her friends boast of two or three lovers a year and calculate their respective values with almost as much coolness as the young men discussed the fortunes of the girls they wished for but could not afford to marry",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "QvgbuRLgjPdjGz7PDr7hgk",
+              "content": "it was so tender earnest and defiant that fanny forgot the defence of her own lover in admiration of polly's loyalty to her for this faithful all-absorbing love was a new evellation to fanny who was used to hearing her friends boast of two or three lovers a year and calculate their respective values with almost as much corners as the young men discussed the fortunes of the girls they wished for but could not afford to marry",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "it was so tender earnest and defiant that fanny forgot the defence of her own lover in admiration of polly's loyalty to her for this faithful all-absorbing love was a new evellation to fanny who was used to hearing her friends boast of two or three lovers a year and calculate their respective values with almost as much corners as the young men discussed the fortunes of the girls they wished for but could not afford to marry",
+        "usage": {
+          "input_tokens": 732,
+          "output_tokens": 87,
+          "total_tokens": 819,
+          "input_tokens_cache_read": 0
+        },
+        "time": 2.7457048689830117,
+        "response_id": "chatcmpl-PZgS5UrTiH765oZX08h0gE1UXpSeGi04"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0375,
+          "answer": "it was so tender earnest and defiant that fanny forgot the defence of her own lover in admiration of polly's loyalty to her for this faithful all-absorbing love was a new evellation to fanny who was used to hearing her friends boast of two or three lovers a year and calculate their respective values with almost as much corners as the young men discussed the fortunes of the girls they wished for but could not afford to marry",
+          "metadata": {
+            "errors": 3,
+            "words": 80,
+            "ins": 0,
+            "del": 0,
+            "sub": 3,
+            "reference": "it was so tender earnest and defiant that fanny forgot the defense of her own lover in admiration of polly s loyalty to hers for this faithful all absorbing love was a new revelation to fanny who was used to hearing her friends boast of 2 or 3 lovers a year and calculate their respective values with almost as much coolness as the young men discussed the fortunes of the girls they wished for but could not afford to marry",
+            "hypothesis": "it was so tender earnest and defiant that fanny forgot the defense of her own lover in admiration of polly s loyalty to her for this faithful all absorbing love was a new evellation to fanny who was used to hearing her friends boast of 2 or 3 lovers a year and calculate their respective values with almost as much corners as the young men discussed the fortunes of the girls they wished for but could not afford to marry"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 28.37
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 732,
+          "output_tokens": 87,
+          "total_tokens": 819,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:53:10.031148+00:00",
+      "completed_at": "2026-10-16T19:53:12.786328+00:00",
+      "total_time": 2.755,
+      "working_time": 2.752,
+      "uuid": "UtTDnmCFemXAcNbsNdrADR",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "5484-24317-0003",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "Muv5sdzZ6HRo2TbrgfrYps",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "so the artist found himself obliged to relinquish his opposition",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "cwY73oWDa2cBuLD7AnEM9D",
+              "content": "So the artist found himself obliged to relinquish his opposition.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "So the artist found himself obliged to relinquish his opposition.",
+        "usage": {
+          "input_tokens": 128,
+          "output_tokens": 12,
+          "total_tokens": 140,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.5084647270268761,
+        "response_id": "chatcmpl-ytabg1f2wIXF0F0wtlbOeoDqasdCvLvi"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "So the artist found himself obliged to relinquish his opposition.",
+          "metadata": {
+            "errors": 0,
+            "words": 10,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "so the artist found himself obliged to relinquish his opposition",
+            "hypothesis": "so the artist found himself obliged to relinquish his opposition"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 4.185
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 128,
+          "output_tokens": 12,
+          "total_tokens": 140,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:53:09.510494+00:00",
+      "completed_at": "2026-10-16T19:53:10.025845+00:00",
+      "total_time": 0.515,
+      "working_time": 0.514,
+      "uuid": "LARGcRViGnQNFU7kvj3TMt",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "6432-63722-0010",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "Raax4bgeun35QQnJ7qKRkB",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "we've got our man and that's all we want",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "ZKfarcZRHACHPPcZoMFu3W",
+              "content": "we've got our man and that's all we want",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "we've got our man and that's all we want",
+        "usage": {
+          "input_tokens": 94,
+          "output_tokens": 14,
+          "total_tokens": 108,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.5413741549709812,
+        "response_id": "chatcmpl-Y2SdEn8d1ZsZKGYA4EFtfRwJ12U1mDnh"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "we've got our man and that's all we want",
+          "metadata": {
+            "errors": 0,
+            "words": 11,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "we have got our man and that is all we want",
+            "hypothesis": "we have got our man and that is all we want"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 2.84
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 94,
+          "output_tokens": 14,
+          "total_tokens": 108,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:53:08.847512+00:00",
+      "completed_at": "2026-10-16T19:53:09.506795+00:00",
+      "total_time": 0.659,
+      "working_time": 0.551,
+      "uuid": "L4z4udNiDWA3WSy2SkZMhG",
+      "error_retries": [],
+      "turn_count": 1
+    }
+  ],
+  "reductions": [
+    {
+      "scorer": "wer",
+      "samples": [
+        {
+          "value": 0.0,
+          "answer": "we've got our man and that's all we want",
+          "metadata": {
+            "errors": 0,
+            "words": 11,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "we have got our man and that is all we want",
+            "hypothesis": "we have got our man and that is all we want"
+          },
+          "history": [],
+          "sample_id": "6432-63722-0010"
+        },
+        {
+          "value": 0.0,
+          "answer": "So the artist found himself obliged to relinquish his opposition.",
+          "metadata": {
+            "errors": 0,
+            "words": 10,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "so the artist found himself obliged to relinquish his opposition",
+            "hypothesis": "so the artist found himself obliged to relinquish his opposition"
+          },
+          "history": [],
+          "sample_id": "5484-24317-0003"
+        },
+        {
+          "value": 0.0375,
+          "answer": "it was so tender earnest and defiant that fanny forgot the defence of her own lover in admiration of polly's loyalty to her for this faithful all-absorbing love was a new evellation to fanny who was used to hearing her friends boast of two or three lovers a year and calculate their respective values with almost as much corners as the young men discussed the fortunes of the girls they wished for but could not afford to marry",
+          "metadata": {
+            "errors": 3,
+            "words": 80,
+            "ins": 0,
+            "del": 0,
+            "sub": 3,
+            "reference": "it was so tender earnest and defiant that fanny forgot the defense of her own lover in admiration of polly s loyalty to hers for this faithful all absorbing love was a new revelation to fanny who was used to hearing her friends boast of 2 or 3 lovers a year and calculate their respective values with almost as much coolness as the young men discussed the fortunes of the girls they wished for but could not afford to marry",
+            "hypothesis": "it was so tender earnest and defiant that fanny forgot the defense of her own lover in admiration of polly s loyalty to her for this faithful all absorbing love was a new evellation to fanny who was used to hearing her friends boast of 2 or 3 lovers a year and calculate their respective values with almost as much corners as the young men discussed the fortunes of the girls they wished for but could not afford to marry"
+          },
+          "history": [],
+          "sample_id": "3331-159609-0014"
+        }
+      ]
+    }
+  ]
+}
