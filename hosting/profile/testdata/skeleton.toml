@@ -37,6 +37,7 @@ origin = "United States"
 licence = "Apache-2.0"
 roles = ["chat"]
 card_url = "https://huggingface.co/openai/gpt-oss-120b"
+card_context = 131072
 kind = "generative"
 c = 131072
 c_reason = """
@@ -63,6 +64,7 @@ origin = "United States"
 licence = "Apache-2.0"
 roles = ["embedding"]
 card_url = "https://huggingface.co/google/embeddinggemma-2"
+card_context = 8192
 kind = "embedding"
 # dims: the 768-dimension output its card states.
 dims = 768

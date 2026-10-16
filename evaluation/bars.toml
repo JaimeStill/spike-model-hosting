@@ -1,0 +1,7 @@
+# Each quality tier's bar: the pass rate a model must reach on the tier, set A's score less set A's
+# two-run spread (package evaluation/tier). The baseline fills them, one key a tier:
+#
+#   <tier> = <bar in [0, 1]>
+#
+# A tier with no bar here runs to completion and records its rate; it never fails.
+[bars]

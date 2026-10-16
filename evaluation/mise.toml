@@ -1,5 +1,7 @@
 # The evaluation area: the instruments that measure the router from the laptop, each a step of
-# one command, `go run ./evaluation/cmd/evaluate <step>` (-h lists the steps). The tools they drive
+# one command, `go run ./evaluation/cmd/evaluate <step>` (-h lists the steps), and the gated run
+# that takes one model through its stages, `go run ./evaluation/cmd/evaluate -set a -role agent`,
+# judged by floors.toml. The tools they drive
 # are pinned in mise.consumers.toml, beside this file, which loads only under MISE_ENV=consumers;
 # the task that needs them (baseline) is declared there. The root's check covers its packages,
 # module-wide.

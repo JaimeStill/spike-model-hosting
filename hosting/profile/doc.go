@@ -19,9 +19,13 @@
 //     role. Chat and embedding are required, and vision and audio optional; SetRoles.Models lists
 //     the assigned models once each. Profile.Set looks a set up by name, or returns the startup
 //     set for an empty name; the probe and every instrument share this one lookup.
-//   - Each Model declares its roles and its licence beside its origin, and an embedding model
-//     its output width, Dims; Profile.Model looks one up by router ID. RouterTag is the tag the
-//     router lists a model by, the one a Model's ID must end with.
+//   - Each Model declares its roles and its licence beside its origin, its card's context
+//     (CardContext, which C may not pass), optionally its active parameters and bits per weight
+//     (ActiveParamsB, BitsPerWeight: the bytes a decoded token reads), and an embedding model
+//     its output width, Dims; Profile.Model looks one up by router ID. A profile's optional
+//     MemoryBandwidthGBs is its host class's memory bandwidth, the ceiling decode is compared
+//     with. RouterTag is the tag the router lists a model by, the one a Model's ID must end
+//     with.
 //   - A chat Model's ConsumerReasoning is the reasoning setting the coding agents send with its
 //     requests, Pi's thinking level and OpenCode's options, each one its template accepts. It
 //     configures the consumers, not the router, and renders into no preset.

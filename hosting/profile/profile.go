@@ -47,8 +47,12 @@ type Profile struct {
 	// Slots is the number of requests each model serves at once (llama.cpp's parallel).
 	Slots int `toml:"slots"`
 	// KV is KVUnified or KVPerSlot.
-	KV       string   `toml:"kv"`
-	Defaults Defaults `toml:"defaults"`
+	KV string `toml:"kv"`
+	// MemoryBandwidthGBs is the host class's memory bandwidth in GB/s (10^9 bytes a second), such
+	// as Strix Halo's 256: the ceiling a decode's speed is compared with, never gated on. It is
+	// optional; a profile without it gets no ceiling comparison.
+	MemoryBandwidthGBs float64  `toml:"memory_bandwidth_gb_s"`
+	Defaults           Defaults `toml:"defaults"`
 	// Models are every model the profile serves, in any of its sets.
 	Models []Model `toml:"models"`
 	// Sets are the named groups of models the router loads together; exactly one is the
@@ -280,8 +284,19 @@ type Model struct {
 	Roles []string `toml:"roles"`
 	// CardURL is the model card the model's settings are traced to.
 	CardURL string `toml:"card_url"`
-	// C is the model's context size.
+	// C is the model's context size, at most CardContext.
 	C int `toml:"c"`
+	// CardContext is the longest context the model's card states, in tokens, or its config's
+	// max_position_embeddings where the card states none: the ceiling C may not pass.
+	CardContext int `toml:"card_context"`
+	// ActiveParamsB is the parameters, in billions, the model reads to decode one token, as its
+	// card states them: the active ones of a mixture of experts, or the effective ones of a model
+	// whose per-layer embeddings are a lookup. With BitsPerWeight it estimates the bytes a token
+	// reads. Optional; set with BitsPerWeight or not at all.
+	ActiveParamsB float64 `toml:"active_params_b"`
+	// BitsPerWeight is the served weights' average bits per parameter: the GGUF's size in bits
+	// over its parameter count. Optional; set with ActiveParamsB or not at all.
+	BitsPerWeight float64 `toml:"bits_per_weight"`
 	// CReason says why the model runs at C. It renders as a comment above the model's section.
 	CReason string `toml:"c_reason"`
 	// Kind is KindGenerative or KindEmbedding.
@@ -477,6 +492,9 @@ func (p *Profile) Validate() error {
 	oneOf("bind", p.Bind, BindTailnet, BindLoopback)
 	positive("slots", p.Slots)
 	oneOf("kv", p.KV, KVUnified, KVPerSlot)
+	if p.MemoryBandwidthGBs < 0 {
+		errs = append(errs, fmt.Errorf("memory_bandwidth_gb_s: %v is below 0", p.MemoryBandwidthGBs))
+	}
 
 	positive("defaults.c", p.Defaults.C)
 	positive("defaults.gpu_layers", p.Defaults.GPULayers)
@@ -506,7 +524,19 @@ func (p *Profile) Validate() error {
 		errs = append(errs, m.validateRoles(field("roles"))...)
 		required(field("card_url"), m.CardURL)
 		positive(field("c"), m.C)
+		positive(field("card_context"), m.CardContext)
+		if m.CardContext > 0 && m.C > m.CardContext {
+			errs = append(errs, fmt.Errorf("%s: %d is over the card's context, %d", field("c"), m.C, m.CardContext))
+		}
 		required(field("c_reason"), m.CReason)
+		switch {
+		case m.ActiveParamsB < 0 || m.BitsPerWeight < 0:
+			errs = append(errs, fmt.Errorf("%s: active_params_b and bits_per_weight are positive", field("active_params_b")))
+		case (m.ActiveParamsB == 0) != (m.BitsPerWeight == 0):
+			errs = append(errs, fmt.Errorf("%s: set with bits_per_weight, or neither", field("active_params_b")))
+		case m.BitsPerWeight > 32:
+			errs = append(errs, fmt.Errorf("%s: %v is over 32", field("bits_per_weight"), m.BitsPerWeight))
+		}
 		oneOf(field("kind"), m.Kind, KindGenerative, KindEmbedding)
 		switch {
 		case m.Kind == KindGenerative && m.Sampling == nil:

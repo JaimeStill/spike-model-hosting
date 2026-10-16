@@ -3,6 +3,9 @@ package main_test
 import (
 	"bytes"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -65,9 +68,8 @@ func TestUsage(t *testing.T) {
 		args []string
 		want string
 	}{
-		"no step":      {nil, "no step named"},
+		"no step":      {nil, "no flags or step named"},
 		"unknown step": {[]string{"nope"}, `unknown step "nope"`},
-		"flag first":   {[]string{"-router", "http://127.0.0.1:1", "prefix"}, `unknown step "-router"`},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -102,5 +104,55 @@ func TestStepUsage(t *testing.T) {
 				t.Errorf("-nope: exit %d, stderr %q; want 2, naming the step", code, errOut)
 			}
 		})
+	}
+}
+
+// TestGatedUsage shows a call that starts with a flag runs the gated stages, which refuse a call
+// that names no model, both ways of naming one, an unknown role or stage, or a trailing step.
+func TestGatedUsage(t *testing.T) {
+	cases := map[string]struct {
+		args []string
+		want string
+	}{
+		"no model":      {[]string{"-router", "http://127.0.0.1:1"}, "-role or -model"},
+		"both":          {[]string{"-router", "http://127.0.0.1:1", "-role", "agent", "-model", "x"}, "-role or -model"},
+		"unknown role":  {[]string{"-router", "http://127.0.0.1:1", "-role", "reasoning"}, `role "reasoning"`},
+		"unknown stage": {[]string{"-router", "http://127.0.0.1:1", "-role", "agent", "-from", "nope"}, `-from "nope"`},
+		"trailing step": {[]string{"-router", "http://127.0.0.1:1", "prefix"}, "unexpected arguments"},
+		"no router":     {[]string{"-role", "agent"}, "no router"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, errOut, code := run(t, nil, tc.args...)
+			if code != 2 || !strings.Contains(errOut, tc.want) || !strings.Contains(errOut, "usage:") {
+				t.Errorf("exit %d, stderr %q; want 2, naming %q, with the usage", code, errOut, tc.want)
+			}
+		})
+	}
+	out, _, code := run(t, nil, "-role", "agent", "-h")
+	if code != 0 || !strings.HasPrefix(out, "usage:\n  evaluate [-router url]") {
+		t.Errorf("-h: exit %d, stdout %q; want 0 and the gated run's usage", code, out)
+	}
+}
+
+// TestGatedRefusesUnloadedModel shows the gated run refuses a model the router lists unloaded,
+// before any stage, writing no report.
+func TestGatedRefusesUnloadedModel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/models" {
+			t.Errorf("a request past GET /models: %s %s", r.Method, r.URL)
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = io.WriteString(w, `{"data":[{"id":"ggml-org/gpt-oss-120b-GGUF:MXFP4","status":{"value":"unloaded"}}]}`)
+	}))
+	defer srv.Close()
+	state := t.TempDir()
+	_, errOut, code := run(t, []string{"SPIKE_ROUTER_URL=" + srv.URL}, "-role", "agent", "-state", state)
+	if code != 1 || !strings.Contains(errOut, "ggml-org/gpt-oss-120b-GGUF:MXFP4 as unloaded") {
+		t.Errorf("exit %d, stderr %q; want 1, naming the model unloaded", code, errOut)
+	}
+	if entries, _ := os.ReadDir(state); len(entries) != 0 {
+		t.Errorf("a refused run wrote %d entries under the state directory", len(entries))
 	}
 }

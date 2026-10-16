@@ -66,6 +66,7 @@ func TestLoadNamesMissingField(t *testing.T) {
 		{"origin =", "models[0].origin"},
 		{"licence =", "models[0].licence"},
 		{"card_url =", "models[0].card_url"},
+		{"card_context =", "models[0].card_context"},
 		{"c = 131072", "models[0].c"},
 		{"c = 32768", "defaults.c"},
 	}
@@ -351,8 +352,28 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 		},
 		{
 			"a generative model with a width",
-			replace(t, text, "gpt-oss-120b\"\nkind = \"generative\"\n", "gpt-oss-120b\"\nkind = \"generative\"\ndims = 768\n"),
+			replace(t, text, "bits_per_weight = 4.34\nkind = \"generative\"\n", "bits_per_weight = 4.34\nkind = \"generative\"\ndims = 768\n"),
 			"models[0].dims: only an embedding model has an output width",
+		},
+		{
+			"a context over the card's",
+			replace(t, text, "card_context = 131072\nactive_params_b = 5.1", "card_context = 65536\nactive_params_b = 5.1"),
+			"models[0].c: 131072 is over the card's context, 65536",
+		},
+		{
+			"active parameters without bits per weight",
+			replace(t, text, "bits_per_weight = 4.34\n", ""),
+			"models[0].active_params_b: set with bits_per_weight, or neither",
+		},
+		{
+			"bits per weight over 32",
+			replace(t, text, "bits_per_weight = 4.34\n", "bits_per_weight = 40.0\n"),
+			"models[0].bits_per_weight: 40 is over 32",
+		},
+		{
+			"a negative bandwidth",
+			replace(t, text, "memory_bandwidth_gb_s = 256\n", "memory_bandwidth_gb_s = -1\n"),
+			"memory_bandwidth_gb_s: -1 is below 0",
 		},
 		{
 			"an embedding model taking another role",

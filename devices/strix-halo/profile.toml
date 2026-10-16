@@ -15,6 +15,9 @@ host_class = "strix-halo"
 bind = "tailnet"
 slots = 4
 kv = "unified"
+# Strix Halo's memory bandwidth: 256-bit LPDDR5X-8000, 256 GB/s. evaluate compares each decode
+# speed with the ceiling it sets (bandwidth over the bytes a token reads); nothing gates on it.
+memory_bandwidth_gb_s = 256
 
 # min_build is a floor, not a pin: a host runs any build at or above it, and each measurement
 # names the build it ran on (memory_budget.build, and /props build_info). b11452 is the first
@@ -133,6 +136,12 @@ origin = "United States"
 licence = "Apache-2.0"
 roles = ["chat"]
 card_url = "https://huggingface.co/openai/gpt-oss-120b"
+# card_context: config.json's max_position_embeddings; the card states none. Active parameters:
+# the card's "117B parameters with 5.1B active". Bits per weight: the GGUF's 63374323968 bytes
+# over its 116829156672 parameters (the router's /v1/models meta), 4.34.
+card_context = 131072
+active_params_b = 5.1
+bits_per_weight = 4.34
 kind = "generative"
 c = 131072
 c_reason = """
@@ -164,6 +173,11 @@ licence = "Apache-2.0"
 # Vision through its mmproj, which the router loads beside the weights.
 roles = ["chat", "vision"]
 card_url = "https://huggingface.co/google/gemma-4-26B-A4B-it"
+# card_context: the card's 256K. Active parameters: the card's MoE table, 3.8B active of 25.2B.
+# Bits per weight: the GGUF's 14602321016 bytes over its 25233142046 parameters, 4.63.
+card_context = 262144
+active_params_b = 3.8
+bits_per_weight = 4.63
 kind = "generative"
 c = 32768
 c_reason = """
@@ -199,6 +213,12 @@ licence = "Apache-2.0"
 # Gemma 4 26B-A4B.
 roles = ["chat", "vision", "audio"]
 card_url = "https://huggingface.co/google/gemma-4-E4B-it"
+# card_context: the card's 128K. Active parameters: the card's "4.5B effective (8B with
+# embeddings)"; its per-layer embeddings are a lookup, not read whole per token. Bits per weight:
+# the GGUF's 8015415464 bytes over its 7518069290 parameters, 8.53.
+card_context = 131072
+active_params_b = 4.5
+bits_per_weight = 8.53
 kind = "generative"
 c = 32768
 c_reason = """
@@ -229,6 +249,12 @@ origin = "United States"
 licence = "Apache-2.0"
 roles = ["embedding"]
 card_url = "https://huggingface.co/google/embeddinggemma-2"
+# card_context: the card's context window. Active parameters: the served GGUF's 271002648 (the
+# router's /v1/models meta), dense; the card's 740M total counts the image and audio encoders
+# no-mmproj keeps out. Bits per weight: its 294064224 bytes over those parameters, 8.68.
+card_context = 8192
+active_params_b = 0.271
+bits_per_weight = 8.68
 kind = "embedding"
 # dims: the 768-dimension output its card states.
 dims = 768
@@ -270,6 +296,8 @@ licence = "Apache-2.0"
 # (common/download.cpp, find_best_sibling).
 roles = ["chat", "vision"]
 card_url = "https://huggingface.co/mistralai/Mistral-Small-4-119B-2603"
+# card_context: the card's 256k (config.json's max_position_embeddings reads 1048576).
+card_context = 262144
 kind = "generative"
 c = 131072
 c_reason = """
@@ -321,6 +349,8 @@ licence = "OpenMDW-1.1"
 # repository's 1.35GB lilicorr-...-NVFP4.gguf, and the fetch takes the first match.
 roles = ["chat", "vision"]
 card_url = "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16"
+# card_context: the card's "up to 1M", config.json's max_position_embeddings.
+card_context = 1048576
 kind = "generative"
 c = 131072
 c_reason = """

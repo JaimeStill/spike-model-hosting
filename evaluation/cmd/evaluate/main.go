@@ -3,8 +3,14 @@
 //
 // Usage:
 //
+//	evaluate [-set name] (-role role | -model id) [flags]
 //	evaluate <step> [flags]
 //	evaluate <step> -h
+//
+// Called with flags first, evaluate takes one model through the gated stages, admission,
+// fitness, capacity, quality, set and deep, stopping at the first that fails, and writes the
+// run's report under the module root's .state/evaluate/ (package gatestep, over the evaluation
+// package gate).
 //
 // A step is one instrument, named as the first argument; the flags after it are the step's own:
 //
@@ -17,8 +23,9 @@
 //     coldloadstep).
 //
 // Each step's package documents its flags, its environment fallbacks, and its exit status: 0 when
-// it passes, 1 when it fails or can't run, and 2 on a usage error. evaluate itself exits 2 when
-// no step, or an unknown one, is named, and 0 on -h.
+// it passes, 1 when it fails or can't run, and 2 on a usage error, as the gated run's does.
+// evaluate itself exits 2 when neither flags nor a step, or an unknown step, are named, and 0 on
+// -h.
 package main
 
 import (
@@ -32,6 +39,7 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/coldloadstep"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/concurrentstep"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/conformstep"
+	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/gatestep"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/prefixstep"
 )
 
@@ -61,17 +69,19 @@ func main() {
 // usage is evaluate's usage, listing the steps, printed on -h and after a usage error.
 func usage() string {
 	var b strings.Builder
-	b.WriteString("usage:\n  evaluate <step> [flags]\n  evaluate <step> -h\n\nsteps:\n")
+	b.WriteString("usage:\n  " + gatestep.Usage + "\n  evaluate <step> [flags]\n  evaluate <step> -h\n\n")
+	b.WriteString("Flags first run one model through the gated stages: admission, fitness, capacity,\nthen quality, set and deep (not built yet).\n\nsteps:\n")
 	for _, s := range steps {
 		fmt.Fprintf(&b, "  %-11s %s\n", s.name, s.summary)
 	}
 	return b.String()
 }
 
-// run runs the step args names with the arguments after it, and returns its exit status.
+// run runs the gated stages when args start with a flag, or else the step args names with the
+// arguments after it, and returns its exit status.
 func run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		_, _ = fmt.Fprintf(stderr, "evaluate: no step named\n%s", usage())
+		_, _ = fmt.Fprintf(stderr, "evaluate: no flags or step named\n%s", usage())
 		return 2
 	}
 	switch args[0] {
@@ -80,6 +90,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 			return 1
 		}
 		return 0
+	}
+	if strings.HasPrefix(args[0], "-") {
+		return gatestep.Run(ctx, args, getenv, stdout, stderr)
 	}
 	for _, s := range steps {
 		if s.name == args[0] {
