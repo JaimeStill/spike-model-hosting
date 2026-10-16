@@ -10,13 +10,15 @@
 2. [x] profile
 3. [x] consumers
 4. [ ] main-model
-5. [ ] rocm
-6. [ ] engines-strix
-7. [ ] gateway
-8. [ ] admin (needs: go-cli-sdk v0.1.0)
-9. [ ] cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
-10. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
-11. [ ] validate
+5. [ ] evaluation
+6. [ ] candidates
+7. [ ] rocm
+8. [ ] engines-strix
+9. [ ] gateway
+10. [ ] admin (needs: go-cli-sdk v0.1.0)
+11. [ ] cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
+12. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
+13. [ ] validate
 
 ## Task brief · main-model
 
@@ -70,40 +72,9 @@ Behaviors     1. The repository pins Pi 1.2.0, Claude Code 2.1.300, node 26.12.0
               8. gpt-oss-120b's pass^5 runs again on the new build and pins (Pi, Claude
                  Code over the router; OpenCode measured beside): the comparison row,
                  every cell named.
-              9. Each candidate is evaluated in stages, cheapest first; a failed gate
-                 disqualifies it and the later stages don't run. The record names the
-                 stage reached and the stages not run.
-                 1 fitness, under ~3 min, the model's native capabilities straight
-                   against the router, no consumer: it loads; chat, a tool call, and
-                   each declared role (image, audio, embedding) answer correctly;
-                   reasoning returns where declared; engine generation >= 24 tok/s
-                   one stream (stopping early once the rate is clearly below);
-                   prompt rate recorded; idle pool >= 3 GiB free.
-                 2 capacity: the concurrent run (no crossed nonces, embedding
-                   tolerance held) with footprint at 4 in flight >= 3 GiB free.
-                 3 reliability: one tool turn per consumer, then wire round-trips and
-                   conform pass^5 judged against gpt-oss-120b's row: Pi 9/9 at 5/5, 0
-                   invalid; Claude Code over streamed /v1/messages every cell at or
-                   above gpt-oss-120b's same-build count, no more invalid, thinking
-                   streamed and returned on tool turns; vision cells 5/5 for Pi and
-                   Claude Code. OpenCode measured, not judged.
-                 4 characterization, only past stage 3: the GuideLLM grid (short and
-                   agentic, 1 and 4 streams), prefix reuse, the set's cold load.
-                 One command runs the stages for a set, stops at the first failed
-                 gate, writes one report per run, and resumes from a named stage.
-              10. A candidate that fails only fitness's speed gate re-runs fitness once
-                 at the next-smaller native-kernel quant: Nemotron at ggml-org Q4_0;
-                 none for Mistral Small 4 (no quant avoids its CPU fallback). Nothing
-                 below ~4 bits; gpt-oss-120b stays MXFP4. The record gives each
-                 candidate's estimated decode ceiling.
-              11. Mistral Small 4, measured before the staged evaluation, keeps its
-                 record: speed grid, prefix reuse, wire round-trips, CPU fallback.
-              12. Verdict: a failing candidate is "not promoted on Vulkan, Strix Halo,
-                 b<N>", with its failing cells and re-probe triggers (#30105, #30260 for
-                 Mistral Small 4). If both pass, more Claude Code cells at 5/5 leads,
-                 single-stream speed breaks a tie. The winner's set becomes the startup
-                 set (router restarted on it; README names it the lead). With no pass,
-                 set A stays. The task closes either way.
+              9-12. Moved to the `candidates` task (escalation, 2026-10-16): the staged
+                 evaluation, Nemotron, the quant retry and the verdict. Mistral Small 4,
+                 measured before the move, keeps its record (disqualified at fitness).
               13. The model-card note catalogs, for set A and both candidates: trained or
                  maximum context, KV bytes per token, recurrent state per sequence, and the
                  c the profile sets, with its reason.
@@ -132,14 +103,7 @@ Slices        1. Upgrade (1): consumer pins; currency shows only the Python hold
                  by swap; probe and footprint pass per set.
               6. Comparison row (8): gpt-oss-120b pass^5 on the new build.
               7. Mistral Small 4 (7, 9, 11): disqualified at fitness (speed).
-              8. Staged evaluation (9): the evaluate command over the existing
-                 packages, fitness as a native-capability check under ~3 min; tested
-                 against fake endpoints; gpt-oss-120b's set A passes fitness live.
-              9. Nemotron 3.5 Super (9, 10): staged evaluation; the Q4_0 fitness
-                 re-run if it applies.
-              10. Verdict (12): tie-break; startup set changes (architect's restart) or
-                 stays set A.
-              11. Records (13, 14, 15): context catalog, boundary text, Decisions,
+              8. Records (13, 14, 15): context catalog, boundary text, Decisions,
                  pending edits and note.
 Out of scope  The workstations (cuda and engines-cuda re-planned after this task). ROCm,
               vLLM, SGLang, llama-swap, gateways. Forcing tool_choice; parse-5xx resample
@@ -187,8 +151,8 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   architect's call for a staged evaluation; conform, concurrent and cold load not run.
   GuideLLM stalled overnight because the laptop suspended; long runs now hold
   systemd-inhibit. Router back on set A.
-- ESCALATION answered (2026-10-16): staged evaluation; brief behaviors 9-11 and slices 7-11
-  amended. Slice 8 (evaluate command) in progress.
+- ESCALATION answered (2026-10-16): staged evaluation; then a second escalation moved it to
+  new tasks `evaluation` and `candidates`. main-model ships after slice 8 (records).
 
 ## Decisions
 
@@ -511,6 +475,17 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
 - main-model: long runs hold a systemd-inhibit sleep block and watch the router's slots, after
   the laptop's suspend stalled a GuideLLM run overnight.
 
+- main-model (escalation 2, architect): role-specific evaluation pipelines (agent, vision,
+  audio, embedding) and a set evaluation for co-loaded models become their own task,
+  `evaluation`, before any more model analysis; fixtures are graded in rising complexity, not
+  single simple cases; a baseline set covers all four core roles; speed is judged beside
+  accuracy and capability, with floors set by the hardware.
+- main-model (escalation 2): main-model ships trimmed (slices 1-7 plus its records); Nemotron,
+  the staged evaluation and the verdict move to `candidates`, after `evaluation`; rejected
+  parking main-model on its branch.
+- main-model (escalation 2, architect): `candidates` also looks for viable vision, audio and
+  embedding candidates to test against set A's incumbents, not only agent models.
+
 ## Pending edits
 
 - coordinator · ai-hosting.md, "Where personal-agents' parts go": add "how to read a
@@ -539,3 +514,7 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   the cuda summary ("sized to its VRAM", nvidia-smi footprint), ai-hosting.md's "discrete VRAM"
   passages, the "from 2026-10-14" dates and needs markers, two-unit serving scope, the dense
   candidates (decode ceiling ~15 tok/s at 30B, ~4 at 128B), and admin's go-cli-sdk need (met).
+- coordinator · roadmap: add tasks `evaluation` (role pipelines for agent, vision, audio and
+  embedding models, graded fixtures, a set evaluation for co-loaded models, floors set by the
+  hardware) and `candidates` (candidates for every role, including Nemotron 3.5 Super, through
+  the pipelines; the verdict and startup set) after `main-model`, before `rocm`.
