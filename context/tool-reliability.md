@@ -312,6 +312,84 @@ with 0 invalid. OpenCode is measured, not judged.
     same as on b11572. Its `audio-tool` gain can't be split between this bump, the build, and
     chance.
 
+## Mistral Small 4: disqualified at fitness (speed) on Vulkan, Strix Halo, b11669
+
+Mistral Small 4 is out of the main-model evaluation at its first stage. The evaluation is staged:
+a candidate that fails a fitness gate is disqualified, and the later stages don't run. The
+fitness gate is engine generation of at least 24 tok/s, one stream, on the short profile. Mistral
+Small 4 (unsloth `UD-Q4_K_XL`, mmproj `BF16`, set `mistral`) generated at 3.36 tok/s there
+([`baseline.md`](baseline.md), "Mistral Small 4 on b11669"). The router reported
+`b11669-620d2225c`. The runs went from the laptop (host `terminal`) against the Framework's
+router, on 2026-10-15 and 2026-10-16. The re-probe triggers are llama.cpp
+[#30105](https://github.com/ggml-org/llama.cpp/pull/30105) (Vulkan F32 `MUL_MAT_ID`, which
+would move its expert down-projections off the CPU) and
+[#30260](https://github.com/ggml-org/llama.cpp/pull/30260), the two the main-model brief names.
+
+These stages didn't run:
+
+- the conform pass^5 (behavior 9). It started and was stopped 5 minutes in, partway through Pi's
+  first trial, before it wrote any report, so it has no cells;
+- the concurrent run and the footprint at 4 in flight. The set's budget stays an estimate
+  ([`memory-budget.md`](memory-budget.md));
+- the set's cold load;
+- the verdict's per-bar-line judgement against the comparison row.
+
+What did run is kept below, since it bears on a re-probe.
+
+### Reasoning round-trip on the wire, set mistral
+
+The `wire` package's `RoundTrip` integration tests ran with `SPIKE_SET=mistral` on 2026-10-15,
+at the consumers environment's pins: Pi 1.3.0, Claude Code 2.1.301 and OpenCode 1.19.1. The
+run's `CLAUDE_*` variables were unset. Claude Code ran from `.state/claude` on the subscription
+login, with its own timeouts raised (`API_TIMEOUT_MS=3600000`,
+`CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS=1800000`, `CLAUDE_STREAM_IDLE_TIMEOUT_MS=1800000`). The
+recordings are under `.state/wire/`.
+
+| Consumer | Reasoning request sent | Reasoning back after a tool call | Turn |
+|---|---|---|---|
+| Pi 1.3.0 (`llama.cpp` provider) | none: no `reasoning_effort` and no `chat_template_kwargs`, so the preset's `reasoning_effort` "high" applies | yes, `reasoning_content` beside `tool_calls` (150 chars) | passed |
+| Claude Code 2.1.301 (`/v1/messages`) | `thinking` `{"type":"adaptive","display":"updates"}`, `output_config` `{"effort":"high"}`, `max_tokens` 32000, as on gpt-oss-120b | none: no request reached generation | failed, every request HTTP 500 |
+| OpenCode 1.19.1, `interleaved` set | `reasoning_effort` "high" (its `reasoningEffort` option), `tool_choice` "auto" | yes, `reasoning_content` beside `tool_calls` (238 chars) | passed |
+| OpenCode 1.19.1, `interleaved` unset | none (the file that holds the option is left out); the preset's "high" applies | yes, the same field (579 chars) | passed |
+
+- **Claude Code can't run on Mistral Small 4's template.** Claude Code puts a `system`-role
+  message inside `messages`, after the first user message. It holds its environment block
+  ("# Environment ... You are powered by the model ..."). It has done so since at least 2.1.296,
+  since the b11572 conform recordings carry it too. llama.cpp passes it through, and the
+  template served from `/props` renders a system message only at `messages[0]`. For any other
+  role it raises "Only user, assistant and tool roles are supported, got system." All 11 of the
+  turn's requests (the first and Claude Code's 10 resends) got that 500, so no thinking block
+  streamed and none went back. gpt-oss-120b's template accepted the same messages. Claude Code
+  stays unchanged and the profile keeps the embedded template (the brief), so on this template
+  Claude Code fails every cell before the model samples.
+- **OpenCode's title request.** OpenCode's title-generation request (no tools) sends a system
+  message and then two user messages. The template raises "After the optional system message,
+  conversation roles must alternate user and assistant", and all three such requests in each
+  run got a 500. The agent's own turn wasn't affected, but conform would count each one as
+  invalid.
+- **The probe's image answer is intermittent.** `SPIKE_SET=mistral` `TestRouter` failed only
+  its image check on its first run in this slice ("I cannot describe images as I don't have the
+  ability to see or process visual content."). Four repeats of the image check passed, each
+  naming the red circle, blue square and green triangle. That is 4 of 5 here, and 16 of 20 with
+  slice 5's 12 of 15.
+
+### Conform timeouts at 3.4 tok/s
+
+These are where a slow model's run would be cut short, found before conform started:
+
+- **The capability.** clutch's `conform.Options.Timeout` bounds each capability, and is
+  `cmd/conform`'s `-timeout` flag (default 10 minutes). The run used `-timeout 60m`.
+- **Claude Code.** Its request timeout is `API_TIMEOUT_MS` (default 600000). Its first-byte
+  window is `CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS`. Its stream idle watchdog is
+  `CLAUDE_STREAM_IDLE_TIMEOUT_MS` (at least 300000). Each is an environment variable that
+  reaches it through the driver, which appends to the parent's environment. They were raised
+  as above.
+- **Pi and OpenCode.** Pi's are `httpIdleTimeoutMs` (300000, for headers and for idle between
+  body bytes) and `retry.provider.timeoutMs`. OpenCode 1.19.1's are the provider's
+  `headerTimeout` and `chunkTimeout` (each 300000) and an unset `timeout`. All are settings-file
+  values, not flags or environment variables, so they stayed at their defaults. At 361 tok/s of
+  prefill and a token every 0.3 s, neither consumer's idle bound would be reached by a turn.
+
 ## Which task answers which layer
 
 - `profile`: `profiles/strix-halo.toml` sets each model's card sampling and leaves reasoning to

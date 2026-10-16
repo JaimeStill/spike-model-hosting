@@ -125,3 +125,109 @@ Framework has 128 GB of RAM, and set A's 96 GiB GTT pool takes most of it. After
 `free -m` showed 25520 MiB of buffers and cache and 103610 MiB used. Set A's files are far
 larger than 25 GiB (gpt-oss-120b alone is about 60 GiB), on an ext4 NVMe drive. So even a
 "warm" restart reads most of set A from disk again.
+
+## Mistral Small 4 on b11669: disqualified at fitness (speed)
+
+Mistral Small 4 is disqualified at the fitness stage on Vulkan, Strix Halo, b11669. One stream
+on the short profile, the engine generated at 3.36 tok/s against the 24 tok/s floor. The
+re-probe triggers are llama.cpp [#30105](https://github.com/ggml-org/llama.cpp/pull/30105) and
+[#30260](https://github.com/ggml-org/llama.cpp/pull/30260). Once a candidate fails a fitness
+gate the later stages don't run: conform pass^5, the concurrent run with its footprint at 4 in
+flight, and the cold load did not run ([`tool-reliability.md`](tool-reliability.md), "Mistral
+Small 4: disqualified at fitness").
+
+The figures are for set `mistral`: unsloth's Mistral Small 4 `UD-Q4_K_XL` with its mmproj `BF16`
+at `c = 131072`, beside gemma-4-E4B and EmbeddingGemma 2. The router was b11669
+(`b11669-620d2225c`, upstream Vulkan x64). They were taken from the laptop (host `terminal`) on
+2026-10-15 and 2026-10-16, with GuideLLM 0.8.1 at the consumers environment's pins. The network
+path differed from set A's rows above: `tailscale ping` read a direct LAN path at 1-2 ms, not
+the DERP relay.
+
+### The grid
+
+`MISE_ENV=consumers mise run baseline -set mistral` ran the cells with the same workloads and
+columns as the table above. GuideLLM cut each prompt with `mistralai/Mistral-Small-4-119B-2603`'s
+tokenizer. The server counted 1069 and 8749 prompt tokens for the short and agentic profiles,
+since the template adds its default system prompt (about 550 tokens) when a request has none.
+
+| Model | Profile | Streams | Completed | Errored | TTFT median ms | TTFT p95 ms | ITL median ms | Output tok/s | Engine prompt tok/s | Engine gen tok/s | Engine cached tokens | Cell took |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Mistral Small 4 | short 512/256 | 1 | 8 | 0 | 1724 | 1984 | 297.8 | 3.3 | 353.9 | 3.4 (3.36) | 4462 | 622 s |
+| Mistral Small 4 | short 512/256 | 4 | 32 | 0 | 6830 | 6923 | 357.3 | 10.6 | 351.1 | 2.8 | 21950 | 773 s |
+| Mistral Small 4 | agentic 8192/512 | 1 | 4 | 0 | 25737 | 26257 | 302.8 | 2.8 | 323.3 | 3.3 | 2235 | 723 s |
+| Mistral Small 4 | agentic 8192/512 | 4 | 16 | 0 | 39852 | 112718 | 560.8 | 6.2 | 309.5 | 1.8 | 6783 | 1321 s |
+
+- **Fitness.** The short profile at one stream generated at 3.36 tok/s by the engine's counters
+  (3.29 by GuideLLM's output rate), a seventh of the 24 tok/s floor. gpt-oss-120b generated
+  48.8 on the same cell. At 4 streams the cell's aggregate output rose to 10.6 tok/s, while each
+  request ran at 2.8.
+- **The agentic cell at 4 streams ran twice.** The first run stalled overnight, and the row is
+  its bounded rerun, `.state/baseline/20261016T113037Z-agentic-c4`. The rerun used the grid's own
+  request count, 16, with a `max_duration` of 3600 s and a 600 s HTTP read timeout. It finished
+  all 16 in 1321 s, so neither bound applied. The other three cells are from the first run,
+  `.state/baseline/20261016T002154Z`, 00:21 to 00:57 UTC.
+- **Why the first agentic c4 run stalled.** The laptop suspended. `systemd-logind` put it to
+  sleep at 01:08:51 UTC, nine seconds after the cell's 8th request completed, while the third
+  wave of four requests was streaming. It woke for five minutes at 01:27 and then slept until
+  11:24. The server finished those four requests: the engine's predicted-token counter rose by
+  12 × 512, and the four slots held 8749 + 511 tokens with nothing processing. But the laptop's
+  sockets were never reset. GuideLLM's HTTP backend sets no read timeout by default
+  (`timeout: None`), so its four workers waited in `epoll_wait` on connections that had
+  received 185-3779 bytes each, until they were stopped at 11:29. It was neither a request
+  timeout, a worker deadlock, nor the scenario. Every long run since holds a `systemd-inhibit`
+  block on sleep, idle and the lid switch, beside a monitor that checks the router's slots are
+  busy.
+
+### The CPU fallback while generating
+
+Mistral's process works the CPU hard while generating, because Vulkan refuses its F32 expert
+down-projections (`MUL_MAT_ID` with `GGML_PREC_F32`; see
+[`llama-cpp-builds.md`](llama-cpp-builds.md), "Mistral's expert down-projection runs on the
+CPU", for the source lines). One request of 3776 prompt tokens and 256 out (`ignore_eos`) ran
+with `top -b -d 2 -p <pid>` sampled over ssh on 2026-10-15:
+
+| Phase | Engine rate | Mistral's `llama-server`, %CPU (2 s samples) |
+|---|---|---|
+| prompt, 3776 tokens in 10.5 s | 360.9 tok/s | 613-665 (5 samples) |
+| generation, 256 tokens in 76.6 s | 3.33 tok/s | 847-858 (38 samples) |
+| idle, after | — | 0 |
+
+That is about 8.5 of its 16 threads busy for every generated token. The child logs at verbosity
+3, which doesn't print op placement or graph splits. Raising it means changing the preset and
+reloading, which is root's, so the source lines stand as the placement's evidence.
+
+### Prefix reuse
+
+`go run ./cmd/prefix -set mistral -timeout 20m` ran on 2026-10-16, 11:53 UTC. It has the same
+shape as above: five streamed requests per generative model, sharing an 8192-token prefix that
+starts with a run nonce, 32 tokens out each.
+
+| Model | Request | `cache_n` | `prompt_n` | Engine prompt ms | TTFT ms |
+|---|---|---|---|---|---|
+| Mistral Small 4 | 1 | 556 | 8205 | 27607 | 29691 |
+| Mistral Small 4 | 2 | 8749 | 9 | 508 | 831 |
+| Mistral Small 4 | 3 | 8749 | 13 | 571 | 892 |
+| Mistral Small 4 | 4 | 8749 | 14 | 582 | 902 |
+| Mistral Small 4 | 5 | 8749 | 14 | 573 | 896 |
+| gemma-4-E4B | 1 | 0 | 8220 | 4040 | 4148 |
+| gemma-4-E4B | 2 | 8204 | 13 | 80 | 183 |
+| gemma-4-E4B | 3 | 8204 | 17 | 81 | 185 |
+| gemma-4-E4B | 4 | 8204 | 18 | 81 | 183 |
+| gemma-4-E4B | 5 | 8204 | 18 | 81 | 183 |
+
+Every later request found the whole prefix cached, and its TTFT fell from 29.7 s to under 0.9 s.
+The cold request's 556 cached tokens are the template's default system prompt, left by the grid.
+The warm requests evaluate their question in about 0.5 s, against 0.12-0.19 s on set A's models.
+gemma-4-E4B's warm TTFT is about 0.2 s lower than on b11572, since this path was direct rather
+than relayed.
+
+### Load times
+
+The cold load didn't run. It needs a router restart, which is root's, and the stage is skipped
+for a disqualified candidate. Swaps over the router's API, with Mistral's files cached
+(`go run ./cmd/swap`):
+
+| Swap | Unloads | Load | Total |
+|---|---|---|---|
+| a to mistral, 2026-10-15 | 26B-A4B 1.0s, gpt-oss-120b 1.0s | Mistral Small 4 23.0s | 25.0s |
+| mistral to a, 2026-10-16 | Mistral Small 4 1.0s | gpt-oss-120b 16.0s, 26B-A4B 5.0s | 22.0s |

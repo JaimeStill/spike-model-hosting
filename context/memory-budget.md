@@ -41,8 +41,9 @@ with the 26B-A4B at `c = 65536` (18084MiB), measured 95425MiB for the set and 26
 free, and failed it.
 
 The Mistral Small 4 swap takes gpt-oss-120b and the 26B-A4B out (82878MiB measured) and puts
-Mistral Small 4 in. Its idle footprint is measured below, in "The candidate sets, idle, b11669";
-at 4 in flight it is not yet measured.
+Mistral Small 4 in. Its idle footprint is measured below, in "The candidate sets, idle, b11669".
+It was never measured at 4 in flight: Mistral Small 4 was disqualified at fitness (speed) on
+b11669 before that stage ([`baseline.md`](baseline.md), "Mistral Small 4 on b11669").
 
 ## During the concurrent run, b11572
 
@@ -103,7 +104,10 @@ model's compute buffers out.
 
 The budget's `measured_mib` is the pool used with Slots requests in flight on every model
 (`profile.MemoryBudget`), so these idle figures don't go into the profile: each candidate keeps
-its estimate until the 4-in-flight run (slices 7 and 8) measures it.
+its estimate until the 4-in-flight run measures it. The mistral set keeps its estimate for
+good on b11669: Mistral Small 4 was disqualified at fitness (3.36 tok/s, one stream, short
+profile, against the 24 tok/s floor), so its concurrent run and 4-in-flight footprint didn't run.
+Its idle row above (87763MiB of the pool used, 10.29GiB free) is the set's only measurement.
 
 System RAM is not the pool. Nemotron's instance held 5549MiB resident (`ps` RSS) after its
 probe, where its context checkpoints live (`ctx-checkpoints = 8` caps them; its
