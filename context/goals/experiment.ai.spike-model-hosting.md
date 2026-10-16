@@ -167,7 +167,14 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   b11669; swaps timed (a→mistral 2154 s, mistral→nemotron 2779 s, both mostly download;
   nemotron→a 23 s). Mistral ~3.4 tok/s with ~8.5 CPU threads busy (the F32 fallback);
   Nemotron ~12.1 tok/s. Mistral's image answer intermittent (3 of 15 repeats said no image).
-- Slice 7: Mistral bar and measurements in progress.
+- Slice 7 committed (97abca4): Mistral Small 4 disqualified at fitness (speed): 3.36 tok/s
+  engine, one stream, short (floor 24). Claude Code can't run on it at all (HTTP 500: its
+  template refuses a system message after the first user message). Stopped on the
+  architect's call for a staged evaluation; conform, concurrent and cold load not run.
+  GuideLLM stalled overnight because the laptop suspended; long runs now hold
+  systemd-inhibit. Router back on set A.
+- ESCALATION open (2026-10-16): staged evaluation with gates, an evaluate command, and
+  Nemotron's Q4_0 retry.
 
 ## Decisions
 
