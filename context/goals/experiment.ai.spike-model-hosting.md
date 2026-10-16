@@ -168,7 +168,7 @@ Door          two-way, except the cleaned .state run outputs. The repository
 
 ## Progress
 
-slices 0/12 committed · standards — · spec — · editor —
+slices 1/12 committed · standards — · spec — · editor —
 
 ## Decisions
 
