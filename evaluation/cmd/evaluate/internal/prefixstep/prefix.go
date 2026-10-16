@@ -1,12 +1,13 @@
-// Command prefix measures prefix-cache reuse on the router: for each generative model of a set, a
-// run of requests that share one long prefix and end in different questions.
+// Package prefixstep is evaluate's prefix step, which measures prefix-cache reuse on the router:
+// for each generative model of a set, a run of requests that share one long prefix and end in
+// different questions.
 //
 // Usage:
 //
-//	prefix [-router url] [-profile name|path] [-set name] [-prefix-tokens n] [-requests n] [-max-tokens n] [-slot id]
+//	evaluate prefix [-router url] [-profile name|path] [-set name] [-prefix-tokens n] [-requests n] [-max-tokens n] [-slot id]
 //
 // The set is the profile's set -set names, or SPIKE_SET, or else its startup set. For each of
-// the set's generative models, the tool builds a prefix of exactly
+// the set's generative models, the step builds a prefix of exactly
 // -prefix-tokens tokens in that model's own tokenizer, through the router's /tokenize and
 // /detokenize, and starts it with a nonce unique to the run, so no cache on the server holds any
 // of it before the first request. It then sends -requests streamed chat completions back to back,
@@ -21,12 +22,12 @@
 // server's slot choice out of what is measured.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. Every model of the set must be loaded
-// already: the tool checks GET /models first, and every request carries autoload=false, so it
+// already: the step checks GET /models first, and every request carries autoload=false, so it
 // never loads one. The output names the build and the set it ran on.
 //
-// It exits 0 when every request was measured, 1 when one failed or the tool can't run, and 2 on
+// It exits 0 when every request was measured, 1 when one failed or the step can't run, and 2 on
 // a usage error.
-package main
+package prefixstep
 
 import (
 	"bufio"
@@ -40,8 +41,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"os/signal"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -71,31 +70,24 @@ var (
 	times    = []string{"before dawn", "in late autumn", "during the storm", "after the census", "at the spring fair", "over three winters", "on the last ferry", "beneath a red moon"}
 )
 
-// errUsage marks an error in how the tool was called, which exits 2 rather than 1.
+// errUsage marks an error in how the step was called, which exits 2 rather than 1.
 var errUsage = errors.New("usage")
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	code := run(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
-	stop()
-	os.Exit(code)
-}
-
-// usage is the tool's usage, printed on -h and after a usage error.
+// usage is the step's usage, printed on -h and after a usage error.
 const usage = `usage:
-  prefix [-router url] [-profile name|path] [-set name] [-prefix-tokens n] [-requests n] [-max-tokens n] [-slot id]
+  evaluate prefix [-router url] [-profile name|path] [-set name] [-prefix-tokens n] [-requests n] [-max-tokens n] [-slot id]
 `
 
-// options are the tool's flags, after the environment's fallbacks.
+// options are the step's flags, after the environment's fallbacks.
 type options struct {
 	router, profile, set                    string
 	prefixTokens, requests, maxTokens, slot int
 	timeout                                 time.Duration
 }
 
-// run runs the tool with args, reading the environment through getenv, and returns its exit
+// Run runs the step with args, reading the environment through getenv, and returns its exit
 // status.
-func run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
+func Run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
 	opts, err := parse(args, getenv)
 	if err == nil {
 		err = measure(ctx, opts, stdout)
@@ -111,10 +103,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		}
 		return 0
 	case errors.Is(err, errUsage):
-		_, _ = fmt.Fprintf(stderr, "prefix: %v\n%s", err, usage)
+		_, _ = fmt.Fprintf(stderr, "evaluate prefix: %v\n%s", err, usage)
 		return 2
 	default:
-		_, _ = fmt.Fprintf(stderr, "prefix: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "evaluate prefix: %v\n", err)
 		return 1
 	}
 }
@@ -122,7 +114,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 // parse reads the flags in args, the router and the set falling back to SPIKE_ROUTER_URL and
 // SPIKE_SET.
 func parse(args []string, getenv func(string) string) (options, error) {
-	fs := flag.NewFlagSet("prefix", flag.ContinueOnError)
+	fs := flag.NewFlagSet("evaluate prefix", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 	var o options
@@ -261,7 +253,7 @@ func buildPrefix(ctx context.Context, hc *http.Client, base, id string, n int) (
 	return detok.Content, nil
 }
 
-// chunk is the part of a streamed chat completion chunk the tool reads; llama.cpp adds its
+// chunk is the part of a streamed chat completion chunk the step reads; llama.cpp adds its
 // timings to the last one.
 type chunk struct {
 	Choices []struct {

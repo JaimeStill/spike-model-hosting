@@ -1,9 +1,9 @@
-// Command concurrent runs Pi, Claude Code and the model client against the router at once, and
-// checks that every answer reached its own request.
+// Package concurrentstep is evaluate's concurrent step, which runs Pi, Claude Code and the model
+// client against the router at once, and checks that every answer reached its own request.
 //
 // Usage:
 //
-//	concurrent [-router url] [-profile name|path] [-set name] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
+//	evaluate concurrent [-router url] [-profile name|path] [-set name] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
 //
 // It runs four streams at once: Pi over OpenAI chat, Claude Code over Anthropic messages, the model
 // client over chat, and the model client over embeddings. The chat streams send to the chat model,
@@ -16,7 +16,7 @@
 // answers before the check, which must then fail and name both.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. Every model of the set must be loaded already:
-// the tool checks GET /models first and never loads one. The report names the build and the set it
+// the step checks GET /models first and never loads one. The report names the build and the set it
 // ran on. Pi is -pi, or SPIKE_PI, and Claude Code is -claude, or SPIKE_CLAUDE; each defaults to the
 // one the consumers mise environment pins (MISE_ENV=consumers mise -C evaluation which pi, or
 // claude, from the repository root). Their state lives under -state, or SPIKE_STATE_DIR, which
@@ -30,7 +30,7 @@
 // then /login. Its model requests go to the router, every model alias mapped to the chat model.
 //
 // It exits 0 when the run passes, 1 when it fails or can't run, and 2 on a usage error.
-package main
+package concurrentstep
 
 import (
 	"cmp"
@@ -42,7 +42,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -76,22 +75,15 @@ var inputs = []string{
 	"Compile the program, then run its tests.",
 }
 
-// errUsage marks an error in how the tool was called, which exits 2 rather than 1.
+// errUsage marks an error in how the step was called, which exits 2 rather than 1.
 var errUsage = errors.New("usage")
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	code := run(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
-	stop()
-	os.Exit(code)
-}
-
-// usage is the tool's usage, printed on -h and after a usage error.
+// usage is the step's usage, printed on -h and after a usage error.
 const usage = `usage:
-  concurrent [-router url] [-profile name|path] [-set name] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
+  evaluate concurrent [-router url] [-profile name|path] [-set name] [-rounds n] [-pi path] [-claude path] [-state dir] [-inject-swap]
 `
 
-// options are the tool's flags, after the environment's fallbacks.
+// options are the step's flags, after the environment's fallbacks.
 type options struct {
 	router, profile, set, pi, claude, state string
 	rounds                                  int
@@ -99,9 +91,9 @@ type options struct {
 	injectSwap                              bool
 }
 
-// run runs the tool with args, reading the environment through getenv, and returns its exit
+// Run runs the step with args, reading the environment through getenv, and returns its exit
 // status.
-func run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
+func Run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
 	opts, err := parse(args, getenv)
 	if err == nil {
 		var rep concurrent.Report
@@ -121,17 +113,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		}
 		return 0
 	case errors.Is(err, errUsage):
-		_, _ = fmt.Fprintf(stderr, "concurrent: %v\n%s", err, usage)
+		_, _ = fmt.Fprintf(stderr, "evaluate concurrent: %v\n%s", err, usage)
 		return 2
 	default:
-		_, _ = fmt.Fprintf(stderr, "concurrent: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "evaluate concurrent: %v\n", err)
 		return 1
 	}
 }
 
 // parse reads the flags in args, each falling back to its environment variable.
 func parse(args []string, getenv func(string) string) (options, error) {
-	fs := flag.NewFlagSet("concurrent", flag.ContinueOnError)
+	fs := flag.NewFlagSet("evaluate concurrent", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 	var o options

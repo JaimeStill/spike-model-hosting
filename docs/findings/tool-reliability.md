@@ -150,13 +150,13 @@ package's `RoundTrip` integration tests run these turns and save the recordings 
 
 ## pass^5 by consumer
 
-Only Pi meets OpenAI's bar. `go run ./evaluation/cmd/conform -k 5` runs clutch's conform suite
-(clutch at `9981a3e`, the `conform` package) five times per consumer, the consumers in turn within
-each trial. The runs used llama.cpp b11572 (`b11572-efe3626b1`, Vulkan) and gpt-oss-120b (ggml-org
-`MXFP4`), with all four set-A models loaded, from the laptop against the Framework's router, on
-2026-10-12. Each consumer's requests pass through a `wire.Recorder` of its own. A model request
-counts as invalid when the router answers it with an error, as a status or as an error event in a
-stream that began with 200. The `passk` package builds the cells:
+Only Pi meets OpenAI's bar. `go run ./evaluation/cmd/evaluate conform -k 5` runs clutch's conform
+suite (clutch at `9981a3e`, the `conform` package) five times per consumer, the consumers in turn
+within each trial. The runs used llama.cpp b11572 (`b11572-efe3626b1`, Vulkan) and gpt-oss-120b
+(ggml-org `MXFP4`), with all four set-A models loaded, from the laptop against the Framework's
+router, on 2026-10-12. Each consumer's requests pass through a `wire.Recorder` of its own. A model
+request counts as invalid when the router answers it with an error, as a status or as an error event
+in a stream that began with 200. The `passk` package builds the cells:
 
 - **Pi 1.1.0** on its `llama.cpp` provider, its agent directory under `.state/conform/pi`.
   The driver's bridge sets `tool_choice: "required"` on every request that offers `respond`.
@@ -208,16 +208,19 @@ Each set took about 16 minutes (15m33s and 17m17s).
 
 ### The engine row
 
-The engine row fails OpenAI's bar on a field name, and its tool calls sit at the bar's line.
-The row is OpenAI's compatibility test for gpt-oss implementations, the one
+The engine row was retired in `evaluation`: BFCL's tier covers tool calls for every model and
+engine, so OpenAI's compatibility test no longer runs. What follows is its 2026-10-12 record.
+
+The engine row fails OpenAI's bar on a field name, and its tool calls sit at the bar's line. The row
+is OpenAI's compatibility test for gpt-oss implementations, the one
 [verifying gpt-oss implementations](https://developers.openai.com/cookbook/articles/gpt-oss/verifying-implementations)
 sets its bar with: openai/gpt-oss at `7b58334` (`7b583341fe16729127f6d5b94a7b09ccae97e1a1`),
-`compatibility-test/`, 30 cases over six tools, each run five times through the OpenAI Agents
-SDK. It ran from the laptop against the Framework's router on 2026-10-12, on the same build
-(`b11572-efe3626b1`) and model (`ggml-org/gpt-oss-120b-GGUF:MXFP4`), in Chat Completions mode
-with `-k 5`, on Node 26.11.1 (tsx 4.23.15, which the suite's `npm start` needs but doesn't
-pin). `mise run //evaluation:gpt-oss-compat` in the consumers environment, with `SPIKE_ROUTER_URL`
-set, fetches the suite into `.state/`, installs it from its lockfile, runs it, and prints the table
+`compatibility-test/`, 30 cases over six tools, each run five times through the OpenAI Agents SDK.
+It ran from the laptop against the Framework's router on 2026-10-12, on the same build
+(`b11572-efe3626b1`) and model (`ggml-org/gpt-oss-120b-GGUF:MXFP4`), in Chat Completions mode with
+`-k 5`, on Node 26.11.1 (tsx 4.23.15, which the suite's `npm start` needs but doesn't pin). The
+consumers environment's `gpt-oss-compat` task, retired in `evaluation`, fetched the suite into
+`.state/`, installed it from its lockfile, ran it against `SPIKE_ROUTER_URL`, and printed the table
 below. It measures the engine and model at the Chat Completions layer, with no consumer between, not
 the `/v1/messages` Claude Code uses. A run counts only when its response is valid and it called the
 case's tool with arguments the tool's schema accepts:
@@ -247,11 +250,11 @@ case's tool with arguments the tool's schema accepts:
 
 ## The comparison row: pass^5 on b11669
 
-The `candidates` task judges each candidate main model against gpt-oss-120b on the same build
-and pins, so gpt-oss-120b's pass^5 ran again after the move to b11669. It ran as
-`go run ./evaluation/cmd/conform -set a -k 5` with `SPIKE_ROUTER_URL=http://framework:8080`, from
-the laptop (host `terminal`) against the Framework's router, on 2026-10-15. The router reported
-`b11669-620d2225c` in `/props` `build_info`, with set A's four models loaded. The model was
+The `candidates` task judges each candidate main model against gpt-oss-120b on the same build and
+pins, so gpt-oss-120b's pass^5 ran again after the move to b11669. It ran as
+`go run ./evaluation/cmd/evaluate conform -set a -k 5` with `SPIKE_ROUTER_URL=http://framework:8080`,
+from the laptop (host `terminal`) against the Framework's router, on 2026-10-15. The router
+reported `b11669-620d2225c` in `/props` `build_info`, with set A's four models loaded. The model was
 gpt-oss-120b (ggml-org `MXFP4`) and clutch was at `9981a3e`, as on b11572. The consumers ran at the
 consumers environment's pins. Pi 1.3.0 ran on its `llama.cpp` provider with `required` on `respond`.
 Claude Code 2.1.301 ran over `/v1/messages` from `.state/claude` on the subscription login. OpenCode
@@ -380,7 +383,7 @@ recordings are under `.state/wire/`.
 These are where a slow model's run would be cut short, found before conform started:
 
 - **The capability.** clutch's `conform.Options.Timeout` bounds each capability, and is
-  `evaluation/cmd/conform`'s `-timeout` flag (default 10 minutes). The run used `-timeout 60m`.
+  `evaluate conform`'s `-timeout` flag (default 10 minutes). The run used `-timeout 60m`.
 - **Claude Code.** Its request timeout is `API_TIMEOUT_MS` (default 600000). Its first-byte
   window is `CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS`. Its stream idle watchdog is
   `CLAUDE_STREAM_IDLE_TIMEOUT_MS` (at least 300000). Each is an environment variable that

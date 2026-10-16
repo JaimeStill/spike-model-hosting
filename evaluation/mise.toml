@@ -1,7 +1,8 @@
-# The evaluation area: the instruments that measure the router from the laptop. The tools they
-# drive are pinned in mise.consumers.toml, beside this file, which loads only under
-# MISE_ENV=consumers; the tasks that need them (baseline, gpt-oss-compat) are declared there. The
-# root's check covers its packages, module-wide.
+# The evaluation area: the instruments that measure the router from the laptop, each a step of
+# one command, `go run ./evaluation/cmd/evaluate <step>` (-h lists the steps). The tools they drive
+# are pinned in mise.consumers.toml, beside this file, which loads only under MISE_ENV=consumers;
+# the task that needs them (baseline) is declared there. The root's check covers its packages,
+# module-wide.
 
 # The live tests of the wire recorder and the concurrent run, against the router SPIKE_ROUTER_URL
 # names. They drive Claude Code and Pi when the environment names them (see each test), so the

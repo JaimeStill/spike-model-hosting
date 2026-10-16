@@ -70,12 +70,12 @@ GuideLLM's JSON for every cell and the `/metrics` snapshots are kept under the g
 
 ## Prefix reuse
 
-`go run ./evaluation/cmd/prefix` sent each generative model five streamed chat completions, back to
-back, that share one prefix of exactly 8192 tokens in the model's own tokenizer (cut through the
-router's `/tokenize` and `/detokenize`) and end in five different questions, 32 tokens out each. The
-prefix starts with a nonce unique to the run, so the first request is cold. `cache_n` and `prompt_n`
-are llama.cpp's own accounting from each response's `timings` (prompt tokens served from the cache,
-and evaluated), with the engine's prompt time; TTFT is the client's.
+`go run ./evaluation/cmd/evaluate prefix` sent each generative model five streamed chat completions,
+back to back, that share one prefix of exactly 8192 tokens in the model's own tokenizer (cut through
+the router's `/tokenize` and `/detokenize`) and end in five different questions, 32 tokens out each.
+The prefix starts with a nonce unique to the run, so the first request is cold. `cache_n` and
+`prompt_n` are llama.cpp's own accounting from each response's `timings` (prompt tokens served from
+the cache, and evaluated), with the engine's prompt time; TTFT is the client's.
 
 | Model | Request | `cache_n` | `prompt_n` | Engine prompt ms | TTFT ms |
 |---|---|---|---|---|---|
@@ -107,11 +107,11 @@ time unpinned, against 0.4 pinned; the warm requests don't show it.
 ## Cold load
 
 A router restart takes about 21 s until all four models are loaded, warm or cold, set by
-gpt-oss-120b's read from NVMe. `go run ./evaluation/cmd/coldload` timed both restarts from the
-laptop, over the same relay, on 2026-10-12. It starts with every model loaded and polls `/models`
-every 250 ms. It takes the restart's start as the first poll that doesn't see every model loaded, so
-each time is late by up to one poll. A model counts as loaded only when it is listed as loaded after
-it was seen gone. The architect ran each restart on the Framework:
+gpt-oss-120b's read from NVMe. `go run ./evaluation/cmd/evaluate coldload` timed both restarts from
+the laptop, over the same relay, on 2026-10-12. It starts with every model loaded and polls
+`/models` every 250 ms. It takes the restart's start as the first poll that doesn't see every model
+loaded, so each time is late by up to one poll. A model counts as loaded only when it is listed as
+loaded after it was seen gone. The architect ran each restart on the Framework:
 `sudo systemctl restart llama-router` for warm, and the same after
 `sync && echo 3 | sudo tee /proc/sys/vm/drop_caches` for cold.
 
@@ -196,9 +196,9 @@ reloading, which is root's, so the source lines stand as the placement's evidenc
 
 ### Prefix reuse
 
-`go run ./evaluation/cmd/prefix -set mistral -timeout 20m` ran on 2026-10-16, 11:53 UTC. It has the
-same shape as above: five streamed requests per generative model, sharing an 8192-token prefix that
-starts with a run nonce, 32 tokens out each.
+`go run ./evaluation/cmd/evaluate prefix -set mistral -timeout 20m` ran on 2026-10-16, 11:53 UTC. It
+has the same shape as above: five streamed requests per generative model, sharing an 8192-token
+prefix that starts with a run nonce, 32 tokens out each.
 
 | Model | Request | `cache_n` | `prompt_n` | Engine prompt ms | TTFT ms |
 |---|---|---|---|---|---|

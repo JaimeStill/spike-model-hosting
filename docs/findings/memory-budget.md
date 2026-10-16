@@ -45,17 +45,17 @@ A candidate set swaps gpt-oss-120b and the 26B-A4B (82878MiB measured) out for i
 
 ## During the concurrent run, b11572
 
-With Pi, Claude Code and the model client streaming at once on b11572, 3.21GiB of the pool
-stayed free, above the 3GiB bar. The read is the same as above, taken during a live run of the `concurrent` command
-(`go run ./evaluation/cmd/concurrent -rounds 10`) on b11572 (`b11572-efe3626b1`) on 2026-10-12: Pi,
-Claude Code and the model client on gpt-oss-120b's 4 slots, and the model client's embedding stream
-on EmbeddingGemma 2, all at once. The run passed: 40 chat requests and 1032 embeddings in 51.7
-seconds. `evaluation/scripts/footprint.sh` read `amdgpu_top -p` over a non-interactive ssh eight
-times, six seconds apart, from 16:44:51 to 16:45:35 UTC. `/slots` showed 3 or 4 of gpt-oss-120b's
-slots processing at the first seven samples, and none at the last, after the run ended.
-EmbeddingGemma 2's batches finish in about 350 ms, so only one sample caught its 4 slots busy. The
-two Gemmas carry no stream in this run and sat idle. Every sample read the same figures, shown
-beside the synthetic 4-in-flight measurement on b11565 above. Figures in MiB:
+With Pi, Claude Code and the model client streaming at once on b11572, 3.21GiB of the pool stayed
+free, above the 3GiB bar. The read is the same as above, taken during a live run of the `concurrent`
+command (`go run ./evaluation/cmd/evaluate concurrent -rounds 10`) on b11572 (`b11572-efe3626b1`) on
+2026-10-12: Pi, Claude Code and the model client on gpt-oss-120b's 4 slots, and the model client's
+embedding stream on EmbeddingGemma 2, all at once. The run passed: 40 chat requests and 1032
+embeddings in 51.7 seconds. `evaluation/scripts/footprint.sh` read `amdgpu_top -p` over a
+non-interactive ssh eight times, six seconds apart, from 16:44:51 to 16:45:35 UTC. `/slots` showed 3
+or 4 of gpt-oss-120b's slots processing at the first seven samples, and none at the last, after the
+run ended. EmbeddingGemma 2's batches finish in about 350 ms, so only one sample caught its 4 slots
+busy. The two Gemmas carry no stream in this run and sat idle. Every sample read the same figures,
+shown beside the synthetic 4-in-flight measurement on b11565 above. Figures in MiB:
 
 | Model | Synthetic, 4 in flight on each, b11565 | During the concurrent run, b11572 |
 |---|---|---|

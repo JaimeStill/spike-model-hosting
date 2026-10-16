@@ -33,7 +33,7 @@ repository is managed with the marathon workflow; start from `context/README.md`
   nothing is served.
 - **Consumers and instruments:** `evaluation/mise.consumers.toml` pins them, run from the root as
   `MISE_ENV=consumers mise -C evaluation exec -- <tool>` (mise loads that file only in
-  `evaluation/`); their untracked state is under the root's `.state/`. The commands are
-  `evaluation/cmd/concurrent`, `evaluation/cmd/conform`, `evaluation/cmd/prefix`, and
-  `evaluation/cmd/coldload`; each package's `doc.go` lists its API. Their results are in
+  `evaluation/`); their untracked state is under the root's `.state/`. The instruments run as
+  steps of one command, `go run ./evaluation/cmd/evaluate <step>` (conform, concurrent, prefix,
+  coldload; `-h` lists them); each package's `doc.go` lists its API. Their results are in
   `docs/findings/baseline.md` and `docs/findings/tool-reliability.md`.

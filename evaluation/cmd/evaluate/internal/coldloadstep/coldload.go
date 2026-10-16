@@ -1,24 +1,24 @@
-// Command coldload times a router restart from the outside: how long until every model of a set
-// is loaded again.
+// Package coldloadstep is evaluate's coldload step, which times a router restart from the outside:
+// how long until every model of a set is loaded again.
 //
 // Usage:
 //
-//	coldload [-router url] [-profile name|path] [-set name] [-interval d] [-timeout d]
+//	evaluate coldload [-router url] [-profile name|path] [-set name] [-interval d] [-timeout d]
 //
 // The set is the profile's set -set names, or SPIKE_SET, or else its startup set, the one the
-// router loads when it starts. Start the tool before the restart, with the set's models loaded:
+// router loads when it starts. Start the step before the restart, with the set's models loaded:
 // it refuses to start otherwise. It polls GET /models every -interval and waits through the
 // restart, as the coldload package's Watch describes, then prints when the router answered again
 // and when each of the set's models was listed as loaded again, each from the restart's start,
 // and the last poll that saw them all loaded before it, which bounds the start from below. It
 // names the set, and the build before the restart and after it.
 //
-// The router comes from -router or SPIKE_ROUTER_URL. The tool only reads /models and /props; it
+// The router comes from -router or SPIKE_ROUTER_URL. The step only reads /models and /props; it
 // never loads a model or starts a restart.
 //
-// It exits 0 when every model loaded, 1 when -timeout passed first or the tool can't run, and 2
+// It exits 0 when every model loaded, 1 when -timeout passed first or the step can't run, and 2
 // on a usage error.
-package main
+package coldloadstep
 
 import (
 	"context"
@@ -27,8 +27,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"os/signal"
 	"strings"
 	"time"
 
@@ -37,30 +35,23 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/hosting/router"
 )
 
-// errUsage marks an error in how the tool was called, which exits 2 rather than 1.
+// errUsage marks an error in how the step was called, which exits 2 rather than 1.
 var errUsage = errors.New("usage")
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	code := run(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
-	stop()
-	os.Exit(code)
-}
-
-// usage is the tool's usage, printed on -h and after a usage error.
+// usage is the step's usage, printed on -h and after a usage error.
 const usage = `usage:
-  coldload [-router url] [-profile name|path] [-set name] [-interval d] [-timeout d]
+  evaluate coldload [-router url] [-profile name|path] [-set name] [-interval d] [-timeout d]
 `
 
-// options are the tool's flags, after the environment's fallbacks.
+// options are the step's flags, after the environment's fallbacks.
 type options struct {
 	router, profile, set string
 	interval, timeout    time.Duration
 }
 
-// run runs the tool with args, reading the environment through getenv, and returns its exit
+// Run runs the step with args, reading the environment through getenv, and returns its exit
 // status.
-func run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
+func Run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
 	opts, err := parse(args, getenv)
 	if err == nil {
 		err = watch(ctx, opts, stdout)
@@ -76,10 +67,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		}
 		return 0
 	case errors.Is(err, errUsage):
-		_, _ = fmt.Fprintf(stderr, "coldload: %v\n%s", err, usage)
+		_, _ = fmt.Fprintf(stderr, "evaluate coldload: %v\n%s", err, usage)
 		return 2
 	default:
-		_, _ = fmt.Fprintf(stderr, "coldload: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "evaluate coldload: %v\n", err)
 		return 1
 	}
 }
@@ -87,7 +78,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 // parse reads the flags in args, the router and the set falling back to SPIKE_ROUTER_URL and
 // SPIKE_SET.
 func parse(args []string, getenv func(string) string) (options, error) {
-	fs := flag.NewFlagSet("coldload", flag.ContinueOnError)
+	fs := flag.NewFlagSet("evaluate coldload", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 	var o options

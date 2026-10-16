@@ -1,9 +1,10 @@
-// Command conform runs clutch's conformance suite k times for each consumer over the router, and
-// judges each consumer by pass^k against the bar for a gpt-oss implementation.
+// Package conformstep is evaluate's conform step, which runs clutch's conformance suite k times for
+// each consumer over the router, and judges each consumer by pass^k against the bar for a gpt-oss
+// implementation.
 //
 // Usage:
 //
-//	conform [-router url] [-profile name|path] [-set name] [-k n] [-consumers list] [-pi path] [-claude path] [-opencode path] [-state dir] [-timeout d]
+//	evaluate conform [-router url] [-profile name|path] [-set name] [-k n] [-consumers list] [-pi path] [-claude path] [-opencode path] [-state dir] [-timeout d]
 //
 // The consumers are Pi on its llama.cpp provider, Claude Code over the router's Anthropic messages,
 // and OpenCode with the chat model's interleaved setting on; the passk package says how each cell
@@ -20,7 +21,7 @@
 // invalid requests and verdict against the bar, and the reason for every trial that didn't pass.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. Every model of the set must be loaded
-// already: the tool checks GET /models first and never loads one. Each consumer is its
+// already: the step checks GET /models first and never loads one. Each consumer is its
 // flag, or SPIKE_PI, SPIKE_CLAUDE or SPIKE_OPENCODE, defaulting to the one the consumers mise
 // environment pins. Their state lives under -state, or SPIKE_STATE_DIR, which defaults to the
 // repository's untracked .state/: the suite's under conform/, and Claude Code's configuration
@@ -32,7 +33,7 @@
 //
 // It exits 0 when every consumer meets the bar, 1 when one doesn't or the run can't start, and 2
 // on a usage error.
-package main
+package conformstep
 
 import (
 	"cmp"
@@ -45,7 +46,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -60,25 +60,18 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/hosting/router"
 )
 
-// consumerNames are the consumers the tool runs, in the order it runs and reports them.
+// consumerNames are the consumers the step runs, in the order it runs and reports them.
 var consumerNames = []string{"pi", "claude", "opencode"}
 
-// errUsage marks an error in how the tool was called, which exits 2 rather than 1.
+// errUsage marks an error in how the step was called, which exits 2 rather than 1.
 var errUsage = errors.New("usage")
 
-func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
-	code := run(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
-	stop()
-	os.Exit(code)
-}
-
-// usage is the tool's usage, printed on -h and after a usage error.
+// usage is the step's usage, printed on -h and after a usage error.
 const usage = `usage:
-  conform [-router url] [-profile name|path] [-set name] [-k n] [-consumers list] [-pi path] [-claude path] [-opencode path] [-state dir] [-timeout d]
+  evaluate conform [-router url] [-profile name|path] [-set name] [-k n] [-consumers list] [-pi path] [-claude path] [-opencode path] [-state dir] [-timeout d]
 `
 
-// options are the tool's flags, after the environment's fallbacks.
+// options are the step's flags, after the environment's fallbacks.
 type options struct {
 	router, profile, set, state string
 	k                           int
@@ -87,9 +80,9 @@ type options struct {
 	timeout                     time.Duration
 }
 
-// run runs the tool with args, reading the environment through getenv, and returns its exit
+// Run runs the step with args, reading the environment through getenv, and returns its exit
 // status.
-func run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
+func Run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
 	opts, err := parse(args, getenv)
 	if err == nil {
 		var rows []passk.Row
@@ -111,17 +104,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		}
 		return 0
 	case errors.Is(err, errUsage):
-		_, _ = fmt.Fprintf(stderr, "conform: %v\n%s", err, usage)
+		_, _ = fmt.Fprintf(stderr, "evaluate conform: %v\n%s", err, usage)
 		return 2
 	default:
-		_, _ = fmt.Fprintf(stderr, "conform: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "evaluate conform: %v\n", err)
 		return 1
 	}
 }
 
 // parse reads the flags in args, each falling back to its environment variable.
 func parse(args []string, getenv func(string) string) (options, error) {
-	fs := flag.NewFlagSet("conform", flag.ContinueOnError)
+	fs := flag.NewFlagSet("evaluate conform", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
 	o := options{commands: map[string]string{}}

@@ -86,10 +86,11 @@ of the admin tooling.
 - **Remote access:** sessions reach both hosts by Tailscale SSH in accept mode, set by the
   architect before the first task and reverted to check mode when the spike completes.
 - **The architect's laptop:** every consumer (Pi, Claude Code, OpenCode, and the `model`
-  client) and every instrument (GuideLLM, OpenAI's gpt-oss compatibility test, the concurrent
-  run, pass^k, prefix, and cold load) runs from it, pinned in `evaluation/mise.consumers.toml` and
-  run from the root as `MISE_ENV=consumers mise -C evaluation exec -- <tool>`, off the root PATH so
-  the architect's own Claude Code and Pi stay untouched. Their untracked state is under the root's
+  client) and every instrument (GuideLLM, and the concurrent run, pass^k, prefix, and cold load,
+  each a step of `evaluation/cmd/evaluate`) runs from it, pinned in
+  `evaluation/mise.consumers.toml` and run from the root as
+  `MISE_ENV=consumers mise -C evaluation exec -- <tool>`, off the root PATH so the architect's own
+  Claude Code and Pi stay untouched. Their untracked state is under the root's
   `.state/`; Claude Code runs from its own
   `CLAUDE_CONFIG_DIR` there, on the architect's subscription login, with `ANTHROPIC_BASE_URL` at
   the router. Nothing is served on the laptop.
@@ -129,10 +130,13 @@ of the admin tooling.
 - **Set swap:** the `swap` package and the `swap` command (`hosting/cmd/swap`) swap the router
   from the set it has loaded to another of the profile's sets over its API. They unload before they
   load, and time each model's step and the total.
-- **Concurrent run:** the `concurrent` package and the `concurrent` command
-  (`evaluation/cmd/concurrent`) run Pi, Claude Code, and the model client's chat and embedding
-  streams against the router at once. The run fails when an answer carries another request's nonce,
-  or an embedding differs from its input's lone embedding by more than the cosine tolerance.
+- **Instruments:** `go run ./evaluation/cmd/evaluate <step>` is the one entry point for the
+  instruments below; each runs as a step by name (`conform`, `concurrent`, `prefix`, `coldload`),
+  with its own flags, and `-h` lists the steps.
+- **Concurrent run:** the `concurrent` package and evaluate's `concurrent` step run Pi, Claude
+  Code, and the model client's chat and embedding streams against the router at once. The run
+  fails when an answer carries another request's nonce, or an embedding differs from its input's
+  lone embedding by more than the cosine tolerance.
 - **Wire recording:** the `wire` package's `Recorder` is a reverse proxy that records what a
   consumer sends the router and what comes back, with credentials dropped. Its `RoundTrip`
   integration tests record each consumer's reasoning round-trip; each runs only when
@@ -140,17 +144,17 @@ of the admin tooling.
 - **Tool-call reliability:** the layered convention every platform, profile, consumer, and
   gateway is held to, with pass^k as its measure, in
   [`tool-reliability.md`](../docs/findings/tool-reliability.md). The `passk` package and the
-  `conform` command (`evaluation/cmd/conform`) run clutch's conformance suite k times per consumer
-  and judge each by pass^k; `mise run //evaluation:gpt-oss-compat` runs OpenAI's gpt-oss
-  compatibility test as the engine row.
+  `conform` step (`evaluate conform`) run clutch's conformance suite k times per consumer and
+  judge each by pass^k. OpenAI's gpt-oss compatibility test, once the engine row, was retired in
+  `evaluation`: BFCL's tier covers tool calls for every model and engine.
 - **Measurement:** footprint, speed, prefix cache, cold load, and the capability matrix. The
   llama.cpp Vulkan baseline every platform is measured against is in
   [`baseline.md`](../docs/findings/baseline.md): the GuideLLM grid
-  (`mise run //evaluation:baseline`), prefix reuse (the `prefix` command,
-  `evaluation/cmd/prefix`), and cold load (the `coldload` package and command,
-  `evaluation/cmd/coldload`). Set A's memory budget on the Framework, estimated against measured,
-  the candidate sets' idle footprints, and the swap timings between sets (evidence 6's
-  model-swapping cell) are in [`memory-budget.md`](../docs/findings/memory-budget.md).
+  (`mise run //evaluation:baseline`), prefix reuse (evaluate's `prefix` step), and cold load (the
+  `coldload` package and evaluate's `coldload` step). Set A's memory budget on the Framework,
+  estimated against measured, the candidate sets' idle footprints, and the swap timings between
+  sets (evidence 6's model-swapping cell) are in
+  [`memory-budget.md`](../docs/findings/memory-budget.md).
 - **llama.cpp builds:** each build move on the Framework, with its release-note review and
   what was re-verified on the new build, and what the main-model candidates loaded (files,
   handlers, the CPU fallback), in

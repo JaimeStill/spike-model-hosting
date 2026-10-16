@@ -1,24 +1,20 @@
 package main_test
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 )
 
-// bin is the coldload tool, built once for the tests, which drive it as a user would.
-var bin string
-
-// root is the repository root, the working directory the tool runs in.
-const root = "../../.."
+// runColdload runs evaluate's coldload step from the repository root with args and env, as run
+// does.
+func runColdload(t *testing.T, env []string, args ...string) (stdout, stderr string, code int) {
+	t.Helper()
+	return run(t, env, append([]string{"coldload"}, args...)...)
+}
 
 // alias names set A's models, and one outside it, by a letter, which the scripted router's steps
 // use.
@@ -35,48 +31,9 @@ func setA(status string) string {
 	return "g=" + status + ",v=" + status + ",s=" + status + ",e=" + status + ",x=unloaded"
 }
 
-func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "coldload-tool")
-	if err != nil {
-		panic(err)
-	}
-	bin = filepath.Join(dir, "coldload")
-	build := exec.Command("go", "build", "-o", bin, ".")
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
-		panic(err)
-	}
-	code := m.Run()
-	_ = os.RemoveAll(dir) // a temporary directory left behind fails no test
-	os.Exit(code)
-}
-
-// run runs the tool from the repository root with args and env (added to a bare environment),
-// and returns its standard output, standard error and exit status.
-func run(t *testing.T, env []string, args ...string) (stdout, stderr string, code int) {
-	t.Helper()
-	cmd := exec.Command(bin, args...)
-	cmd.Dir = root
-	// A nil Env would inherit this process's environment, SPIKE_ROUTER_URL and the consumer
-	// variables with it; a non-nil slice holds the tool to exactly env.
-	cmd.Env = append([]string{}, env...)
-	var out, errOut bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errOut
-	err := cmd.Run()
-	var exit *exec.ExitError
-	switch {
-	case err == nil:
-	case errors.As(err, &exit):
-		code = exit.ExitCode()
-	default:
-		t.Fatalf("run %v: %v", args, err)
-	}
-	return out.String(), errOut.String(), code
-}
-
-// TestUsage shows the tool refuses a call it can't run with exit status 2 and its usage, and
-// prints its usage on -h.
-func TestUsage(t *testing.T) {
+// TestColdloadUsage shows the step refuses a call it can't run with exit status 2 and its usage,
+// and prints its usage on -h.
+func TestColdloadUsage(t *testing.T) {
 	cases := map[string]struct {
 		env  []string
 		args []string
@@ -90,13 +47,13 @@ func TestUsage(t *testing.T) {
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, errOut, code := run(t, tc.env, tc.args...)
+			_, errOut, code := runColdload(t, tc.env, tc.args...)
 			if code != 2 || !strings.Contains(errOut, tc.want) || !strings.Contains(errOut, "usage:") {
 				t.Errorf("exit %d, stderr %q; want 2, naming %q, with the usage", code, errOut, tc.want)
 			}
 		})
 	}
-	out, _, code := run(t, nil, "-h")
+	out, _, code := runColdload(t, nil, "-h")
 	if code != 0 || !strings.Contains(out, "usage:") {
 		t.Errorf("-h: exit %d, stdout %q; want 0 and the usage", code, out)
 	}
@@ -136,18 +93,18 @@ func (s *scripted) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintf(w, `{"data":[%s]}`, strings.Join(data, ","))
 }
 
-// TestRestart shows the tool waits through a restart for set A's models, ignoring a model
+// TestColdloadRestart shows the step waits through a restart for set A's models, ignoring a model
 // outside the set, and prints the router's return and each model's load, in the order they
 // loaded, with the set and the build.
-func TestRestart(t *testing.T) {
+func TestColdloadRestart(t *testing.T) {
 	srv := httptest.NewServer(&scripted{steps: []string{
-		// The tool's check that the set is loaded, then the first poll of the watch.
+		// The step's check that the set is loaded, then the first poll of the watch.
 		setA("loaded"), setA("loaded"), setA("loaded"),
 		"g=loaded,v=unloading,s=loaded,e=loaded,x=unloaded", "", "",
 		setA("loading"), "g=loading,v=loaded,s=loaded,e=loaded,x=unloaded", setA("loaded"),
 	}})
 	defer srv.Close()
-	out, errOut, code := run(t, nil, "-router", srv.URL, "-interval", "5ms")
+	out, errOut, code := runColdload(t, nil, "-router", srv.URL, "-interval", "5ms")
 	if code != 0 {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
@@ -167,26 +124,26 @@ func TestRestart(t *testing.T) {
 	}
 }
 
-// TestRefuses shows the tool refuses to start when one of the set's models isn't loaded, or the
-// set is one the profile doesn't name.
-func TestRefuses(t *testing.T) {
+// TestColdloadRefuses shows the step refuses to start when one of the set's models isn't loaded, or
+// the set is one the profile doesn't name.
+func TestColdloadRefuses(t *testing.T) {
 	srv := httptest.NewServer(&scripted{steps: []string{"g=loaded,v=loading,s=loaded,e=loaded"}})
 	defer srv.Close()
-	_, errOut, code := run(t, nil, "-router", srv.URL, "-interval", "5ms")
+	_, errOut, code := runColdload(t, nil, "-router", srv.URL, "-interval", "5ms")
 	if code != 1 || !strings.Contains(errOut, alias["v"]+` as "loading"`) {
 		t.Errorf("exit %d, stderr %q; want 1, naming the model loading", code, errOut)
 	}
-	_, errOut, code = run(t, []string{"SPIKE_SET=z"}, "-router", srv.URL)
+	_, errOut, code = runColdload(t, []string{"SPIKE_SET=z"}, "-router", srv.URL)
 	if code != 2 || !strings.Contains(errOut, `no set "z"`) {
 		t.Errorf("exit %d, stderr %q; want 2, naming the unknown set", code, errOut)
 	}
 }
 
-// TestTimeout shows the tool gives up after -timeout, saying how far the restart got.
-func TestTimeout(t *testing.T) {
+// TestColdloadTimeout shows the step gives up after -timeout, saying how far the restart got.
+func TestColdloadTimeout(t *testing.T) {
 	srv := httptest.NewServer(&scripted{steps: []string{setA("loaded"), setA("loaded"), setA("loaded"), ""}})
 	defer srv.Close()
-	_, errOut, code := run(t, nil, "-router", srv.URL, "-interval", "5ms", "-timeout", "200ms")
+	_, errOut, code := runColdload(t, nil, "-router", srv.URL, "-interval", "5ms", "-timeout", "200ms")
 	if code != 1 || !strings.Contains(errOut, "never came back") {
 		t.Errorf("exit %d, stderr %q; want 1, saying the router never came back", code, errOut)
 	}
