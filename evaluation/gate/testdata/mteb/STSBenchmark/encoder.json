@@ -1,0 +1,6 @@
+{
+  "main_score": "cosine_spearman",
+  "prompts": {
+    "all": "task: sentence similarity | query: "
+  }
+}

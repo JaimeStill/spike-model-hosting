@@ -11,12 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JaimeStill/spike-model-hosting/evaluation/tier"
 	"github.com/JaimeStill/spike-model-hosting/hosting/profile"
 	"github.com/JaimeStill/spike-model-hosting/hosting/router"
 )
 
-// The stages, in the order a run takes them. Admission, fitness and capacity are built;
-// quality, set and deep are named so a run reports them, and later work fills them in.
+// The stages, in the order a run takes them. Admission, fitness and capacity are built; quality
+// is built for the embedding role; set and deep, and quality for the other roles, are named so a
+// run reports them, and later work fills them in.
 const (
 	StageAdmission = "admission"
 	StageFitness   = "fitness"
@@ -50,6 +52,13 @@ type Runner struct {
 	SampleEvery time.Duration
 	// Log takes a line as each stage starts, for a reader watching a long run; nil discards it.
 	Log io.Writer
+	// Bars are the quality stage's bars, by tier or task name (evaluation/bars.toml); a task
+	// without one is recorded and never fails.
+	Bars tier.Bars
+	// MTEB runs the embedding role's MTEB tasks; Dir is the run's directory, under which each
+	// task's MTEB output is kept, in mteb/<task>.
+	MTEB MTEB
+	Dir  string
 }
 
 // Roles returns the roles the set assigns Model, in the order Roles lists them.
@@ -111,10 +120,16 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 		StageAdmission: r.admission,
 		StageFitness:   r.fitness,
 		StageCapacity:  r.capacity,
+		StageQuality:   r.quality,
 	}
+	// A stage with a function may still have nothing built for the run's roles.
+	builtFor := map[string]func(*Report) bool{StageQuality: qualityBuilt}
 	failed := ""
 	for _, name := range Stages[start:] {
 		run, built := stages[name]
+		if b, ok := builtFor[name]; ok && built {
+			built = b(rep)
+		}
 		switch {
 		case failed != "":
 			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: failed + " failed"})

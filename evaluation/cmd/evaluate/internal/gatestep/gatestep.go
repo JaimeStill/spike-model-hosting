@@ -1,10 +1,10 @@
 // Package gatestep is evaluate's gated run, which takes one model through the evaluation
-// package gate's stages: admission, fitness, capacity, then quality, set and deep, which are not
-// built yet.
+// package gate's stages: admission, fitness, capacity, quality (built for the embedding role),
+// then set and deep, which are not built yet.
 //
 // Usage:
 //
-//	evaluate [-router url] [-profile name|path] [-set name] (-role role | -model id) [-from stage] [-run dir] [-ssh dest] [-floors path] [-state dir]
+//	evaluate [-router url] [-profile name|path] [-set name] (-role role | -model id) [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-state dir]
 //
 // The model is -model, by router ID, or the model the set assigns -role: agent (the profile's
 // chat role; chat is accepted), vision, audio or embedding. The set is -set, or SPIKE_SET, or
@@ -20,8 +20,14 @@
 // The report is <state>/evaluate/<UTC time>-<model>/report.json, the state directory being
 // -state, or SPIKE_STATE_DIR, or else the module root's untracked .state/. A summary of it goes
 // to stdout, and a line as each stage starts to stderr. The floors are -floors, the module
-// root's evaluation/floors.toml by default. The pool is read over ssh with amdgpu_top, on -ssh,
+// root's evaluation/floors.toml by default, and the quality stage's bars -bars, the module
+// root's evaluation/bars.toml by default. The pool is read over ssh with amdgpu_top, on -ssh,
 // by default the router URL's host.
+//
+// The embedding role's quality stage runs MTEB through the uv project evaluation/suites, with uv
+// and Python from -uv and -python, or SPIKE_UV and SPIKE_PYTHON, or else the consumers mise
+// environment's pins; MTEB's output for each task goes in the run directory's mteb/<task>, and
+// the datasets download into the state directory's cache/.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. The model must be loaded already: the run
 // checks GET /models first, and refuses an unloaded model before any stage; every request
@@ -43,13 +49,16 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/JaimeStill/spike-model-hosting/evaluation/consumers"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/gate"
+	"github.com/JaimeStill/spike-model-hosting/evaluation/tier"
 	"github.com/JaimeStill/spike-model-hosting/hosting/profile"
 )
 
 // Usage is the run's usage line, which evaluate's own usage lists.
-const Usage = "evaluate [-router url] [-profile name|path] [-set name] (-role role | -model id) [-from stage] [-run dir] [-ssh dest] [-floors path] [-state dir]"
+const Usage = "evaluate [-router url] [-profile name|path] [-set name] (-role role | -model id) [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-state dir]"
 
 const usage = "usage:\n  " + Usage + "\n"
 
@@ -57,7 +66,7 @@ const usage = "usage:\n  " + Usage + "\n"
 var errUsage = errors.New("usage")
 
 type options struct {
-	router, profile, set, role, model, from, run, ssh, floors, state string
+	router, profile, set, role, model, from, run, ssh, floors, bars, uv, python, state string
 }
 
 // Run runs the gated stages with args, reading the environment through getenv, and returns its
@@ -102,6 +111,9 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs.StringVar(&o.run, "run", "", "with -from, the run directory to resume; default the model's newest")
 	fs.StringVar(&o.ssh, "ssh", "", "the ssh destination the pool is read on; default the router's host")
 	fs.StringVar(&o.floors, "floors", "", "the floors file; default the module root's evaluation/floors.toml")
+	fs.StringVar(&o.bars, "bars", "", "the quality stage's bars file; default the module root's evaluation/bars.toml")
+	fs.StringVar(&o.uv, "uv", getenv("SPIKE_UV"), "the uv executable (SPIKE_UV); empty asks mise for the pinned one")
+	fs.StringVar(&o.python, "python", getenv("SPIKE_PYTHON"), "the Python uv runs (SPIKE_PYTHON); empty asks mise for the pinned one")
 	fs.StringVar(&o.state, "state", getenv("SPIKE_STATE_DIR"), "the state directory (SPIKE_STATE_DIR); default the module root's .state")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -162,6 +174,10 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 	if err != nil {
 		return false, err
 	}
+	bars, err := tier.LoadBars(cmp.Or(o.bars, filepath.Join(root, "evaluation", "bars.toml")))
+	if err != nil {
+		return false, err
+	}
 	media, err := gate.LoadMedia(root)
 	if err != nil {
 		return false, err
@@ -185,16 +201,31 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 		}
 	}
 
+	// The run directory is named before the run, since the quality stage writes into it.
+	if dir == "" {
+		dir = gate.RunDir(state, model, time.Now())
+	}
 	r := &gate.Runner{
 		Router: o.router, Profile: p, Set: set, Model: model, Floors: floors,
-		Footprint: gate.SSH{Dest: o.ssh}, Media: media, Log: stderr,
+		Footprint: gate.SSH{Dest: o.ssh}, Media: media, Log: stderr, Bars: bars, Dir: dir,
+	}
+	if slices.Contains(r.Roles(), gate.RoleEmbedding) {
+		uv, err := consumers.Executable(ctx, o.uv, "uv")
+		if err != nil {
+			return false, err
+		}
+		python, err := consumers.Executable(ctx, o.python, "python")
+		if err != nil {
+			return false, err
+		}
+		r.MTEB = gate.UV{
+			Exe: uv, Python: python, Project: filepath.Join(root, gate.SuitesDir),
+			Cache: filepath.Join(state, "cache"), Log: stderr,
+		}
 	}
 	rep, err := r.Run(ctx, o.from, prior)
 	if rep == nil {
 		return false, err
-	}
-	if dir == "" {
-		dir = gate.RunDir(state, model, rep.Started)
 	}
 	if werr := gate.WriteReport(dir, rep); werr != nil {
 		return false, errors.Join(err, werr)

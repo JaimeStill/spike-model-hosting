@@ -26,7 +26,8 @@ type Check struct {
 	// Measured is the value judged, in Unit; nil for a fact, which Detail states.
 	Measured *float64 `json:"measured,omitempty"`
 	Unit     string   `json:"unit,omitempty"`
-	// Op is AtLeast or AtMost, and Floor the floor or bar Measured is judged against.
+	// Op is AtLeast or AtMost, and Floor the floor or bar Measured is judged against; both are
+	// empty for a measurement that is recorded only, such as a quality task with no bar yet.
 	Op    string   `json:"op,omitempty"`
 	Floor *float64 `json:"floor,omitempty"`
 	// Values are further measurements the check recorded, such as a request's token counts or
@@ -218,8 +219,11 @@ func WriteSummary(w io.Writer, r *Report) error {
 				name = c.Role + " " + name
 			}
 			fmt.Fprintf(&b, "  %s %s", mark, name)
-			if c.Measured != nil {
+			switch {
+			case c.Measured != nil && c.Floor != nil:
 				fmt.Fprintf(&b, ": %s, floor %s %s", strings.TrimSpace(num(*c.Measured)+" "+c.Unit), c.Op, num(*c.Floor))
+			case c.Measured != nil:
+				fmt.Fprintf(&b, ": %s, no floor", strings.TrimSpace(num(*c.Measured)+" "+c.Unit))
 			}
 			if c.Detail != "" {
 				fmt.Fprintf(&b, " (%s)", c.Detail)

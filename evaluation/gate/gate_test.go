@@ -29,11 +29,13 @@ const (
 type harness struct {
 	router    *fakeRouter
 	footprint *fakeFootprint
+	uv        *fakeUV
 	runner    *gate.Runner
 }
 
 // newHarness returns a runner for model in set A against a fake router with set A loaded, the
-// committed floors, and a pool with 3333MiB free, as set A left it idle on b11669.
+// committed floors, a pool with 3333MiB free, as set A left it idle on b11669, no bars, and a
+// fake uv that answers each MTEB task with its recorded result.
 func newHarness(t *testing.T, model string) *harness {
 	t.Helper()
 	p, err := profile.Load(strixHalo)
@@ -52,10 +54,12 @@ func newHarness(t *testing.T, model string) *harness {
 		router:    newFakeRouter(t, set.Models...),
 		footprint: &fakeFootprint{free: []int{3333}},
 	}
+	h.uv = newFakeUV(t)
 	h.runner = &gate.Runner{
 		Router: h.router.srv.URL, Profile: p, Set: set, Model: model, Floors: floors,
 		Footprint: h.footprint, SampleEvery: 5 * time.Millisecond,
 		Media: gate.Media{PNG: []byte("png"), WAV: []byte("wav"), AudioSeconds: 6},
+		MTEB:  h.uv.runner(), Dir: t.TempDir(),
 	}
 	return h
 }
@@ -116,7 +120,8 @@ func TestRunAgentPasses(t *testing.T) {
 	check(t, rep, gate.StageCapacity, gate.RoleAgent, "embedding tolerance")
 }
 
-// TestRunOtherRoles runs each other role's model of set A through the built stages.
+// TestRunOtherRoles runs each other role's model of set A through the built stages: quality is
+// built for the embedding role alone, and runs MTEB for it only.
 func TestRunOtherRoles(t *testing.T) {
 	for model, role := range map[string]string{gemma26B: gate.RoleVision, gemmaE4B: gate.RoleAudio, embedding: gate.RoleEmbedding} {
 		t.Run(role, func(t *testing.T) {
@@ -124,6 +129,16 @@ func TestRunOtherRoles(t *testing.T) {
 			rep := h.run(t, "", nil)
 			if !rep.Passed || !equal(rep.Roles, []string{role}) {
 				t.Errorf("passed %v roles %q; want passed, %s\n%+v", rep.Passed, rep.Roles, role, rep.Stages)
+			}
+			quality, reached, runs := gate.StatusNotBuilt, gate.StageCapacity, 0
+			if role == gate.RoleEmbedding {
+				quality, reached, runs = gate.StatusPass, gate.StageQuality, len(gate.EmbeddingTasks)
+			}
+			if s := rep.Stage(gate.StageQuality).Status; s != quality || rep.Reached != reached {
+				t.Errorf("quality %s, reached %s; want %s, %s", s, rep.Reached, quality, reached)
+			}
+			if n := len(h.uv.calls(t)); n != runs {
+				t.Errorf("uv ran %d times; want %d", n, runs)
 			}
 		})
 	}

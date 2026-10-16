@@ -52,6 +52,19 @@ while read -r line; do
 	[ -n "$line" ] && report "$line"
 done <<<"$outdated"
 
+# Each uv project's direct dependencies behind their newest release, from its lock: the
+# suites project pins its packages exactly, so a newer release is reported, never taken. uv is
+# pinned in the consumers environment only, so it runs from the evaluation area, on the
+# project's absolute path. Each line names the project's lock.
+mapfile -t uv_projects < <(git ls-files 'uv.lock' '*/uv.lock' | xargs -r -n1 dirname)
+for dir in "${uv_projects[@]}"; do
+	tree=$(MISE_ENV=consumers mise -C evaluation exec -- uv tree --project "$PWD/$dir" --outdated --depth 1 --locked)
+	behind=$(sed -nE 's/.*── ([^ ]+) (v[^ ]+) \(latest: (v[^)]+)\).*/\1 \2 -> \3/p' <<<"$tree")
+	while read -r line; do
+		[ -n "$line" ] && report "$dir/uv.lock: $line"
+	done <<<"$behind"
+done
+
 # The profiles pin no engine: they hold llama.cpp to a minimum build, a floor a
 # newer release never makes stale, so there is nothing of theirs to scan. Each
 # document and measurement names the build it ran on instead.

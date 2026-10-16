@@ -1,0 +1,6 @@
+{
+  "main_score": "accuracy",
+  "prompts": {
+    "all": "task: classification | query: "
+  }
+}

@@ -3,5 +3,11 @@
 #
 #   <tier> = <bar in [0, 1]>
 #
-# A tier with no bar here runs to completion and records its rate; it never fails.
+# The embedding role's MTEB tasks take a bar the same way, keyed by the MTEB task's name, the
+# bar being the task's main score in MTEB's [0, 1] scale (package evaluation/gate):
+#
+#   SciFact = <ndcg_at_10 in [0, 1]>
+#
+# A tier or task with no bar here runs to completion and records its rate or score; it never
+# fails.
 [bars]
