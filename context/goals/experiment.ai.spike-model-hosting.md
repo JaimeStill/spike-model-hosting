@@ -1,15 +1,15 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** brief ready
-- **Task:** main-model
-- **Branch:** main-model
+- **State:** idle
+- **Task:** none
+- **Branch:** none
 
 ## Tasks
 
 1. [x] align
 2. [x] profile
 3. [x] consumers
-4. [ ] main-model
+4. [x] main-model
 5. [ ] evaluation
 6. [ ] candidates
 7. [ ] rocm
@@ -118,44 +118,6 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
               of 657 GB free) move to the retired directory beside the cache. Swaps and
               loads undo on restart. On the laptop, removing the new pins restores the old.
 ```
-
-## Progress
-
-- PLAN approved 2026-10-15.
-- Slice 1 committed (ff8238d): Pi 1.3.0, Claude Code 2.1.301, OpenCode 1.19.1, node 26.12.0,
-  uv 0.13.1 (newer than the brief's PLAN versions; nothing to adapt); currency shows only the
-  Python hold.
-- Slice 2 committed (5ae4b65): b11669 reviewed (no preset change), probe passes on set A,
-  `swap a` a no-op on the live router. The router can't load candidates until the rendered
-  presets (sha256 f98d9faf…) are installed: root step handed to the architect, then
-  GET /models?reload=1 (no restart).
-- Slice 6 committed (67c9197): gpt-oss-120b on b11669, one set: Pi 9/9 0 invalid; Claude Code
-  6/9 (tool 0/5, skill 0/5, dropped-image n/a, rest 5/5) 0 invalid; OpenCode 6/9, 18 invalid.
-  Candidates run one set each against this row.
-- Slice 3 committed (bed1dac): named sets with per-set budgets, roles, licences; non-startup
-  models render no load-on-startup key; a model in no set is refused.
-- Slice 4 committed (f4077c9, a4158b2): sets name a model per role ([sets.roles]); `swap`
-  command and package; every instrument takes -set (SPIKE_SET fallback, default the startup
-  set); embedding models record dims. Live swap of set A not yet run (router still b11572).
-- Slice 5 hermetic half committed (63e28aa): mistral and nemotron sets (estimated budgets),
-  per-model consumer reasoning ([models.consumers]); Pi can't send reasoning_effort to Mistral
-  without a driver change (out of scope), so Mistral's effort comes from its preset. Live half
-  committed (e3274ab, c14826a): presets render hf-repo; Mistral's ID tag is Q4_K_XL (the router
-  canonicalizes UD-Q4_K_XL; same files). Both candidates downloaded, loaded and probed on
-  b11669; swaps timed (a→mistral 2154 s, mistral→nemotron 2779 s, both mostly download;
-  nemotron→a 23 s). Mistral ~3.4 tok/s with ~8.5 CPU threads busy (the F32 fallback);
-  Nemotron ~12.1 tok/s. Mistral's image answer intermittent (3 of 15 repeats said no image).
-- Slice 7 committed (97abca4): Mistral Small 4 disqualified at fitness (speed): 3.36 tok/s
-  engine, one stream, short (floor 24). Claude Code can't run on it at all (HTTP 500: its
-  template refuses a system message after the first user message). Stopped on the
-  architect's call for a staged evaluation; conform, concurrent and cold load not run.
-  GuideLLM stalled overnight because the laptop suspended; long runs now hold
-  systemd-inhibit. Router back on set A.
-- ESCALATION answered (2026-10-16): staged evaluation; then a second escalation moved it to
-  new tasks `evaluation` and `candidates`. main-model ships after slice 8 (records).
-- Slice 8 committed (f41f500): context catalog in model-cards.md; no-sudo boundary text in
-  CLAUDE.md, README and STANDARDS; README path adds evaluation and candidates. Every slice
-  committed; standards review next.
 
 ## Decisions
 
