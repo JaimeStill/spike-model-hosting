@@ -247,3 +247,65 @@ is read from the router's `/props` `build_info`.
   with no unload or load: the command's first run against a real router. `swap mistral`
   stopped before any change, since the installed presets, rendered before the candidate sets
   existed, list neither candidate.
+
+### The candidates loaded on b11669
+
+`main-model` slice 5 loaded both candidate sets on b11669 on 2026-10-15, through `cmd/swap`.
+Their footprints and the swap timings are in [`memory-budget.md`](memory-budget.md).
+
+- **The presets, first.** Two faults in the presets kept the candidates from loading, and both
+  were fixed before the swaps. First, the router renames a section to its canonical tag, the
+  quant type at the end of the tag (`canonical_tag` in `common/preset.cpp`), so
+  `[unsloth/...:UD-Q4_K_XL]` was listed as `:Q4_K_XL`. Mistral's router ID is now
+  `unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL`, and `profile.Validate` refuses an ID the
+  router would rename. Second, a section with no `hf-repo` gets one only by merging with the
+  router's entry for a model already in its cache. Neither candidate was cached, so its process
+  would have started with no model, and `llama-server` then runs as a second router (the
+  `is_router_server` check in `tools/server/server.cpp`). Every section now renders
+  `hf-repo = <its ID>`; installed as sha256 `9eeb9f04…`.
+- **Mistral Small 4.** The files are
+  `UD-Q4_K_XL/Mistral-Small-4-119B-2603-UD-Q4_K_XL-0000{1,2,3}-of-00003.gguf`, 74.16GB.
+  `find_best_model` in `common/download.cpp` takes the first file matching `Q4_K_XL[.-]`, and
+  only these splits match. `/props` names the first split as the model path, ftype
+  `Q4_K - Medium`. The mmproj is `mmproj-BF16.gguf`, by the router log's `loaded multimodal
+  model` line. The handler is Ministral 3: the served template has `[SYSTEM_PROMPT]`,
+  `[TOOL_CALLS]` and `[ARGS]` and no `[CALL_ID]`, which is what
+  `common_chat_template_detect_params_init` checks first. That function logs its choice only at
+  debug level, which the router's default verbosity doesn't print, so the handler was read by
+  applying the function's checks to the template `/props` serves. It is unsloth's version of
+  the template, which carries `reasoning_effort`, and `/props` reports
+  `supports_reasoning_effort`. The load took 23s after the download.
+- **Mistral's expert down-projection runs on the CPU.** The shared mixture-of-experts graph
+  (`build_moe_ffn` in `src/llama-graph.cpp`) calls
+  `ggml_prec_set_src(experts, GGML_PREC_F32, 1)` on the expert down-projection for
+  `LLM_ARCH_MISTRAL4` ("src1 can exceed F16 range"). That call writes op_params[3], and Vulkan's
+  `supports_op` refuses a `MUL_MAT_ID` with it, so the scheduler places the op on the CPU. The
+  log doesn't print the placement at default verbosity, but the run shows it. While generating,
+  Mistral's process held 840-890% CPU (`top`, 2s samples during the probe), about 8.5 of its 16
+  threads, and 0% when idle. One request generated at 3.4 tokens/s (209 tokens; the server's
+  `timings`). Nemotron's process peaked at 60% CPU and generated at 12.1 tokens/s on the same
+  kind of request. This is the open PR #30105 above.
+- **Mistral's probe.** `SPIKE_SET=mistral mise run integration` passed. A second, verbose
+  probe run failed only its image check: Mistral answered "Please upload the image you'd like
+  me to describe." Repeated, the same request (871 prompt tokens each time, the image
+  included) failed 3 of 15 times. Each failure claimed it could not see an image. In two of
+  them the reasoning named the three shapes and then called them "a description rather than an
+  actual image file". The other 12, and 6 more with the image placed first, named every shape
+  and colour. So the image reaches the model, and the failure is the model's own answer, at
+  its card's temperature 0.7 and `reasoning_effort` high. Chat, the `/v1/messages` tool call
+  (`get_weather` `{"city":"Paris"}`), gemma-4-E4B's audio and EmbeddingGemma 2 passed every
+  run.
+- **Nemotron 3.5 Super VL.** The file is `NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-NVFP4.gguf`,
+  76918795552 bytes, the 120B weights. The 1.35GB `lilicorr-...-NVFP4.gguf` was not fetched:
+  the cache holds only the weights and the mmproj, and `/props` names the weights as the model
+  path. The mmproj is `mmproj-NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-Q8_0.gguf`. The handler
+  is Qwen3-Coder: the template has `<tool_call>`, `<function=` and `<parameter=`, and reads
+  `enable_thinking`. Reasoning is on: a plain chat returned `reasoning_content`, and the
+  server logged that the template preserves reasoning by default. The context checkpoints are
+  8 per slot: the preset's `ctx-checkpoints = 8` reaches the process as `--swa-checkpoints 8`,
+  an alias of the same flag in `common/arg.cpp`. One connection drop during the download was
+  retried by the fetch itself. The load took 23s after the download. `SPIKE_SET=nemotron mise
+  run integration` passed, and so did a verbose rerun, image included ("a red circle, a blue
+  square, and a green triangle on a white background").
+- **Back to set A.** `swap a` reloaded gpt-oss-120b and the 26B-A4B from the cache in 23.0s,
+  and `mise run integration` on set A passed.

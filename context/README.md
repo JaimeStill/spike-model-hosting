@@ -135,11 +135,13 @@ of the admin tooling.
   llama.cpp Vulkan baseline every platform is measured against is in
   [`baseline.md`](baseline.md): the GuideLLM grid (`mise run baseline`), prefix reuse (the
   `prefix` command, `cmd/prefix`), and cold load (the `coldload` package and command,
-  `cmd/coldload`). Set A's memory budget on the Framework, estimated against measured, is in
-  [`memory-budget.md`](memory-budget.md).
+  `cmd/coldload`). Set A's memory budget on the Framework, estimated against measured, the
+  candidate sets' idle footprints, and the swap timings between sets (evidence 6's
+  model-swapping cell) are in [`memory-budget.md`](memory-budget.md).
 - **llama.cpp builds:** each build move on the Framework, with its release-note review and
-  what was re-verified on the new build, in [`llama-cpp-builds.md`](llama-cpp-builds.md). The
-  Framework runs b11572.
+  what was re-verified on the new build, and what the main-model candidates loaded (files,
+  handlers, the CPU fallback), in [`llama-cpp-builds.md`](llama-cpp-builds.md). The Framework
+  runs b11669.
 - **Gateways:** none, agentgateway, and LiteLLM.
 - **Admin tool:** a CLI on go-cli-sdk over the profile, with personal-agents' `outpost` as its
   baseline.
