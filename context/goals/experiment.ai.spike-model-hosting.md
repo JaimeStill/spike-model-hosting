@@ -153,6 +153,9 @@ Door          two-way. The repository reverts by PR. On the Framework the earlie
   systemd-inhibit. Router back on set A.
 - ESCALATION answered (2026-10-16): staged evaluation; then a second escalation moved it to
   new tasks `evaluation` and `candidates`. main-model ships after slice 8 (records).
+- Slice 8 committed (f41f500): context catalog in model-cards.md; no-sudo boundary text in
+  CLAUDE.md, README and STANDARDS; README path adds evaluation and candidates. Every slice
+  committed; standards review next.
 
 ## Decisions
 
