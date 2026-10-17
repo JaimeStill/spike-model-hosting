@@ -60,10 +60,10 @@ Behaviors     1. The repository has five areas: hosting (the Go tooling for
                  stage's wall time. It refuses a model that isn't loaded.
               4. Admission is on paper: licence, origin (judged by
                  STANDARDS), roles, card context, a budget estimate at least
-                 3 GiB under the pool, the minimum build. Fitness takes
+                 2.75 GiB under the pool, the minimum build. Fitness takes
                  under ~3 min: a probe smoke per declared role, the
-                 single-stream floors, an idle pool at least 3 GiB free.
-                 Capacity: 4 in flight with at least 3 GiB free, no crossed
+                 single-stream floors, an idle pool at least 2.75 GiB free.
+                 Capacity: 4 in flight with at least 2.75 GiB free, no crossed
                  nonce, the embedding tolerance held, the 4-stream floors.
               5. Each role's floors are absolute and task-based, held as
                  data with initial values a later decision may change:
@@ -97,8 +97,8 @@ Behaviors     1. The repository has five areas: hosting (the Go tooling for
                  profile: which harnesses fit, and each failed cell with its
                  reason. The role fails only if no harness fits.
               11. The set stage runs each role's tier 1 alone, then every
-                 role's at once, with at least 3 GiB of the pool free at the
-                 peak and no crossed answer.
+                 role's at once, with at least 2.75 GiB of the pool free at
+                 the peak and no crossed answer.
               12. One model's run, admission through the set stage, fits in
                  ~85 min for a chat-and-vision model that passes every gate
                  at set A's rates; a failing model stops at its first failed
@@ -571,6 +571,7 @@ slices 8/12 committed · standards — · spec — · editor —
 - evaluation (slice 7, architect): fit profiles, with each failed cell's reason, are design input for the native Go harness spike: what a harness must do for a local model (force the tool call when offering respond, round-trip reasoning, no blind resend on a parse 500, drop images for a model without vision). The fit tier takes harnesses as a list, so that spike's harness joins it as one more.
 - evaluation (slice 8, architect): the hour becomes ~85 min for a chat-and-vision model that passes every gate (measured ~105-120 min before harness fit and the set-stage change); sample counts hold; the set stage in a model's run reuses the model's quality tier 1 as its alone figure, and the set's other roles generate load only while the model's tiers run. Supersedes r2's 1-hour target.
 - evaluation (slice 8, architect): set A fails the set stage's 3 GiB floor (2968-2990 MiB) because Gemma 4 26B's memory grows ~250-270 MiB under heavy vision use and holds until reload; diagnose which buffer grows and whether a server setting caps it before choosing between a profile setting, a lower floor, or a reload in the procedure.
+- evaluation (slice 8, architect): the pool floor drops from 3072 to 2816 MiB (2.75 GiB), and the vision model's preset caps the image-encoder batch (mtmd-batch-max-tokens = 512; measured cost under 1% on two-image prefill), keeping c 32768. The growth is a high-water mark, not a leak: one image over 256 tokens +200 MiB, a two-image batch +330 MiB, Vulkan scratch +100 MiB. Rejected c 16384 (4 slots sharing 16k against MMMU's 4096-token answers) and image-max-tokens 256 (halves image detail, V*Bench's subject). The preset installs with slice 10's build move, in one root session.
 
 ## Pending edits
 
