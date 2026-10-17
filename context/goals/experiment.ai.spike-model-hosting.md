@@ -625,3 +625,4 @@ slices 10/12 committed · standards — · spec — · editor —
 - coordinator · roadmap, the spike's candidates summary: a host keeps only the models that passed on it
   (failed candidates are deleted after their verdict is recorded), and sets load only models that
   passed together.
+- coordinator · roadmap, the spike's candidates summary: candidates are screened, not baselined: tiers stop early on a pass or a fail, each tier's screening fifth runs by default and the full tiers and deep stage only for finalists, the roles' quality tiers run concurrently, and results are kept by model, build and preset so a changed profile reruns only its changed roles plus the set stage.
