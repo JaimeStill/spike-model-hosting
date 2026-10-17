@@ -119,6 +119,18 @@ func TestSetRun(t *testing.T) {
 	}
 }
 
+// loads fails t unless each of the set's roles other than the vision model's carried load from
+// workers workers in rep's set stage, answered, recorded and unjudged.
+func loads(t *testing.T, rep *gate.Report, workers float64) {
+	t.Helper()
+	for _, role := range []string{gate.RoleAgent, gate.RoleAudio, gate.RoleEmbedding} {
+		l := check(t, rep, gate.StageSet, role, "load")
+		if !l.Passed || l.Measured == nil || l.Values["errors"] != 0 || l.Values["workers"] != workers || l.Values["window_s"] <= 0 || l.Floor != nil {
+			t.Errorf("%s load %+v; want answered requests from %v workers over the window, recorded, unjudged", role, l, workers)
+		}
+	}
+}
+
 // TestSetModelRun shows a model's run takes the set stage after quality: the model's tier 1
 // runs once, under load from the set's other role models, beside its quality tier 1 as the alone
 // figure, which it never reruns; the other roles run no tier, and their load stops with the
@@ -169,14 +181,9 @@ func TestSetModelRun(t *testing.T) {
 		t.Errorf("slowdown %+v; want the concurrent wall over quality's tier 1 wall, %v", s, qWall)
 	}
 
-	// The other roles carried load, recorded as load, not as scored tiers.
-	workers := map[string]float64{gate.RoleAgent: 4, gate.RoleAudio: 1, gate.RoleEmbedding: 4}
-	for role, w := range workers {
-		l := check(t, first, gate.StageSet, role, "load")
-		if !l.Passed || l.Measured == nil || l.Values["errors"] != 0 || l.Values["workers"] != w || l.Values["window_s"] <= 0 || l.Floor != nil {
-			t.Errorf("%s load %+v; want answered requests from %v workers over the window, recorded, unjudged", role, l, w)
-		}
-	}
+	// The other roles carried load, one worker each by default, recorded as load, not as scored
+	// tiers.
+	loads(t, first, 1)
 	// The fake answers a chat in well under a millisecond, and the tiers' uv calls each take longer.
 	if l := check(t, first, gate.StageSet, gate.RoleAgent, "load"); l.Values["requests"] < 1 || *l.Measured <= 0 {
 		t.Errorf("agent load %+v; want answered requests", l)
@@ -192,7 +199,9 @@ func TestSetModelRun(t *testing.T) {
 	}
 
 	quality := len(h.uv.calls(t))
+	h.runner.LoadWorkers = 2
 	rep := h.run(t, gate.StageSet, first)
+	loads(t, rep, 2)
 	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
 	if got := statuses(rep); !equal(got, want) || !rep.Stage(gate.StageQuality).Reused || rep.Stage(gate.StageSet).Reused {
 		t.Fatalf("resumed %q; want %q, quality reused, set run", got, want)

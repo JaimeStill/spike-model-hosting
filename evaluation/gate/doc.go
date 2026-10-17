@@ -80,7 +80,8 @@
 //     wall time, from its quality stage's tier 1 records, the same lists at the same settings,
 //     and runs only its own roles' tier 1s, at once, while each of the set's other role models
 //     carries load for exactly that window: capacity's request for the role, sent one after
-//     another by as many workers as its tier 1 keeps in flight (four, or one for audio), started
+//     another by Runner.LoadWorkers workers (one by default: one a role keeps every model
+//     resident and interleaving, and memory and crossing don't depend on how hard), started
 //     with the model's tiers and stopped when they finish, and recorded as load (requests
 //     answered and errored, requests and tokens a second), never as a scored tier. Each unit's
 //     score and wall time are recorded, the concurrent one beside the alone one's with its

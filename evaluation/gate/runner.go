@@ -56,6 +56,12 @@ type Runner struct {
 	// CrossEvery spaces the set stage's rounds of nonce requests over its concurrent phase; zero
 	// is 15 seconds.
 	CrossEvery time.Duration
+	// LoadWorkers is how many workers each of the set's other roles sends its load with, one
+	// request after another, in a model run's set stage; zero is one. One worker a role keeps the
+	// other models resident and interleaving with the model's tiers, which is what the stage
+	// gates: memory (KV is fixed when a model loads) and crossing. The tier-1 concurrency, four,
+	// slowed the vision model's set stage 3.17x on set A, against 1.68x in a set run.
+	LoadWorkers int
 	// Log takes a line as each stage starts, for a reader watching a long run; nil discards it.
 	Log io.Writer
 	// Bars are the quality stage's bars, by tier or task name (evaluation/bars.toml); a task

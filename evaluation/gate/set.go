@@ -353,21 +353,16 @@ type load struct {
 	wall                      time.Duration
 }
 
-// newLoad returns a's load. Its workers are the requests its tier 1 keeps in flight: the
-// profile's slots for the agent's and vision's Inspect tiers (agent_quality.py's and
-// vision_quality.py's SLOTS) and the embedding encoder (mteb_quality.py's IN_FLIGHT), and one for
-// the audio role's ASR task, which sends one clip at a time.
+// newLoad returns a's load, sent by Runner.LoadWorkers workers (one when zero). The workers are a
+// closed loop: each sends its next request as its last returns.
 func (r *Runner) newLoad(c *client, a assignment) *load {
-	l := &load{role: a.role, model: a.model, workers: r.Profile.Slots}
-	switch a.role {
-	case RoleEmbedding:
+	l := &load{role: a.role, model: a.model, workers: max(r.LoadWorkers, 1)}
+	if a.role == RoleEmbedding {
 		l.send = func(ctx context.Context, _ uint64) (int, error) {
 			got, err := c.embed(ctx, a.model, loadInputs)
 			return got.PromptTokens, err
 		}
 		return l
-	case RoleAudio:
-		l.workers = 1
 	}
 	rec := &recorder{c: c, model: a.model, role: a.role, media: r.Media}
 	l.send = func(ctx context.Context, n uint64) (int, error) {
