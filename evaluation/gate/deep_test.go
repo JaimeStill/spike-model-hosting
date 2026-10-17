@@ -76,20 +76,21 @@ func TestDeepAgent(t *testing.T) {
 		t.Fatalf("stages %q, passed %v, reached %q; want %q, passed, reached deep\n%+v", got, rep.Passed, rep.Reached, want, rep.Stage(gate.StageDeep))
 	}
 
-	// τ2: the recorded airline run passed task 22 twice, 37 once and 44 never; retail 63 and 99
-	// twice and 102 once.
+	// τ2: the recorded airline run passed task 22 twice, 37 never and 44 once, its simulator
+	// called 26 times; retail 63 once, 99 twice and 102 once, 41 calls.
 	for _, c := range []struct {
 		domain       string
 		pass1, pass2 float64
-	}{{"airline", 0.5, 1.0 / 3}, {"retail", 2.5 / 3, 2.0 / 3}} {
+		calls        float64
+	}{{"airline", 0.5, 1.0 / 3, 26}, {"retail", 2.0 / 3, 1.0 / 3, 41}} {
 		ch := check(t, rep, gate.StageDeep, gate.RoleAgent, gate.Tau2Check(c.domain))
 		v := ch.Values
 		if !ch.Passed || ch.Floor != nil || !near(*ch.Measured, c.pass1) || !near(v["pass_1"], c.pass1) || !near(v["pass_2"], c.pass2) ||
-			v["tasks"] != 3 || v["trials"] != 2 || v["samples"] != 6 || v["simulator_calls"] != 36 || v["agent_errors"] != 1 ||
+			v["tasks"] != 3 || v["trials"] != 2 || v["samples"] != 6 || v["simulator_calls"] != c.calls || v["agent_errors"] != 0 ||
 			v["simulator_errors"] != 0 || v["wall_s"] <= 0 {
 			t.Errorf("%s %+v; want pass^1 %v and pass^2 %v over 3 tasks x 2 trials, recorded, unjudged", c.domain, ch, c.pass1, c.pass2)
 		}
-		if !strings.Contains(ch.Detail, "Claude Code 2.1.301, reported claude-sonnet-5-5 (36)") || !strings.Contains(ch.Detail, "tau2_"+c.domain+"@3-A") {
+		if !strings.Contains(ch.Detail, fmt.Sprintf("Claude Code 2.1.301, reported claude-sonnet-5-5 (%v)", c.calls)) || !strings.Contains(ch.Detail, "tau2_"+c.domain+"@3-A") {
 			t.Errorf("%s detail %q; want the simulator's Claude Code and reported model, and the task's version", c.domain, ch.Detail)
 		}
 	}
@@ -107,9 +108,9 @@ func TestDeepAgent(t *testing.T) {
 		}
 	}
 	sim := check(t, rep, gate.StageDeep, gate.RoleAgent, "tau2 simulator")
-	if *sim.Measured != 72 || sim.Values["retries"] != 2 || sim.Values["errors"] != 0 ||
-		!strings.Contains(sim.Detail, "reported model: claude-sonnet-5-5 (72)") || !strings.Contains(sim.Detail, "claude -p, tools off") {
-		t.Errorf("simulator %+v; want both domains' 72 calls rolled up, with the reported model", sim)
+	if *sim.Measured != 67 || sim.Values["retries"] != 0 || sim.Values["errors"] != 0 ||
+		!strings.Contains(sim.Detail, "reported model: claude-sonnet-5-5 (67)") || !strings.Contains(sim.Detail, "claude -p, tools off") {
+		t.Errorf("simulator %+v; want both domains' 67 calls rolled up, with the reported model", sim)
 	}
 
 	// The grid: four cells on the model, the prompt cut by its card's tokenizer, GuideLLM's
@@ -245,8 +246,8 @@ func TestDeepBroken(t *testing.T) {
 	if retail := check(t, rep, gate.StageDeep, gate.RoleAgent, gate.Tau2Check("retail")); retail.Passed || !strings.Contains(retail.Detail, "couldn't measure") {
 		t.Errorf("retail %+v; want a measurement that couldn't be taken", retail)
 	}
-	if sim := check(t, rep, gate.StageDeep, gate.RoleAgent, "tau2 simulator"); *sim.Measured != 36 || sim.Values["errors"] != 1 {
-		t.Errorf("simulator %+v; want airline's 36 calls, one failed", sim)
+	if sim := check(t, rep, gate.StageDeep, gate.RoleAgent, "tau2 simulator"); *sim.Measured != 26 || sim.Values["errors"] != 1 {
+		t.Errorf("simulator %+v; want airline's 26 calls, one failed", sim)
 	}
 	for _, cell := range gate.GridCells {
 		c := check(t, rep, gate.StageDeep, "", cell.Name())

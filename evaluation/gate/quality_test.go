@@ -25,9 +25,9 @@ import (
 // Framework, trimmed to testdata/tiers/vision-<tier>.txt, or testdata/vision/<tier>-stopped
 // given a bar; a BFCL tier with testdata/agent/<tier>, a live run of gpt-oss-120b trimmed to
 // testdata/tiers/agent-<tier>.txt, or testdata/agent/<tier>-stopped given a bar; a τ2 domain with
-// testdata/tau2/<domain>, the summary (tau2.json) of testdata/tiers/agent-tau2-<domain>.txt's
-// tasks, two trials each, in the shape tau2_quality.py writes, synthesized until a live run is
-// recorded. Each result is stamped with the suites project's pin of MTEB, Inspect AI or
+// testdata/tau2/<domain>, the summary (tau2.json) of a live run of gpt-oss-120b on the Framework,
+// its user simulated by Sonnet through Claude Code 2.1.301, trimmed to
+// testdata/tiers/agent-tau2-<domain>.txt's tasks, two trials each. Each result is stamped with the suites project's pin of MTEB, Inspect AI or
 // inspect_evals, since the check refuses another's and a pin moves on while the recording stays
 // the same.
 type fakeUV struct {

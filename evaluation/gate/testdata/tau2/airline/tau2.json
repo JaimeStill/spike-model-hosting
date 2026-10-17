@@ -11,23 +11,60 @@
   "trials": 2,
   "simulator": "claude-code/sonnet",
   "claude_code_version": "2.1.301",
-  "full_task_version": "3-A"
+  "simulator_settings": "temperature, seed and token limits are not applied: Claude Code's print mode takes none",
+  "full_task_version": "3-A",
+  "task_interface_version": "A",
+  "task_comparability_version": 3
  },
- "log": "2026-10-17T00-00-00-00-00_tau2-airline_synthetic.eval",
+ "log": "2026-10-17T19-47-24-00-00_tau2-airline_WWzCwPirVS9gu3ozhszX25.eval",
  "samples": [
   {
    "id": "22",
    "epoch": 1,
    "score": "C",
-   "working_time": 30.5,
+   "working_time": 163.377,
+   "error": null,
+   "store": {
+    "claude_code:calls": 5,
+    "claude_code:models": {
+     "claude-sonnet-5-5": 5
+    },
+    "claude_code:retries": 0,
+    "claude_code:seconds": 13.772567445063032
+   },
+   "simulator_errors": 0,
+   "agent_errors": 0
+  },
+  {
+   "id": "37",
+   "epoch": 1,
+   "score": "I",
+   "working_time": 245.755,
+   "error": null,
+   "store": {
+    "claude_code:calls": 4,
+    "claude_code:models": {
+     "claude-sonnet-5-5": 4
+    },
+    "claude_code:retries": 0,
+    "claude_code:seconds": 12.512237521936186
+   },
+   "simulator_errors": 0,
+   "agent_errors": 0
+  },
+  {
+   "id": "44",
+   "epoch": 1,
+   "score": "C",
+   "working_time": 471.921,
    "error": null,
    "store": {
     "claude_code:calls": 6,
     "claude_code:models": {
      "claude-sonnet-5-5": 6
     },
-    "claude_code:retries": 1,
-    "claude_code:seconds": 21.0
+    "claude_code:retries": 0,
+    "claude_code:seconds": 17.220199820993003
    },
    "simulator_errors": 0,
    "agent_errors": 0
@@ -36,32 +73,15 @@
    "id": "22",
    "epoch": 2,
    "score": "C",
-   "working_time": 30.5,
+   "working_time": 227.127,
    "error": null,
    "store": {
-    "claude_code:calls": 6,
+    "claude_code:calls": 4,
     "claude_code:models": {
-     "claude-sonnet-5-5": 6
+     "claude-sonnet-5-5": 4
     },
     "claude_code:retries": 0,
-    "claude_code:seconds": 21.0
-   },
-   "simulator_errors": 0,
-   "agent_errors": 0
-  },
-  {
-   "id": "37",
-   "epoch": 1,
-   "score": "C",
-   "working_time": 30.5,
-   "error": null,
-   "store": {
-    "claude_code:calls": 6,
-    "claude_code:models": {
-     "claude-sonnet-5-5": 6
-    },
-    "claude_code:retries": 0,
-    "claude_code:seconds": 21.0
+    "claude_code:seconds": 17.48138872598065
    },
    "simulator_errors": 0,
    "agent_errors": 0
@@ -70,32 +90,15 @@
    "id": "37",
    "epoch": 2,
    "score": "I",
-   "working_time": 30.5,
+   "working_time": 206.476,
    "error": null,
    "store": {
-    "claude_code:calls": 6,
+    "claude_code:calls": 4,
     "claude_code:models": {
-     "claude-sonnet-5-5": 6
+     "claude-sonnet-5-5": 4
     },
     "claude_code:retries": 0,
-    "claude_code:seconds": 21.0
-   },
-   "simulator_errors": 0,
-   "agent_errors": 0
-  },
-  {
-   "id": "44",
-   "epoch": 1,
-   "score": "I",
-   "working_time": 30.5,
-   "error": null,
-   "store": {
-    "claude_code:calls": 6,
-    "claude_code:models": {
-     "claude-sonnet-5-5": 6
-    },
-    "claude_code:retries": 0,
-    "claude_code:seconds": 21.0
+    "claude_code:seconds": 9.115806925052311
    },
    "simulator_errors": 0,
    "agent_errors": 0
@@ -104,18 +107,18 @@
    "id": "44",
    "epoch": 2,
    "score": "I",
-   "working_time": 30.5,
+   "working_time": 96.296,
    "error": null,
    "store": {
-    "claude_code:calls": 6,
+    "claude_code:calls": 3,
     "claude_code:models": {
-     "claude-sonnet-5-5": 6
+     "claude-sonnet-5-5": 3
     },
     "claude_code:retries": 0,
-    "claude_code:seconds": 21.0
+    "claude_code:seconds": 7.512651817058213
    },
    "simulator_errors": 0,
-   "agent_errors": 1
+   "agent_errors": 0
   }
  ]
 }
