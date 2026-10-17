@@ -186,16 +186,17 @@ func readJSON(path string, v any, python bool) error {
 // VisionTiers through r.Vision. The agent's and vision's tiers run cheapest first, stopping at
 // the first tier that fails.
 func (r *Runner) quality(ctx context.Context, rep *Report) []Check {
+	t := target{model: r.Model, dir: r.Dir, judged: true}
 	var checks []Check
 	if slices.Contains(rep.Roles, RoleAgent) {
-		checks = append(checks, r.agentTiers(ctx)...)
+		checks = append(checks, r.agentTiers(ctx, t)...)
 		if ctx.Err() != nil {
 			return checks
 		}
 	}
 	if slices.Contains(rep.Roles, RoleEmbedding) {
 		for _, task := range EmbeddingTasks {
-			checks = append(checks, r.mtebTask(ctx, task))
+			checks = append(checks, r.mtebTask(ctx, t, task))
 			if ctx.Err() != nil {
 				return checks
 			}
@@ -203,34 +204,35 @@ func (r *Runner) quality(ctx context.Context, rep *Report) []Check {
 	}
 	if slices.Contains(rep.Roles, RoleAudio) {
 		for _, set := range AudioSets {
-			checks = append(checks, r.asrSet(ctx, set))
+			checks = append(checks, r.asrSet(ctx, t, set))
 			if ctx.Err() != nil {
 				return checks
 			}
 		}
 	}
 	if slices.Contains(rep.Roles, RoleVision) {
-		checks = append(checks, r.visionTiers(ctx)...)
+		checks = append(checks, r.visionTiers(ctx, t)...)
 	}
 	return checks
 }
 
-// mtebTask runs one MTEB task into the run directory's mteb/<task>, and judges its result.
-func (r *Runner) mtebTask(ctx context.Context, task string) Check {
-	if r.MTEB == nil || r.Dir == "" {
+// mtebTask runs one MTEB task on t's model into t's mteb/<task>, and judges its result when t
+// is judged.
+func (r *Runner) mtebTask(ctx context.Context, t target, task string) Check {
+	if r.MTEB == nil || t.dir == "" {
 		return broken(task, RoleEmbedding, errors.New("the runner has no MTEB runner or no run directory"))
 	}
-	bar, hasBar := r.Bars.Bar(task)
+	bar, hasBar := r.bar(t, task)
 	if hasBar && bar.AtMost {
 		return broken(task, RoleEmbedding, errors.New("a main score is higher-is-better, so its bar belongs under [bars], not [bars_at_most]"))
 	}
-	out := filepath.Join(r.Dir, "mteb", task)
+	out := filepath.Join(t.dir, "mteb", task)
 	// A rerun into the same run directory (a resumed run) must not read the last run's result.
 	if err := os.RemoveAll(out); err != nil {
 		return broken(task, RoleEmbedding, err)
 	}
 	began := time.Now()
-	err := r.MTEB.Task(ctx, r.Router, r.Model, task, out)
+	err := r.MTEB.Task(ctx, r.Router, t.model, task, out)
 	wall := time.Since(began).Seconds()
 	var res MTEBResult
 	if err == nil {
@@ -257,7 +259,7 @@ func (r *Runner) mtebTask(ctx context.Context, task string) Check {
 	} else {
 		score := res.MainScore
 		ch = Check{Name: task, Role: RoleEmbedding, Measured: &score, Unit: res.Metric, Passed: true}
-		notes = append(notes, "no bar: recorded, never fails")
+		notes = append(notes, t.unjudged("no bar: recorded, never fails"))
 	}
 	ch.Values = map[string]float64{"wall_s": wall}
 	ch.Detail = strings.Join(notes, "; ")

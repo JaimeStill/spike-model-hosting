@@ -1,7 +1,8 @@
 // Package gate runs evaluate's gated stages for one model of a profile's set against the router:
 // admission, fitness, capacity, quality, set and deep, in that order, stopping at the first that
-// fails. Admission, fitness, capacity and quality are built; set and deep are named stages a run
-// reports as not built yet, which later work fills in.
+// fails. Admission, fitness, capacity, quality and set are built; deep is a named stage a run
+// reports as not built yet, which later work fills in. A set run, with no model, takes the set
+// stage alone for the set.
 //
 //   - Admission judges the model on paper, from the profile and the router's build: licence and
 //     origin recorded (failing only when missing), the set's roles declared, the profile's
@@ -68,15 +69,30 @@
 //     it too). Each check records the samples run and passed, the request and wall time, the
 //     dataset's revision, the tasks' inspect_evals versions and Inspect's release, and, for a
 //     tier the model's card reports, the card's figure beside ours.
+//   - Set runs each role's tier 1 (TierOne) on the model the set assigns the role: the agent's
+//     BFCL single-turn, the vision probe and V*Bench, the audio role's LibriSpeech test-clean and
+//     the embedding role's STSBenchmark, the cheapest of its MTEB tasks. Each runs alone, role
+//     after role, then every role's at once, all of the set's models loaded, through the quality
+//     stage's suites, whole and without their bars; each unit's score and wall time are recorded
+//     in both phases, the concurrent one beside the alone one's with its change and slowdown, and
+//     each role's tier 1 slowdown, never judged. The stage gates the concurrent phase: the pool's
+//     least free memory, read as capacity reads it, against the pool's floor, and no crossed
+//     answer, from rounds of capacity's nonce requests sent to every role's model at once, every
+//     Runner.CrossEvery, while the tiers run, each answer carrying its own nonce and no other and
+//     each embedding vector its own input's; a request that errored or came back empty is
+//     recorded unanswered, not crossed, so long as each role had one checked. Its output is in the run's set/alone and
+//     set/concurrent.
 //
 // Every request carries autoload=false; a run refuses a model the router doesn't list loaded
 // before any stage, and never loads one.
 //
 // The API:
 //   - Runner runs the stages, judging quality by its Bars (package tier's) and the conform tier
-//     by its Comparison, and keeping the suites' output in its Dir; Runner.Run returns the Report, and resumes from a named stage by
-//     reusing a prior run's passed results for the stages before it. Runner.Roles are the roles
-//     the set assigns the model. ErrNotLoaded marks a refused run.
+//     by its Comparison, and keeping the suites' output in its Dir; Runner.Run returns the
+//     Report, and resumes from a named stage by reusing a prior run's passed results for the
+//     stages before it. Runner.Roles are the roles the set assigns the model, or every role for
+//     a set run, a Runner with no Model, whose directory is named for SetSubject. ErrNotLoaded
+//     marks a refused run. TierOne names a role's tier 1 units, which the set stage runs.
 //   - Stages and the Stage* constants name the stages; Roles and the Role* constants name the
 //     roles, RoleAgent being the profile's chat role (ProfileRole, ParseRole).
 //   - Floors are the per-role floors, data in evaluation/floors.toml, which LoadFloors reads.

@@ -60,15 +60,16 @@ type Conform interface {
 	Run(ctx context.Context, plan passk.Plan) (passk.Result, error)
 }
 
-// agentTiers runs the agent role's tiers in order, and stops at the first that fails.
-func (r *Runner) agentTiers(ctx context.Context) []Check {
+// agentTiers runs the agent role's tiers on t's model in order, and stops at the first that
+// fails.
+func (r *Runner) agentTiers(ctx context.Context, t target) []Check {
 	var checks []Check
-	for _, t := range AgentTiers {
+	for _, at := range AgentTiers {
 		var tierChecks []Check
-		if t.Name == ConformTier {
-			tierChecks = r.conformTier(ctx, t)
+		if at.Name == ConformTier {
+			tierChecks = r.conformTier(ctx, at)
 		} else {
-			tierChecks = []Check{r.bfclTier(ctx, t)}
+			tierChecks = []Check{r.bfclTier(ctx, t, at)}
 		}
 		checks = append(checks, tierChecks...)
 		for _, c := range tierChecks {
@@ -83,26 +84,26 @@ func (r *Runner) agentTiers(ctx context.Context) []Check {
 	return checks
 }
 
-// bfclTier runs one BFCL tier into the run directory's agent/<tier>, and judges it. Its accuracy
-// is judged against its floor, by check name (agent-<tier>), under [bars]; the floor also stops
+// bfclTier runs one BFCL tier on t's model into t's agent/<tier>, and, when t is judged, judges
+// it; otherwise it runs whole and is recorded, passed. Its accuracy is judged against its floor, by check name (agent-<tier>), under [bars]; the floor also stops
 // it early (its screening fifth, then a 95% Wilson upper bound on the pass rate under the
 // floor); without one it runs whole and its accuracy is recorded. The check records the samples
 // run and passed, their model requests, their working time, the wall time, the data's commit,
 // the task's inspect_evals version and Inspect's release.
-func (r *Runner) bfclTier(ctx context.Context, t AgentTier) Check {
+func (r *Runner) bfclTier(ctx context.Context, tg target, t AgentTier) Check {
 	name := AgentCheck(t.Name)
-	if r.Agent == nil || r.Dir == "" || r.Tiers == "" {
+	if r.Agent == nil || tg.dir == "" || r.Tiers == "" {
 		return broken(name, RoleAgent, errors.New("the runner has no agent runner, run directory or tiers directory"))
 	}
 	var floor *float64
-	bar, hasBar := r.Bars.Bar(name)
+	bar, hasBar := r.bar(tg, name)
 	switch {
 	case hasBar && bar.AtMost:
 		return broken(name, RoleAgent, errors.New("an accuracy is higher-is-better, so its bar belongs under [bars], not [bars_at_most]"))
 	case hasBar:
 		floor = &bar.Value
 	}
-	dir := filepath.Join(r.Dir, "agent", t.Name)
+	dir := filepath.Join(tg.dir, "agent", t.Name)
 	out := filepath.Join(dir, "logs")
 	// A rerun into the same run directory (a resumed run) must not read the last run's logs.
 	if err := os.RemoveAll(dir); err != nil {
@@ -114,7 +115,7 @@ func (r *Runner) bfclTier(ctx context.Context, t AgentTier) Check {
 		return broken(name, RoleAgent, err)
 	}
 	began := time.Now()
-	err = r.Agent.Agent(ctx, r.Router, r.Model, t.Name, listPath, out, floor)
+	err = r.Agent.Agent(ctx, r.Router, tg.model, t.Name, listPath, out, floor)
 	wall := time.Since(began).Seconds()
 	var res TierResult
 	if err == nil {
@@ -135,7 +136,7 @@ func (r *Runner) bfclTier(ctx context.Context, t AgentTier) Check {
 	switch {
 	case !hasBar:
 		ch = Check{Name: name, Role: RoleAgent, Measured: &score, Unit: "accuracy", Passed: true}
-		notes = append(notes, "no bar: recorded, never fails; early stop needs a bar")
+		notes = append(notes, tg.unjudged("no bar: recorded, never fails; early stop needs a bar"))
 	case len(res.Stopped) > 0:
 		ch = measure(name, RoleAgent, score, "accuracy", AtLeast, bar.Value)
 		ch.Passed = false

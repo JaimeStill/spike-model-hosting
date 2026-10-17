@@ -163,18 +163,18 @@ func ReadASR(out string) (ASRResult, error) {
 	return res, nil
 }
 
-// asrSet runs one ASR set's tier into the run directory's asr/<set>, and judges its WER against
-// the tier's bar, which must be a ceiling, [bars_at_most]. A bar also stops the set early (the
+// asrSet runs one ASR set's tier on t's model into t's asr/<set>, and, when t is judged, judges
+// its WER against the tier's bar, which must be a ceiling, [bars_at_most]. A bar also stops the set early (the
 // screening fifth, then a 95% lower bound on the WER, asr_quality.py's WERStop); without one the
 // tier runs whole and its WER is recorded. The check records the RTFx, the counts, the wall
 // time, the dataset, normalizer and Inspect release, and the card's figure for the set beside the
 // WER where the model's card reports one.
-func (r *Runner) asrSet(ctx context.Context, set string) Check {
+func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
 	name := ASRTier(set)
-	if r.ASR == nil || r.Dir == "" || r.Tiers == "" {
+	if r.ASR == nil || t.dir == "" || r.Tiers == "" {
 		return broken(name, RoleAudio, errors.New("the runner has no ASR runner, run directory or tiers directory"))
 	}
-	bar, hasBar := r.Bars.Bar(name)
+	bar, hasBar := r.bar(t, name)
 	var ceiling *float64
 	if hasBar {
 		if !bar.AtMost {
@@ -187,13 +187,13 @@ func (r *Runner) asrSet(ctx context.Context, set string) Check {
 	if err != nil {
 		return broken(name, RoleAudio, err)
 	}
-	out := filepath.Join(r.Dir, "asr", set)
+	out := filepath.Join(t.dir, "asr", set)
 	// A rerun into the same run directory (a resumed run) must not read the last run's log.
 	if err := os.RemoveAll(out); err != nil {
 		return broken(name, RoleAudio, err)
 	}
 	began := time.Now()
-	err = r.ASR.ASR(ctx, r.Router, r.Model, set, listPath, out, ceiling)
+	err = r.ASR.ASR(ctx, r.Router, t.model, set, listPath, out, ceiling)
 	wall := time.Since(began).Seconds()
 	var res ASRResult
 	if err == nil {
@@ -217,7 +217,7 @@ func (r *Runner) asrSet(ctx context.Context, set string) Check {
 	switch {
 	case !hasBar:
 		ch = Check{Name: name, Role: RoleAudio, Measured: &wer, Unit: "WER", Passed: true}
-		notes = append(notes, "no bar: recorded, never fails; early stop needs a bar")
+		notes = append(notes, t.unjudged("no bar: recorded, never fails; early stop needs a bar"))
 	case len(res.Stopped) > 0:
 		ch = measure(name, RoleAudio, wer, "WER", AtMost, bar.Value)
 		ch.Passed = false
@@ -233,7 +233,7 @@ func (r *Runner) asrSet(ctx context.Context, set string) Check {
 	if res.LowerBound != nil {
 		ch.Values["wer_lower_bound"] = *res.LowerBound
 	}
-	if m := r.model(); m != nil {
+	if m := r.Profile.Model(t.model); m != nil {
 		if card, ok := cardWERs[m.CardURL][set]; ok {
 			ch.Values["card_wer"] = card.value
 			notes = append(notes, fmt.Sprintf("card: %s; ours %.3f on en_us", card.label, wer))

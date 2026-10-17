@@ -120,6 +120,7 @@ func TestGatedUsage(t *testing.T) {
 		"unknown stage": {[]string{"-router", "http://127.0.0.1:1", "-role", "agent", "-from", "nope"}, `-from "nope"`},
 		"trailing step": {[]string{"-router", "http://127.0.0.1:1", "prefix"}, "unexpected arguments"},
 		"no router":     {[]string{"-role", "agent"}, "no router"},
+		"set run from":  {[]string{"-router", "http://127.0.0.1:1", "-set", "a", "-from", "capacity"}, "-from may name only set"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -155,6 +156,29 @@ func TestGatedRefusesUnloadedModel(t *testing.T) {
 	_, errOut, code := run(t, []string{"SPIKE_ROUTER_URL=" + srv.URL}, append([]string{"-role", "agent", "-state", state}, tools...)...)
 	if code != 1 || !strings.Contains(errOut, "ggml-org/gpt-oss-120b-GGUF:MXFP4 as unloaded") {
 		t.Errorf("exit %d, stderr %q; want 1, naming the model unloaded", code, errOut)
+	}
+	if entries, _ := os.ReadDir(state); len(entries) != 0 {
+		t.Errorf("a refused run wrote %d entries under the state directory", len(entries))
+	}
+}
+
+// TestGatedSetRunRefusesUnloaded shows -set with no model is a set run, which refuses a set
+// whose models the router doesn't all list loaded, before any stage, writing no report.
+func TestGatedSetRunRefusesUnloaded(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/models" {
+			t.Errorf("a request past GET /models: %s %s", r.Method, r.URL)
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = io.WriteString(w, `{"data":[{"id":"ggml-org/gpt-oss-120b-GGUF:MXFP4","status":{"value":"loaded"}}]}`)
+	}))
+	defer srv.Close()
+	state := t.TempDir()
+	tools := []string{"-uv", "/nonexistent/uv", "-python", "/nonexistent/python"}
+	_, errOut, code := run(t, []string{"SPIKE_ROUTER_URL=" + srv.URL}, append([]string{"-set", "a", "-from", "set", "-state", state}, tools...)...)
+	if code != 1 || !strings.Contains(errOut, "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0 as unlisted") {
+		t.Errorf("exit %d, stderr %q; want 1, naming set A's first model not loaded", code, errOut)
 	}
 	if entries, _ := os.ReadDir(state); len(entries) != 0 {
 		t.Errorf("a refused run wrote %d entries under the state directory", len(entries))

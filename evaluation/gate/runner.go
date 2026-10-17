@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -17,8 +18,8 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/hosting/router"
 )
 
-// The stages, in the order a run takes them. Admission, fitness, capacity and quality are built;
-// set and deep are named so a run reports them, and later work fills them in.
+// The stages, in the order a run takes them. Admission, fitness, capacity, quality and set are
+// built; deep is named so a run reports it, and later work fills it in.
 const (
 	StageAdmission = "admission"
 	StageFitness   = "fitness"
@@ -34,7 +35,8 @@ var Stages = []string{StageAdmission, StageFitness, StageCapacity, StageQuality,
 // ErrNotLoaded is the error of a run refused because the router doesn't list its model loaded.
 var ErrNotLoaded = errors.New("model not loaded")
 
-// Runner runs the stages for one model of a profile's set against the router.
+// Runner runs the stages for one model of a profile's set against the router, or, with no Model,
+// the set stage for the set itself: a set run.
 type Runner struct {
 	// Router is the router's root URL; HTTP, the client that reaches it (nil for a default one).
 	Router string
@@ -42,14 +44,19 @@ type Runner struct {
 	// Profile and Set are the profile the router serves and the set Model is evaluated in.
 	Profile *profile.Profile
 	Set     *profile.Set
-	// Model is the model evaluated, by router ID: one the set assigns at least one role.
+	// Model is the model evaluated, by router ID: one the set assigns at least one role. Empty
+	// makes the run a set run, which takes the set stage alone, across every role the set
+	// assigns.
 	Model     string
 	Floors    Floors
 	Footprint Footprint
 	Media     Media
-	// SampleEvery spaces the footprint's readings while capacity's requests are in flight; zero
-	// is two seconds.
+	// SampleEvery spaces the footprint's readings while capacity's requests are in flight, and
+	// the set stage's tiers; zero is two seconds.
 	SampleEvery time.Duration
+	// CrossEvery spaces the set stage's rounds of nonce requests while every role's tier 1 runs
+	// at once; zero is 15 seconds.
+	CrossEvery time.Duration
 	// Log takes a line as each stage starts, for a reader watching a long run; nil discards it.
 	Log io.Writer
 	// Bars are the quality stage's bars, by tier or task name (evaluation/bars.toml); a task
@@ -75,20 +82,23 @@ type Runner struct {
 	Tiers string
 }
 
-// Roles returns the roles the set assigns Model, in the order Roles lists them.
+// Roles returns the roles the set assigns Model, in the order Roles lists them; for a set run,
+// every role the set assigns.
 func (r *Runner) Roles() []string {
-	assigned := map[string]string{
-		RoleAgent: r.Set.Roles.Chat, RoleVision: r.Set.Roles.Vision,
-		RoleAudio: r.Set.Roles.Audio, RoleEmbedding: r.Set.Roles.Embedding,
-	}
 	var out []string
-	for _, role := range Roles {
-		if assigned[role] == r.Model {
-			out = append(out, role)
+	for _, a := range r.assignments() {
+		if r.Model == "" || a.model == r.Model {
+			out = append(out, a.role)
 		}
 	}
 	return out
 }
+
+// SetSubject is the name a set run's directory takes in place of a model's: set-<name>.
+func SetSubject(set string) string { return "set-" + set }
+
+// setRunReason is why a set run reports the stages before the set stage not run.
+const setRunReason = "a set run: each role's model takes it in its own run"
 
 // Run runs the stages in order and returns the run's report, stopping at the first stage that
 // fails: every later stage is reported not run, naming it. Before any stage it refuses a model
@@ -98,6 +108,10 @@ func (r *Runner) Roles() []string {
 // from names the stage to start at; empty starts at admission. A run from a later stage reuses
 // prior's results for every stage before it: prior must be a run of the same model and set in
 // which each of them passed.
+//
+// A set run (no Model) starts at the set stage, from empty or naming it, and needs no prior: it
+// reports every stage before it not run, since each is a model's, and refuses the run unless the
+// router lists every model of the set loaded.
 func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, error) {
 	if r.HTTP == nil {
 		r.HTTP = &http.Client{}
@@ -109,9 +123,16 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 			return nil, fmt.Errorf("no stage %q; the stages are %q", from, Stages)
 		}
 	}
+	setRun := r.Model == ""
+	if setRun {
+		if from != "" && from != StageSet {
+			return nil, fmt.Errorf("a set run takes the set stage alone, not from %s", from)
+		}
+		start = slices.Index(Stages, StageSet)
+	}
 	roles := r.Roles()
 	if len(roles) == 0 {
-		return nil, fmt.Errorf("set %s assigns %s no role", r.Set.Name, r.Model)
+		return nil, fmt.Errorf("set %s assigns %s no role", r.Set.Name, cmp.Or(r.Model, "any model"))
 	}
 	if err := r.checkLoaded(ctx); err != nil {
 		return nil, err
@@ -124,7 +145,13 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 		Router: r.Router, Build: build, HostClass: r.Profile.HostClass, Set: r.Set.Name,
 		Model: r.Model, Roles: roles, Started: time.Now().UTC(),
 	}
-	if start > 0 {
+	switch {
+	case setRun:
+		rep.From = from
+		for _, name := range Stages[:start] {
+			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: setRunReason})
+		}
+	case start > 0:
 		rep.From = from
 		if err := reuse(rep, prior, start); err != nil {
 			return nil, err
@@ -135,6 +162,7 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 		StageFitness:   r.fitness,
 		StageCapacity:  r.capacity,
 		StageQuality:   r.quality,
+		StageSet:       r.set,
 	}
 	failed := ""
 	for _, name := range Stages[start:] {
@@ -147,9 +175,7 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotBuilt, Reason: "not built yet"})
 			continue
 		}
-		if r.Log != nil {
-			_, _ = fmt.Fprintf(r.Log, "evaluate: %s %s\n", name, r.Model)
-		}
+		r.logf("evaluate: %s %s\n", name, cmp.Or(r.Model, SetSubject(r.Set.Name)))
 		began := time.Now()
 		checks := run(ctx, rep)
 		res := StageResult{Name: name, Status: StatusPass, Checks: checks, WallS: time.Since(began).Seconds()}
@@ -194,21 +220,35 @@ func reuse(rep, prior *Report, start int) error {
 	return nil
 }
 
-// checkLoaded refuses the run unless the router lists Model loaded.
+// checkLoaded refuses the run unless the router lists Model loaded, or, for a set run, every
+// model of the set.
 func (r *Runner) checkLoaded(ctx context.Context) error {
 	status, err := router.Statuses(ctx, r.HTTP, r.Router)
 	if err != nil {
 		return err
 	}
-	s, ok := status[r.Model]
-	if !ok {
-		s = "unlisted"
+	models := []string{r.Model}
+	if r.Model == "" {
+		models = r.Set.Models
 	}
-	if s != router.StatusLoaded {
-		return fmt.Errorf("%w: the router lists %s as %s; evaluate never loads a model, so load it (or swap its set in) first",
-			ErrNotLoaded, r.Model, s)
+	for _, m := range models {
+		s, ok := status[m]
+		if !ok {
+			s = "unlisted"
+		}
+		if s != router.StatusLoaded {
+			return fmt.Errorf("%w: the router lists %s as %s; evaluate never loads a model, so load it (or swap its set in) first",
+				ErrNotLoaded, m, s)
+		}
 	}
 	return nil
+}
+
+// logf writes a line to Log, when there is one.
+func (r *Runner) logf(format string, args ...any) {
+	if r.Log != nil {
+		_, _ = fmt.Fprintf(r.Log, format, args...)
+	}
 }
 
 // model returns the profile's entry for Model.

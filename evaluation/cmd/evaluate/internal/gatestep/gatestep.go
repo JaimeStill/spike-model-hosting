@@ -1,16 +1,22 @@
 // Package gatestep is evaluate's gated run, which takes one model through the evaluation
-// package gate's stages: admission, fitness, capacity, quality, then set and deep, which are not
-// built yet.
+// package gate's stages: admission, fitness, capacity, quality and set, then deep, which is not
+// built yet; or, as a set run, takes a set through the set stage alone.
 //
 // Usage:
 //
-//	evaluate [-router url] [-profile name|path] [-set name] (-role role | -model id) [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-comparison path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]
+//	evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-comparison path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]
 //
 // The model is -model, by router ID, or the model the set assigns -role: agent (the profile's
 // chat role; chat is accepted), vision, audio or embedding. The set is -set, or SPIKE_SET, or
 // else the profile's startup set; with -model and no set named, it is the startup set when that
 // assigns the model a role, or else the first set that does. The run judges each role the set
-// assigns the model.
+// assigns the model; its set stage runs every role's tier 1, its own on it beside the set's other
+// role models.
+//
+// A set run names -set on the command line and neither -role nor -model: it takes the set stage
+// alone, every role's tier 1 on the model the set assigns it, alone and then at once, and needs
+// every model of the set loaded. -from may name only set, and it resumes nothing. Its report is
+// <state>/evaluate/<UTC time>-set-<name>/report.json.
 //
 // The run stops at the first stage that fails. -from starts it at a later stage, reusing the
 // results of the stages before it from an earlier run of the same model: the run directory -run
@@ -31,7 +37,9 @@
 // SPIKE_PYTHON, or else the consumers mise environment's pins. MTEB's output for each task goes
 // in the run directory's mteb/<task>, Inspect's JSON log for each ASR set in its asr/<set>, each
 // vision tier's logs in its vision/<tier>/logs and each BFCL tier's in its agent/<tier>/logs; the
-// datasets download into the state directory's cache/. The agent role's conform tier runs Pi,
+// datasets download into the state directory's cache/. The set stage runs the same suites on
+// every role's tier 1, its output under the run directory's set/alone/ and set/concurrent/,
+// laid out as the quality stage's. The agent role's conform tier runs Pi,
 // Claude Code and OpenCode, each -pi, -claude and -opencode, or SPIKE_PI, SPIKE_CLAUDE and
 // SPIKE_OPENCODE, or else the consumers mise environment's pin, their state under the state
 // directory's conform/, Claude Code's login in its claude/ (as evaluate conform keeps them), and
@@ -67,7 +75,7 @@ import (
 )
 
 // Usage is the run's usage line, which evaluate's own usage lists.
-const Usage = "evaluate [-router url] [-profile name|path] [-set name] (-role role | -model id) [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-comparison path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]"
+const Usage = "evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-comparison path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]"
 
 const usage = "usage:\n  " + Usage + "\n"
 
@@ -141,13 +149,21 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	for name, p := range consumerFlags {
 		o.consumers[name] = *p
 	}
+	// A set run needs -set on the command line: SPIKE_SET alone, with a model forgotten, would
+	// start one.
+	setNamed := false
+	fs.Visit(func(f *flag.Flag) { setNamed = setNamed || f.Name == "set" })
 	switch {
 	case fs.NArg() != 0:
 		return o, fmt.Errorf("%w: unexpected arguments %q", errUsage, fs.Args())
 	case o.router == "":
 		return o, fmt.Errorf("%w: no router: set -router or SPIKE_ROUTER_URL", errUsage)
-	case (o.role == "") == (o.model == ""):
+	case o.role != "" && o.model != "":
 		return o, fmt.Errorf("%w: name the model to evaluate with -role or -model, one of them", errUsage)
+	case o.role == "" && o.model == "" && !setNamed:
+		return o, fmt.Errorf("%w: name the model to evaluate with -role or -model, or a set run with -set alone", errUsage)
+	case o.role == "" && o.model == "" && o.from != "" && o.from != gate.StageSet:
+		return o, fmt.Errorf("%w: a set run takes the set stage alone; -from may name only set", errUsage)
 	case o.from != "" && !slices.Contains(gate.Stages, o.from):
 		return o, fmt.Errorf("%w: -from %q is not one of the stages %q", errUsage, o.from, gate.Stages)
 	case o.run != "" && o.from == "":
@@ -204,9 +220,14 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 	}
 	state := cmp.Or(o.state, filepath.Join(root, ".state"))
 
+	setRun := model == ""
+	subject := model
+	if setRun {
+		subject = gate.SetSubject(set.Name)
+	}
 	var prior *gate.Report
 	dir := ""
-	if o.from != "" && o.from != gate.Stages[0] {
+	if !setRun && o.from != "" && o.from != gate.Stages[0] {
 		dir = o.run
 		if dir == "" {
 			if dir, err = gate.LatestRun(state, model); err != nil {
@@ -223,7 +244,7 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 
 	// The run directory is named before the run, since the quality stage writes into it.
 	if dir == "" {
-		dir = gate.RunDir(state, model, time.Now())
+		dir = gate.RunDir(state, subject, time.Now())
 	}
 	r := &gate.Runner{
 		Router: o.router, Profile: p, Set: set, Model: model, Floors: floors,
@@ -245,7 +266,7 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 		}
 		r.MTEB, r.ASR, r.Vision, r.Agent, r.Tiers = suites, suites, suites, suites, filepath.Join(root, gate.TiersDir)
 	}
-	if slices.Contains(roles, gate.RoleAgent) {
+	if !setRun && slices.Contains(roles, gate.RoleAgent) {
 		if r.Conform, r.Comparison, err = conformRunner(ctx, o, root, state, stderr); err != nil {
 			return false, err
 		}
@@ -294,8 +315,12 @@ func conformRunner(ctx context.Context, o options, root, state string, log io.Wr
 // conformTimeout bounds one conform capability, as evaluate conform's -timeout does by default.
 const conformTimeout = 10 * time.Minute
 
-// pick returns the set and the model the options name.
+// pick returns the set and the model the options name; the model is empty for a set run.
 func pick(p *profile.Profile, o options) (*profile.Set, string, error) {
+	if o.role == "" && o.model == "" {
+		set, err := p.Set(o.set)
+		return set, "", err
+	}
 	if o.role != "" {
 		set, err := p.Set(o.set)
 		if err != nil {

@@ -86,11 +86,12 @@ var cardScores = map[string]map[string]cardScore{
 	},
 }
 
-// visionTiers runs the vision role's tiers in order, and stops at the first that fails.
-func (r *Runner) visionTiers(ctx context.Context) []Check {
+// visionTiers runs the vision role's tiers on t's model in order, and stops at the first that
+// fails.
+func (r *Runner) visionTiers(ctx context.Context, t target) []Check {
 	var checks []Check
-	for _, t := range VisionTiers {
-		ch := r.visionTier(ctx, t)
+	for _, vt := range VisionTiers {
+		ch := r.visionTier(ctx, t, vt)
 		checks = append(checks, ch)
 		if !ch.Passed || ctx.Err() != nil {
 			break
@@ -99,21 +100,22 @@ func (r *Runner) visionTiers(ctx context.Context) []Check {
 	return checks
 }
 
-// visionTier runs one vision tier into the run directory's vision/<tier>, and judges it. The
-// probe passes on all of its repeats, pass^5, whatever the bars hold. A benchmark's score is
+// visionTier runs one vision tier on t's model into t's vision/<tier>, and judges it when t is
+// judged; otherwise it runs whole and is recorded, passed. The probe passes on all of its
+// repeats, pass^5, whatever the bars hold. A benchmark's score is
 // judged against its floor, by check name (vision-<tier>), under [bars]; the floor also stops it
 // early (its screening fifth, then a 95% Wilson upper bound on the pass rate under the floor);
 // without one it runs whole and its score is recorded. The check records the samples run and
 // passed, the request time, the wall time, the dataset's revision, the tasks' inspect_evals
 // versions and Inspect's release, and the card's figure beside a tier the card reports.
-func (r *Runner) visionTier(ctx context.Context, t VisionTier) Check {
+func (r *Runner) visionTier(ctx context.Context, tg target, t VisionTier) Check {
 	name := VisionCheck(t.Name)
-	if r.Vision == nil || r.Dir == "" || r.Tiers == "" {
+	if r.Vision == nil || tg.dir == "" || r.Tiers == "" {
 		return broken(name, RoleVision, errors.New("the runner has no vision runner, run directory or tiers directory"))
 	}
 	probe := t.Name == "probe"
 	var floor *float64
-	bar, hasBar := r.Bars.Bar(name)
+	bar, hasBar := r.bar(tg, name)
 	switch {
 	case probe:
 		hasBar = false
@@ -122,7 +124,7 @@ func (r *Runner) visionTier(ctx context.Context, t VisionTier) Check {
 	case hasBar:
 		floor = &bar.Value
 	}
-	dir := filepath.Join(r.Dir, "vision", t.Name)
+	dir := filepath.Join(tg.dir, "vision", t.Name)
 	out := filepath.Join(dir, "logs")
 	// A rerun into the same run directory (a resumed run) must not read the last run's logs.
 	if err := os.RemoveAll(dir); err != nil {
@@ -147,7 +149,7 @@ func (r *Runner) visionTier(ctx context.Context, t VisionTier) Check {
 		list = &l
 	}
 	began := time.Now()
-	err := r.Vision.Vision(ctx, r.Router, r.Model, t.Name, input, out, floor)
+	err := r.Vision.Vision(ctx, r.Router, tg.model, t.Name, input, out, floor)
 	wall := time.Since(began).Seconds()
 	var res TierResult
 	if err == nil {
@@ -173,13 +175,16 @@ func (r *Runner) visionTier(ctx context.Context, t VisionTier) Check {
 	}
 	var ch Check
 	switch {
+	case probe && !tg.judged:
+		ch = Check{Name: name, Role: RoleVision, Measured: &score, Unit: t.Metric, Passed: true}
+		notes = append(notes, tg.unjudged(""))
 	case probe:
 		ch = fact(name, RoleVision, "", passes == probeRepeats)
 		ch.Measured, ch.Unit = &score, t.Metric
 		notes = append(notes, fmt.Sprintf("pass^%d: every repeat must name the three shapes and colours, at the router's defaults", probeRepeats))
 	case !hasBar:
 		ch = Check{Name: name, Role: RoleVision, Measured: &score, Unit: t.Metric, Passed: true}
-		notes = append(notes, "no bar: recorded, never fails; early stop needs a bar")
+		notes = append(notes, tg.unjudged("no bar: recorded, never fails; early stop needs a bar"))
 	case len(res.Stopped) > 0:
 		ch = measure(name, RoleVision, score, t.Metric, AtLeast, bar.Value)
 		ch.Passed = false
@@ -194,7 +199,7 @@ func (r *Runner) visionTier(ctx context.Context, t VisionTier) Check {
 	if res.Upper != nil {
 		ch.Values["pass_rate_upper_bound"] = *res.Upper
 	}
-	if m := r.model(); m != nil {
+	if m := r.Profile.Model(tg.model); m != nil {
 		if card, ok := cardScores[m.CardURL][t.Name]; ok {
 			ch.Values["card_score"] = card.value
 			notes = append(notes, fmt.Sprintf("card: %s; ours %.3f", card.label, score))

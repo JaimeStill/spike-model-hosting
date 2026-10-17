@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -90,9 +91,35 @@ esac
 	return gate.UV{Exe: exe, Python: "/pinned/python", Project: "/module/evaluation/suites", Cache: "/state/cache"}
 }
 
-// calls returns each call's arguments, HF_HOME, MTEB_CACHE, ASR_CACHE and
-// INSPECT_EVALS_CACHE_DIR, '|'-separated, in order.
+// calls returns each call of the quality stage's, its arguments, HF_HOME, MTEB_CACHE, ASR_CACHE
+// and INSPECT_EVALS_CACHE_DIR, '|'-separated, in order; setCalls returns the set stage's, those
+// whose output is under a run directory's set/.
 func (f *fakeUV) calls(t *testing.T) []string {
+	t.Helper()
+	var out []string
+	for _, c := range f.allCalls(t) {
+		if !setCall.MatchString(c) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func (f *fakeUV) setCalls(t *testing.T) []string {
+	t.Helper()
+	var out []string
+	for _, c := range f.allCalls(t) {
+		if setCall.MatchString(c) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// setCall matches a set stage's call, by its output under the run directory's set/.
+var setCall = regexp.MustCompile(`--output \S*/set/(alone|concurrent)/`)
+
+func (f *fakeUV) allCalls(t *testing.T) []string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(f.dir, "calls"))
 	if os.IsNotExist(err) {
@@ -123,7 +150,7 @@ var recorded = map[string]struct {
 func TestQualityEmbedding(t *testing.T) {
 	h := newHarness(t, embedding)
 	rep := h.run(t, "", nil)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set not built", "deep not built"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}
@@ -293,7 +320,7 @@ const (
 func TestQualityAudio(t *testing.T) {
 	h := newHarness(t, gemmaE4B)
 	rep := h.run(t, "", nil)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set not built", "deep not built"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}

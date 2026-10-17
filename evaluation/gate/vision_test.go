@@ -59,7 +59,7 @@ func visionLog(t *testing.T, tierName string) (string, map[string]any) {
 func TestQualityVision(t *testing.T) {
 	h := newHarness(t, gemma26B)
 	rep := h.run(t, "", nil)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set not built", "deep not built"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}

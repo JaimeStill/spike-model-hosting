@@ -95,13 +95,15 @@ type Ceiling struct {
 
 // Report is one run of evaluate's stages.
 type Report struct {
-	Router    string    `json:"router"`
-	Build     string    `json:"build"`
-	HostClass string    `json:"host_class"`
-	Set       string    `json:"set"`
-	Model     string    `json:"model"`
-	Roles     []string  `json:"roles"`
-	Started   time.Time `json:"started"`
+	Router    string `json:"router"`
+	Build     string `json:"build"`
+	HostClass string `json:"host_class"`
+	Set       string `json:"set"`
+	// Model is the model evaluated, empty for a set run; Roles, the roles it takes, or for a set
+	// run every role the set assigns.
+	Model   string    `json:"model"`
+	Roles   []string  `json:"roles"`
+	Started time.Time `json:"started"`
 	// From is the stage a resumed run started at, empty for a run from the start.
 	From string `json:"from,omitempty"`
 	// Reached is the last stage that ran; Passed, whether every stage that ran passed.
@@ -131,7 +133,7 @@ func Slug(model string) string {
 }
 
 // RunDir returns the run directory of a run of model started at t, under the state root:
-// <state>/evaluate/<UTC time>-<slug>.
+// <state>/evaluate/<UTC time>-<slug>. A set run's model is SetSubject(set).
 func RunDir(state, model string, t time.Time) string {
 	return filepath.Join(state, "evaluate", t.UTC().Format("20060102T150405Z")+"-"+Slug(model))
 }
@@ -195,7 +197,11 @@ func WriteSummary(w io.Writer, r *Report) error {
 	if !r.Passed {
 		verdict = "FAILED"
 	}
-	fmt.Fprintf(&b, "%s on %s, build %s, set %s, roles %s\n", r.Model, r.Router, r.Build, r.Set, strings.Join(r.Roles, ", "))
+	subject := r.Model
+	if subject == "" {
+		subject = "a set run"
+	}
+	fmt.Fprintf(&b, "%s on %s, build %s, set %s, roles %s\n", subject, r.Router, r.Build, r.Set, strings.Join(r.Roles, ", "))
 	fmt.Fprintf(&b, "reached %s: %s\n", r.Reached, verdict)
 	for _, s := range r.Stages {
 		line := fmt.Sprintf("%-9s %-9s", s.Name, s.Status)

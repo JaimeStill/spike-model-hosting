@@ -71,7 +71,7 @@ func newHarness(t *testing.T, model string) *harness {
 	uv := h.uv.runner()
 	h.runner = &gate.Runner{
 		Router: h.router.srv.URL, Profile: p, Set: set, Model: model, Floors: floors,
-		Footprint: h.footprint, SampleEvery: 5 * time.Millisecond,
+		Footprint: h.footprint, SampleEvery: 5 * time.Millisecond, CrossEvery: 5 * time.Millisecond,
 		Media: gate.Media{PNG: []byte("png"), WAV: []byte("wav"), AudioSeconds: 6},
 		MTEB:  uv, ASR: uv, Vision: uv, Agent: uv, Dir: t.TempDir(), Tiers: tiers,
 		Conform: h.conform, Comparison: &comparison,
@@ -120,16 +120,16 @@ func equal(a, b []string) bool { return strings.Join(a, "|") == strings.Join(b, 
 func TestRunAgentPasses(t *testing.T) {
 	h := newHarness(t, gptOSS)
 	rep := h.run(t, "", nil)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set not built", "deep not built"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}
-	if !rep.Passed || rep.Reached != gate.StageQuality {
-		t.Errorf("passed %v, reached %q; want passed, reached quality", rep.Passed, rep.Reached)
+	if !rep.Passed || rep.Reached != gate.StageSet {
+		t.Errorf("passed %v, reached %q; want passed, reached set", rep.Passed, rep.Reached)
 	}
 	// Capacity put the profile's 4 slots in flight, with the set's embedding stream beside them.
-	if n := h.router.count("capacity"); n != 4 {
-		t.Errorf("capacity sent %d requests; want 4", n)
+	if c := check(t, rep, gate.StageCapacity, gate.RoleAgent, "no crossed nonce"); !strings.HasPrefix(c.Detail, "4 answers in flight") {
+		t.Errorf("capacity's nonce check %q; want 4 answers in flight", c.Detail)
 	}
 	check(t, rep, gate.StageCapacity, gate.RoleAgent, "no crossed nonce")
 	check(t, rep, gate.StageCapacity, gate.RoleAgent, "embedding tolerance")
@@ -155,8 +155,8 @@ func TestRunOtherRoles(t *testing.T) {
 			case gate.RoleAudio:
 				runs = len(gate.AudioSets)
 			}
-			if s := rep.Stage(gate.StageQuality).Status; s != gate.StatusPass || rep.Reached != gate.StageQuality {
-				t.Errorf("quality %s, reached %s; want pass, quality", s, rep.Reached)
+			if s := rep.Stage(gate.StageQuality).Status; s != gate.StatusPass || rep.Reached != gate.StageSet {
+				t.Errorf("quality %s, reached %s; want pass, set", s, rep.Reached)
 			}
 			if n := len(h.uv.calls(t)); n != runs {
 				t.Errorf("uv ran %d times; want %d", n, runs)
@@ -235,7 +235,7 @@ func TestRunResumes(t *testing.T) {
 	h.footprint.free, h.footprint.n = []int{3333}, 0
 	toolCalls := h.router.count("messages")
 	rep := h.run(t, gate.StageCapacity, first)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set not built", "deep not built"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
 	if got := statuses(rep); !equal(got, want) || !rep.Passed || rep.From != gate.StageCapacity {
 		t.Fatalf("resumed run %q, passed %v, from %q; want %q, passed, from capacity", got, rep.Passed, rep.From, want)
 	}
@@ -332,8 +332,9 @@ func TestTranscriptionRequest(t *testing.T) {
 
 	h := newHarness(t, gemmaE4B)
 	h.run(t, "", nil)
-	if len(h.router.audio) != 1+4 {
-		t.Fatalf("%d audio requests; want fitness's one and capacity's 4", len(h.router.audio))
+	// The set stage's crossing probe sends capacity's request too, a round at a time.
+	if len(h.router.audio) < 1+4+1 {
+		t.Fatalf("%d audio requests; want fitness's one, capacity's 4 and the set stage's probe", len(h.router.audio))
 	}
 	for i, body := range h.router.audio {
 		kwargs, _ := body["chat_template_kwargs"].(map[string]any)
@@ -392,15 +393,15 @@ func TestReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.Build != "b11669-620d2225c" || got.Set != "a" || got.Model != gptOSS || !equal(got.Roles, []string{gate.RoleAgent}) ||
-		got.Reached != gate.StageQuality || !got.Passed || got.HostClass != "strix-halo" || got.Router != h.router.srv.URL {
+		got.Reached != gate.StageSet || !got.Passed || got.HostClass != "strix-halo" || got.Router != h.router.srv.URL {
 		t.Errorf("report header %+v", got)
 	}
-	for _, s := range got.Stages[:4] {
+	for _, s := range got.Stages[:5] {
 		if s.WallS <= 0 || len(s.Checks) == 0 {
 			t.Errorf("stage %s: wall %v s, %d checks; want both recorded", s.Name, s.WallS, len(s.Checks))
 		}
 	}
-	for _, s := range got.Stages[4:] {
+	for _, s := range got.Stages[5:] {
 		if s.Reason != "not built yet" {
 			t.Errorf("stage %s: reason %q; want not built yet", s.Name, s.Reason)
 		}
@@ -423,8 +424,8 @@ func TestReport(t *testing.T) {
 	if err := gate.WriteSummary(&sum, got); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"build b11669-620d2225c, set a, roles agent", "reached quality: passed",
-		"ok   agent decode: 50 tok/s, floor >= 20", "set       not built  not built yet", "ceiling: decode 50.0 tok/s of 92.5"} {
+	for _, want := range []string{"build b11669-620d2225c, set a, roles agent", "reached set: passed",
+		"ok   agent decode: 50 tok/s, floor >= 20", "deep      not built  not built yet", "ceiling: decode 50.0 tok/s of 92.5"} {
 		if !strings.Contains(sum.String(), want) {
 			t.Errorf("summary lacks %q:\n%s", want, sum.String())
 		}

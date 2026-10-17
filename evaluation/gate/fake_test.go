@@ -29,6 +29,11 @@ type fakeRouter struct {
 	build  string
 	// decode and prefill are every chat completion's predicted_per_second and prompt_per_second.
 	decode, prefill float64
+	// crossed is a model whose nonce answers carry crossedNonce in place of their own, as an
+	// answer that reached the wrong request would.
+	crossed string
+	// empty is a model whose nonce answers come back empty.
+	empty string
 
 	mu       sync.Mutex
 	requests []string
@@ -37,6 +42,9 @@ type fakeRouter struct {
 }
 
 var fakeNonce = regexp.MustCompile(`nonce-[0-9a-f]{16}`)
+
+// crossedNonce is the nonce a crossed model's answers carry, one no request sent.
+const crossedNonce = "nonce-0123456789abcdef"
 
 func newFakeRouter(t *testing.T, models ...string) *fakeRouter {
 	f := &fakeRouter{status: map[string]string{}, build: "b11669-620d2225c", decode: 50, prefill: 700}
@@ -144,7 +152,13 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 	}
 	kind := "chat"
 	if n := fakeNonce.FindString(text.String()); n != "" {
+		if body["model"] == f.crossed {
+			n = crossedNonce
+		}
 		kind, answer = "capacity", answer+"\n"+n
+		if body["model"] == f.empty {
+			answer = ""
+		}
 	}
 	if audio {
 		f.mu.Lock()
