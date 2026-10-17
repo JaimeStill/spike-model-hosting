@@ -338,7 +338,7 @@ var GridCells = []GridCell{
 	{"agentic", 8192, 512, 1, 4}, {"agentic", 8192, 512, 4, 16},
 }
 
-// Name is the cell's check name and its files' stem: grid <profile> <prompt>/<output> c<streams>.
+// Name is the cell's check name: grid <profile> <prompt>/<output> c<streams>.
 func (c GridCell) Name() string {
 	return fmt.Sprintf("grid %s %d/%d c%d", c.Profile, c.PromptTokens, c.OutputTokens, c.Streams)
 }
