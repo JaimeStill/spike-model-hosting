@@ -42,13 +42,17 @@ FAKE = textwrap.dedent("""\
     responses = json.load(open(queue))
     response, rest = responses[0], responses[1:]
     json.dump(rest, open(queue, "w"))
-    import time
+    import select, stat, time
     began = time.time()
+    # Claude Code waits 3 seconds for stdin, then gives up; the fake waits 0.2.
+    if not select.select([sys.stdin], [], [], 0.2)[0]:
+        sys.stdout.write("Warning: no stdin data received in 3s, proceeding without it.")
+        sys.exit(1)
     if "sleep" in response:
         time.sleep(response["sleep"])
     with open(os.environ["FAKE_LOG"], "a") as log:
         log.write(json.dumps({{
-            "args": sys.argv[1:], "stdin": sys.stdin.read(), "cwd": os.getcwd(), "began": began, "ended": time.time(),
+            "args": sys.argv[1:], "stdin_file": stat.S_ISREG(os.fstat(0).st_mode), "stdin": sys.stdin.read(), "cwd": os.getcwd(), "began": began, "ended": time.time(),
             "env": {{k: v for k, v in os.environ.items() if k.startswith(("ANTHROPIC_", "CLAUDE"))}},
         }}) + "\\n")
     sys.stdout.write(response["stdout"])
@@ -128,6 +132,10 @@ class ClaudeCodeTest(unittest.TestCase):
             "--output-format", "json",
         ])
         self.assertEqual(call["stdin"], "Begin.")
+        # The prompt is a file on stdin, whole before Claude Code starts, not a pipe this event loop
+        # fills: a busy loop (τ2's samples each serialize a database) filled the pipe after Claude
+        # Code's 3-second wait for stdin, and it exited.
+        self.assertTrue(call["stdin_file"])
         self.assertEqual(os.listdir(call["cwd"]), [])
         self.assertEqual(call["env"], {
             "CLAUDE_CONFIG_DIR": str(self.config), "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1",

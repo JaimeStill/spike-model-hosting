@@ -279,14 +279,21 @@ class ClaudeCodeAPI(ModelAPI):
 
     async def call(self, args: list[str], prompt: str, env: dict[str, str]) -> dict[str, Any]:
         """Runs Claude Code once, the prompt on stdin, and returns its JSON result."""
-        proc = await asyncio.create_subprocess_exec(
-            *args, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            env=env, cwd=self.workdir,
-        )
-        try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(prompt.encode()), self.timeout)
-        except TimeoutError:
-            proc.kill()
-            await proc.wait()
-            raise ClaudeCodeError(f"claude took longer than {self.timeout:.0f}s", transient=True)
+        # The prompt is a file on stdin, whole before Claude Code starts: piped from this event
+        # loop, it can arrive after Claude Code's 3-second wait for stdin when the loop is busy
+        # (τ2's samples each serialize a database), and Claude Code then exits with "no stdin data
+        # received in 3s".
+        with tempfile.TemporaryFile() as stdin:
+            stdin.write(prompt.encode())
+            stdin.seek(0)
+            proc = await asyncio.create_subprocess_exec(
+                *args, stdin=stdin, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                env=env, cwd=self.workdir,
+            )
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), self.timeout)
+            except TimeoutError:
+                proc.kill()
+                await proc.wait()
+                raise ClaudeCodeError(f"claude took longer than {self.timeout:.0f}s", transient=True)
         return parse(stdout.decode(errors="replace"), proc.returncode or 0, stderr.decode(errors="replace"))
