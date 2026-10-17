@@ -69,6 +69,12 @@ func TestTracker(t *testing.T) {
 	if strings.Index(got, "b 5.0s") > strings.Index(got, "a 7.0s") {
 		t.Errorf("want b before a, in the order they loaded:\n%s", out.String())
 	}
+	// The same times, as figures.
+	times := tr.Times()
+	if times.Up != 3*time.Second || times.Loaded["b"] != 5*time.Second || times.Loaded["a"] != 7*time.Second ||
+		times.All != 7*time.Second || len(times.Loaded) != 2 {
+		t.Errorf("times %+v; want up 3s, b 5s, a 7s, all 7s", times)
+	}
 }
 
 // TestTrackerNeverDown shows a restart in which the router kept answering counts the router as

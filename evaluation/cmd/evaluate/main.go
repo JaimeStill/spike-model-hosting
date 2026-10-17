@@ -71,7 +71,7 @@ func main() {
 func usage() string {
 	var b strings.Builder
 	b.WriteString("usage:\n  " + gatestep.Usage + "\n  evaluate <step> [flags]\n  evaluate <step> -h\n\n")
-	b.WriteString("Flags first run one model through the gated stages: admission, fitness, capacity,\nquality, set, then deep (not built yet). -set with no model runs the set stage\nfor the set alone.\n\nsteps:\n")
+	b.WriteString("Flags first run one model through the gated stages: admission, fitness, capacity,\nquality, set, then deep. -set with no model runs the set stage for the set\nalone.\n\nsteps:\n")
 	for _, s := range steps {
 		fmt.Fprintf(&b, "  %-11s %s\n", s.name, s.summary)
 	}

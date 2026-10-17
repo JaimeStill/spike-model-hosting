@@ -71,6 +71,9 @@ type UV struct {
 	Project, Cache string
 	// Log takes the run's output, MTEB's and Inspect's progress; nil discards it.
 	Log io.Writer
+	// Claude is the Claude Code that simulates τ2's user (Tau2), the consumers mise environment's,
+	// and ClaudeConfig its configuration directory, which holds the subscription login.
+	Claude, ClaudeConfig string
 }
 
 // Task runs the MTEB task through mteb_quality.py, and fails when uv does.

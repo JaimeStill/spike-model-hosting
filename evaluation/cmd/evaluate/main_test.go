@@ -149,10 +149,10 @@ func TestGatedRefusesUnloadedModel(t *testing.T) {
 	}))
 	defer srv.Close()
 	state := t.TempDir()
-	// The quality stage's tools are named, so finding them asks no mise, which the bare
+	// The quality and deep stages' tools are named, so finding them asks no mise, which the bare
 	// environment lacks; the run refuses before it would start one.
 	tools := []string{"-uv", "/nonexistent/uv", "-python", "/nonexistent/python",
-		"-pi", "/nonexistent/pi", "-claude", "/nonexistent/claude", "-opencode", "/nonexistent/opencode"}
+		"-pi", "/nonexistent/pi", "-claude", "/nonexistent/claude", "-opencode", "/nonexistent/opencode", "-guidellm", "/nonexistent/guidellm"}
 	_, errOut, code := run(t, []string{"SPIKE_ROUTER_URL=" + srv.URL}, append([]string{"-role", "agent", "-state", state}, tools...)...)
 	if code != 1 || !strings.Contains(errOut, "ggml-org/gpt-oss-120b-GGUF:MXFP4 as unloaded") {
 		t.Errorf("exit %d, stderr %q; want 1, naming the model unloaded", code, errOut)

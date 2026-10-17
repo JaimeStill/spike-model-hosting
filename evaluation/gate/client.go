@@ -13,8 +13,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -277,6 +279,43 @@ func (c *client) embed(ctx context.Context, model string, inputs []string) (embe
 			return out, fmt.Errorf("the answer's index %d is outside the %d inputs", d.Index, len(inputs))
 		}
 		out.Vectors[d.Index] = d.Embedding
+	}
+	return out, nil
+}
+
+// metrics reads model's llama.cpp counters from the router's /metrics, by name without the
+// llamacpp: prefix.
+func (c *client) metrics(ctx context.Context, model string) (map[string]float64, error) {
+	u := c.base + "/metrics?" + url.Values{"model": {model}, "autoload": {"false"}}.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET /metrics: %s", resp.Status)
+	}
+	out := map[string]float64{}
+	sc := bufio.NewScanner(resp.Body)
+	for sc.Scan() {
+		name, value, ok := strings.Cut(sc.Text(), " ")
+		name, counter := strings.CutPrefix(name, "llamacpp:")
+		if !ok || !counter {
+			continue
+		}
+		if v, err := strconv.ParseFloat(strings.TrimSpace(value), 64); err == nil {
+			out[name] = v
+		}
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("GET /metrics for %s: no llamacpp counter", model)
 	}
 	return out, nil
 }

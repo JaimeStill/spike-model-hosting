@@ -17,8 +17,7 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/hosting/router"
 )
 
-// The stages, in the order a run takes them. Admission, fitness, capacity, quality and set are
-// built; deep is named so a run reports it, and later work fills it in.
+// The stages, in the order a run takes them.
 const (
 	StageAdmission = "admission"
 	StageFitness   = "fitness"
@@ -80,9 +79,18 @@ type Runner struct {
 	// Conform runs the agent role's conform tier, harness fit, through the harnesses, its
 	// recordings and table kept in the run's conform/.
 	Conform Conform
-	// Tiers is the directory of the tier lists the ASR sets, vision tiers and BFCL tiers run
-	// (TiersDir, under the module root).
+	// Tiers is the directory of the tier lists the ASR sets, vision tiers, BFCL tiers and τ2
+	// domains run (TiersDir, under the module root).
 	Tiers string
+	// Tau2 runs the deep stage's τ2 domains, each domain's Inspect log kept in the run's
+	// deep/tau2/<domain>, and Grid its GuideLLM cells, kept in its deep/grid.
+	Tau2 Tau2
+	Grid Grid
+	// Restarts says the architect is at hand to restart the router when the deep stage's cold load
+	// asks; without it, cold load is recorded not run.
+	Restarts bool
+	// PollEvery spaces cold load's polls of /models; zero is 250 milliseconds.
+	PollEvery time.Duration
 }
 
 // Roles returns the roles the set assigns Model, in the order Roles lists them; for a set run,
@@ -100,8 +108,12 @@ func (r *Runner) Roles() []string {
 // SetSubject is the name a set run's directory takes in place of a model's: set-<name>.
 func SetSubject(set string) string { return "set-" + set }
 
-// setRunReason is why a set run reports the stages before the set stage not run.
-const setRunReason = "a set run: each role's model takes it in its own run"
+// setRunReason is why a set run reports the stages before the set stage not run, and
+// setRunAfterReason why it reports the deep stage not run.
+const (
+	setRunReason      = "a set run: each role's model takes it in its own run"
+	setRunAfterReason = "a set run takes the set stage alone; each role's model takes the deep stage in its own run"
+)
 
 // Run runs the stages in order and returns the run's report, stopping at the first stage that
 // fails: every later stage is reported not run, naming it. Before any stage it refuses a model
@@ -114,8 +126,9 @@ const setRunReason = "a set run: each role's model takes it in its own run"
 // tier 1 units, which its set stage reuses as the alone figure.
 //
 // A set run (no Model) starts at the set stage, from empty or naming it, and needs no prior: it
-// reports every stage before it not run, since each is a model's, and refuses the run unless the
-// router lists every model of the set loaded.
+// reports every stage before it not run, since each is a model's, and the deep stage after it,
+// which each model takes in its own run; it refuses the run unless the router lists every model
+// of the set loaded.
 func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, error) {
 	if r.HTTP == nil {
 		r.HTTP = &http.Client{}
@@ -174,18 +187,19 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 		StageCapacity:  r.capacity,
 		StageQuality:   r.quality,
 		StageSet:       r.set,
+		StageDeep:      r.deep,
 	}
 	failed := ""
 	for _, name := range Stages[start:] {
-		run, built := stages[name]
 		switch {
 		case failed != "":
 			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: failed + " failed"})
 			continue
-		case !built:
-			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotBuilt, Reason: "not built yet"})
+		case setRun && name != StageSet:
+			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: setRunAfterReason})
 			continue
 		}
+		run := stages[name]
 		r.logf("evaluate: %s %s\n", name, cmp.Or(r.Model, SetSubject(r.Set.Name)))
 		began := time.Now()
 		checks := run(ctx, rep)

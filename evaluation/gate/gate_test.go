@@ -32,13 +32,16 @@ type harness struct {
 	footprint *fakeFootprint
 	uv        *fakeUV
 	conform   *fakeConform
+	guidellm  *fakeGuideLLM
 	runner    *gate.Runner
 }
 
 // newHarness returns a runner for model in set A against a fake router with set A loaded, the
 // committed floors, a pool with 3333MiB free, as set A left it idle on b11669, no bars, a fake uv
-// that answers each MTEB task, ASR set, vision tier and BFCL tier with its recorded result, and a
-// fake conform run in which Pi fits and Claude Code and OpenCode drop at their first trial.
+// that answers each MTEB task, ASR set, vision tier, BFCL tier and τ2 domain with its recorded
+// result, a fake conform run in which Pi fits and Claude Code and OpenCode drop at their first
+// trial, and a fake GuideLLM that answers every cell with a recorded one; the architect isn't at
+// hand to restart the router.
 func newHarness(t *testing.T, model string) *harness {
 	t.Helper()
 	p, err := profile.Load(strixHalo)
@@ -59,6 +62,7 @@ func newHarness(t *testing.T, model string) *harness {
 	}
 	h.uv = newFakeUV(t)
 	h.conform = newFakeConform(gate.ConformK)
+	h.guidellm = newFakeGuideLLM(t)
 	tiers, err := filepath.Abs("testdata/tiers")
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +73,7 @@ func newHarness(t *testing.T, model string) *harness {
 		Footprint: h.footprint, SampleEvery: 5 * time.Millisecond, CrossEvery: 5 * time.Millisecond,
 		Media: gate.Media{PNG: []byte("png"), WAV: []byte("wav"), AudioSeconds: 6},
 		MTEB:  uv, ASR: uv, Vision: uv, Agent: uv, Dir: t.TempDir(), Tiers: tiers,
-		Conform: h.conform,
+		Conform: h.conform, Tau2: uv, Grid: h.guidellm.runner(), PollEvery: 2 * time.Millisecond,
 	}
 	return h
 }
@@ -110,17 +114,16 @@ func check(t *testing.T, rep *gate.Report, stage, role, name string) gate.Check 
 
 func equal(a, b []string) bool { return strings.Join(a, "|") == strings.Join(b, "|") }
 
-// TestRunAgentPasses runs gpt-oss-120b, set A's agent, through every built stage, and reports
-// the unbuilt ones as such.
+// TestRunAgentPasses runs gpt-oss-120b, set A's agent, through every stage.
 func TestRunAgentPasses(t *testing.T) {
 	h := newHarness(t, gptOSS)
 	rep := h.run(t, "", nil)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}
-	if !rep.Passed || rep.Reached != gate.StageSet {
-		t.Errorf("passed %v, reached %q; want passed, reached set", rep.Passed, rep.Reached)
+	if !rep.Passed || rep.Reached != gate.StageDeep {
+		t.Errorf("passed %v, reached %q; want passed, reached deep", rep.Passed, rep.Reached)
 	}
 	// Capacity put the profile's 4 slots in flight, with the set's embedding stream beside them.
 	if c := check(t, rep, gate.StageCapacity, gate.RoleAgent, "no crossed nonce"); !strings.HasPrefix(c.Detail, "4 answers in flight") {
@@ -150,8 +153,8 @@ func TestRunOtherRoles(t *testing.T) {
 			case gate.RoleAudio:
 				runs = len(gate.AudioSets)
 			}
-			if s := rep.Stage(gate.StageQuality).Status; s != gate.StatusPass || rep.Reached != gate.StageSet {
-				t.Errorf("quality %s, reached %s; want pass, set", s, rep.Reached)
+			if s := rep.Stage(gate.StageQuality).Status; s != gate.StatusPass || rep.Reached != gate.StageDeep {
+				t.Errorf("quality %s, reached %s; want pass, deep", s, rep.Reached)
 			}
 			if n := len(h.uv.calls(t)); n != runs {
 				t.Errorf("uv ran %d times; want %d", n, runs)
@@ -230,7 +233,7 @@ func TestRunResumes(t *testing.T) {
 	h.footprint.free, h.footprint.n = []int{3333}, 0
 	toolCalls := h.router.count("messages")
 	rep := h.run(t, gate.StageCapacity, first)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) || !rep.Passed || rep.From != gate.StageCapacity {
 		t.Fatalf("resumed run %q, passed %v, from %q; want %q, passed, from capacity", got, rep.Passed, rep.From, want)
 	}
@@ -388,17 +391,12 @@ func TestReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.Build != "b11669-620d2225c" || got.Set != "a" || got.Model != gptOSS || !equal(got.Roles, []string{gate.RoleAgent}) ||
-		got.Reached != gate.StageSet || !got.Passed || got.HostClass != "strix-halo" || got.Router != h.router.srv.URL {
+		got.Reached != gate.StageDeep || !got.Passed || got.HostClass != "strix-halo" || got.Router != h.router.srv.URL {
 		t.Errorf("report header %+v", got)
 	}
-	for _, s := range got.Stages[:5] {
+	for _, s := range got.Stages {
 		if s.WallS <= 0 || len(s.Checks) == 0 {
 			t.Errorf("stage %s: wall %v s, %d checks; want both recorded", s.Name, s.WallS, len(s.Checks))
-		}
-	}
-	for _, s := range got.Stages[5:] {
-		if s.Reason != "not built yet" {
-			t.Errorf("stage %s: reason %q; want not built yet", s.Name, s.Reason)
 		}
 	}
 	d := check(t, got, gate.StageFitness, gate.RoleAgent, "decode")
@@ -419,8 +417,8 @@ func TestReport(t *testing.T) {
 	if err := gate.WriteSummary(&sum, got); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"build b11669-620d2225c, set a, roles agent", "reached set: passed",
-		"ok   agent decode: 50 tok/s, floor >= 20", "deep      not built  not built yet", "ceiling: decode 50.0 tok/s of 92.5"} {
+	for _, want := range []string{"build b11669-620d2225c, set a, roles agent", "reached deep: passed",
+		"ok   agent decode: 50 tok/s, floor >= 20", "ok   agent agent-tau2-airline: 0.5 pass^1, no floor", "ceiling: decode 50.0 tok/s of 92.5"} {
 		if !strings.Contains(sum.String(), want) {
 			t.Errorf("summary lacks %q:\n%s", want, sum.String())
 		}

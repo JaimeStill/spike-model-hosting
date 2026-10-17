@@ -2,7 +2,10 @@
 # embedding role, through mteb_quality.py's encoder, and Inspect's for the generative roles:
 # asr_quality.py's ASR sets for the audio role, vision_quality.py's tiers (inspect_evals' stock
 # V*Bench, DocVQA and MMMU tasks) for the vision role, and agent_quality.py's tiers (inspect_evals'
-# stock BFCL task) for the agent role, the last two sharing pass_stop.py's early stop. Each package
+# stock BFCL task) for the agent role, the last two sharing pass_stop.py's early stop; and the deep
+# stage's tau2_quality.py (inspect_evals' stock τ2 airline and retail), whose simulated user is
+# claude_code.py's Inspect provider, Claude Code in print mode, tested against a fake claude by
+# test_claude_code.py (go test runs it, through suites_test.go). Each package
 # is pinned exactly, and Python is the consumers mise environment's 3.14.8; uv.lock is committed,
 # and `mise run currency` reports a pin behind its newest release. The quality stage reads the
 # MTEB, Inspect AI and inspect_evals pins from this file (package evaluation/suites), the one place

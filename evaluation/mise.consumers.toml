@@ -41,3 +41,9 @@ run = "{{config_root}}/scripts/vision-tiers.sh"
 [tasks.agent-tiers]
 description = "Draw the agent role's BFCL single-turn and multi-turn tier lists from their IDs with their seed"
 run = "{{config_root}}/scripts/agent-tiers.sh"
+
+# The deep stage's τ2 task lists, evaluation/tiers/agent-tau2-<domain>.txt, drawn again from their
+# seed and the τ2 data inspect_evals ships. It rewrites the committed lists.
+[tasks.tau2-tiers]
+description = "Draw the deep stage's τ2 airline and retail task lists from their IDs with their seed"
+run = "{{config_root}}/scripts/tau2-tiers.sh"

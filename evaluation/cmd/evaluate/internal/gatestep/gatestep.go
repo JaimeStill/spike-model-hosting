@@ -1,10 +1,10 @@
 // Package gatestep is evaluate's gated run, which takes one model through the evaluation
-// package gate's stages: admission, fitness, capacity, quality and set, then deep, which is not
-// built yet; or, as a set run, takes a set through the set stage alone.
+// package gate's stages: admission, fitness, capacity, quality and set, then deep; or, as a set
+// run, takes a set through the set stage alone.
 //
 // Usage:
 //
-//	evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]
+//	evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-guidellm path] [-restart] [-state dir]
 //
 // The model is -model, by router ID, or the model the set assigns -role: agent (the profile's
 // chat role; chat is accepted), vision, audio or embedding. The set is -set, or SPIKE_SET, or
@@ -47,6 +47,17 @@
 // keeps them), and the run's recordings and conform table, the fit profile, in the run
 // directory's conform/.
 //
+// The deep stage, reached once every gate passed, runs the agent role's τ2 airline and retail
+// through the same uv project, their simulated user the pinned Claude Code (-claude, SPIKE_CLAUDE
+// or the pin) on the state directory's claude/ login, each domain's Inspect log in the run
+// directory's deep/tau2/<domain>; then, for a generative model, the GuideLLM grid, with GuideLLM
+// from -guidellm, or SPIKE_GUIDELLM, or else the consumers mise environment's pin, its tokenizers
+// fetched into the state directory's hf/ and its files in the run directory's deep/grid; then
+// prefix reuse; then cold load. Cold load restarts the router twice, root commands the run
+// can't take: with -restart, the architect is at hand, and the run asks for each restart on
+// stderr, naming its command, and times it; without it, cold load is recorded not run, naming the
+// commands. -from deep runs the deep stage alone again on a run whose gates all passed.
+//
 // The router comes from -router or SPIKE_ROUTER_URL. The model must be loaded already: the run
 // checks GET /models first, and refuses an unloaded model before any stage; every request
 // carries autoload=false, so it never loads one.
@@ -77,7 +88,7 @@ import (
 )
 
 // Usage is the run's usage line, which evaluate's own usage lists.
-const Usage = "evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]"
+const Usage = "evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-guidellm path] [-restart] [-state dir]"
 
 const usage = "usage:\n  " + Usage + "\n"
 
@@ -85,7 +96,9 @@ const usage = "usage:\n  " + Usage + "\n"
 var errUsage = errors.New("usage")
 
 type options struct {
-	router, profile, set, role, model, from, run, ssh, floors, bars, uv, python, state string
+	router, profile, set, role, model, from, run, ssh, floors, bars, uv, python, guidellm, state string
+	// restart says the architect is at hand to restart the router for the deep stage's cold load.
+	restart bool
 	// consumers are the conform tier's consumer executables, by name; empty asks mise.
 	consumers map[string]string
 }
@@ -135,6 +148,8 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs.StringVar(&o.bars, "bars", "", "the quality stage's bars file; default the module root's evaluation/bars.toml")
 	fs.StringVar(&o.uv, "uv", getenv("SPIKE_UV"), "the uv executable (SPIKE_UV); empty asks mise for the pinned one")
 	fs.StringVar(&o.python, "python", getenv("SPIKE_PYTHON"), "the Python uv runs (SPIKE_PYTHON); empty asks mise for the pinned one")
+	fs.StringVar(&o.guidellm, "guidellm", getenv("SPIKE_GUIDELLM"), "the GuideLLM executable (SPIKE_GUIDELLM); empty asks mise for the pinned one")
+	fs.BoolVar(&o.restart, "restart", false, "the architect restarts the router when the deep stage's cold load asks; without it, cold load is recorded not run")
 	consumerFlags := map[string]*string{}
 	for _, name := range passk.ConsumerNames {
 		env := "SPIKE_" + strings.ToUpper(name)
@@ -249,7 +264,7 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 	}
 	r := &gate.Runner{
 		Router: o.router, Profile: p, Set: set, Model: model, Floors: floors,
-		Footprint: gate.SSH{Dest: o.ssh}, Media: media, Log: stderr, Bars: bars, Dir: dir,
+		Footprint: gate.SSH{Dest: o.ssh}, Media: media, Log: stderr, Bars: bars, Dir: dir, Restarts: o.restart,
 	}
 	roles := r.Roles()
 	if len(roles) > 0 {
@@ -265,12 +280,28 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 			Exe: uv, Python: python, Project: filepath.Join(root, gate.SuitesDir),
 			Cache: filepath.Join(state, "cache"), Log: stderr,
 		}
-		r.MTEB, r.ASR, r.Vision, r.Agent, r.Tiers = suites, suites, suites, suites, filepath.Join(root, gate.TiersDir)
+		if !setRun && slices.Contains(roles, gate.RoleAgent) {
+			// τ2's simulated user is the pinned Claude Code on the login conform's Claude Code uses.
+			if suites.Claude, err = consumers.Executable(ctx, o.consumers["claude"], "claude"); err != nil {
+				return false, err
+			}
+			if suites.ClaudeConfig, err = filepath.Abs(filepath.Join(state, "claude")); err != nil {
+				return false, err
+			}
+		}
+		r.MTEB, r.ASR, r.Vision, r.Agent, r.Tau2, r.Tiers = suites, suites, suites, suites, suites, filepath.Join(root, gate.TiersDir)
 	}
 	if !setRun && slices.Contains(roles, gate.RoleAgent) {
 		if r.Conform, err = conformRunner(ctx, o, state, stderr); err != nil {
 			return false, err
 		}
+	}
+	if m := p.Model(model); !setRun && m != nil && m.Kind == profile.KindGenerative {
+		exe, err := consumers.Executable(ctx, o.guidellm, "guidellm")
+		if err != nil {
+			return false, err
+		}
+		r.Grid = gate.GuideLLM{Exe: exe, HFHome: filepath.Join(state, "hf"), Log: stderr}
 	}
 	rep, err := r.Run(ctx, o.from, prior)
 	if rep == nil {

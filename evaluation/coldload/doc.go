@@ -14,7 +14,8 @@
 //
 // The API:
 //   - Watch polls a router until a restart has every model it waits for loaded again, and
-//     writes the times.
+//     writes the times; Follow does the same and returns the Tracker, for a caller that keeps
+//     the times as figures (Tracker.Times, Times).
 //   - Tracker follows one restart, and its zero value is ready to use; Tracker.Models names the
 //     models it waits for. Tracker.Observe takes each poll, Tracker.Ready and Tracker.Done say
 //     how far it got, Tracker.Progress describes a restart that didn't finish, and Tracker.Write

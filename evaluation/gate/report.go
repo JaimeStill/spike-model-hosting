@@ -58,10 +58,9 @@ func broken(name, role string, err error) Check {
 
 // The statuses a stage ends in.
 const (
-	StatusPass     = "pass"
-	StatusFail     = "fail"
-	StatusNotRun   = "not run"
-	StatusNotBuilt = "not built"
+	StatusPass   = "pass"
+	StatusFail   = "fail"
+	StatusNotRun = "not run"
 )
 
 // StageResult is one stage of a run.

@@ -24,12 +24,14 @@ import (
 // testdata/vision/<tier>: the Inspect JSON logs of a live run of Gemma 4 26B-A4B on the
 // Framework, trimmed to testdata/tiers/vision-<tier>.txt, or testdata/vision/<tier>-stopped
 // given a bar; a BFCL tier with testdata/agent/<tier>, a live run of gpt-oss-120b trimmed to
-// testdata/tiers/agent-<tier>.txt, or testdata/agent/<tier>-stopped given a bar. Each result is stamped with the suites project's pin of MTEB, Inspect AI or
+// testdata/tiers/agent-<tier>.txt, or testdata/agent/<tier>-stopped given a bar; a τ2 domain with
+// testdata/tau2/<domain>, a log of testdata/tiers/agent-tau2-<domain>.txt's tasks, two trials
+// each, in the shape tau2_quality.py writes, synthesized until a live run is recorded. Each result is stamped with the suites project's pin of MTEB, Inspect AI or
 // inspect_evals, since the check refuses another's and a pin moves on while the recording stays
 // the same.
 type fakeUV struct {
 	dir string
-	// fail names a task, set, vision tier or BFCL tier the fake exits 1 on, writing nothing; mteb, inspect
+	// fail names a task, set, vision tier, BFCL tier or τ2 domain the fake exits 1 on, writing nothing; mteb, inspect
 	// and evals, when set, are the versions stamped in place of the pins.
 	fail, mteb, inspect, evals string
 	// testdata, when set, is the directory the results are answered from in place of testdata.
@@ -48,10 +50,12 @@ func (f *fakeUV) runner() gate.UV {
 	}
 	script := fmt.Sprintf(`#!/bin/sh
 printf '%%s|%%s|%%s|%%s|%%s\n' "$*" "$HF_HOME" "$MTEB_CACHE" "$ASR_CACHE" "$INSPECT_EVALS_CACHE_DIR" >> %[1]q
-kind= task= set= tier= out= bar=
+kind= task= set= tier= out= bar= domain=
 while [ $# -gt 0 ]; do
 	case $1 in
 	*/mteb_quality.py) kind=mteb ;;
+	*/tau2_quality.py) kind=tau2 ;;
+	--domain) domain=$2; shift ;;
 	*/asr_quality.py) kind=asr ;;
 	*/vision_quality.py) kind=vision ;;
 	*/agent_quality.py) kind=agent ;;
@@ -80,6 +84,10 @@ vision|agent)
 	[ -n "$bar" ] && [ -d "$src-stopped" ] && src=$src-stopped
 	mkdir -p "$out" && cp "$src"/*.json "$out"/ || exit 1
 	sed -i -e 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' -e 's/"inspect_evals": "[^"]*"/"inspect_evals": "%[6]s"/' "$out"/*.json ;;
+tau2)
+	[ "$domain" = %[2]q ] && exit 1
+	mkdir -p "$out" && cp %[3]q/tau2/"$domain"/*.json "$out"/ || exit 1
+	sed -i -e 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' -e 's/"inspect_evals": "[^"]*"/"inspect_evals": "%[6]s"/' "$out"/*.json ;;
 *) exit 2 ;;
 esac
 `, filepath.Join(f.dir, "calls"), f.fail, testdata, cmp.Or(f.mteb, gate.MTEBVersion), cmp.Or(f.inspect, gate.InspectVersion),
@@ -88,22 +96,45 @@ esac
 	if err := os.WriteFile(exe, []byte(script), 0o700); err != nil {
 		panic(err)
 	}
-	return gate.UV{Exe: exe, Python: "/pinned/python", Project: "/module/evaluation/suites", Cache: "/state/cache"}
+	// τ2's simulated user needs a Claude Code login in its configuration directory.
+	login := filepath.Join(f.dir, "claude")
+	if err := os.MkdirAll(login, 0o700); err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(filepath.Join(login, ".credentials.json"), []byte("{}"), 0o600); err != nil {
+		panic(err)
+	}
+	return gate.UV{Exe: exe, Python: "/pinned/python", Project: "/module/evaluation/suites", Cache: "/state/cache",
+		Claude: "/pinned/claude", ClaudeConfig: login}
 }
 
 // calls returns each call of the quality stage's, its arguments, HF_HOME, MTEB_CACHE, ASR_CACHE
 // and INSPECT_EVALS_CACHE_DIR, '|'-separated, in order; setCalls returns the set stage's, those
-// whose output is under a run directory's set/.
+// whose output is under a run directory's set/, and deepCalls the deep stage's, under its deep/.
 func (f *fakeUV) calls(t *testing.T) []string {
 	t.Helper()
 	var out []string
 	for _, c := range f.allCalls(t) {
-		if !setCall.MatchString(c) {
+		if !setCall.MatchString(c) && !deepCall.MatchString(c) {
 			out = append(out, c)
 		}
 	}
 	return out
 }
+
+func (f *fakeUV) deepCalls(t *testing.T) []string {
+	t.Helper()
+	var out []string
+	for _, c := range f.allCalls(t) {
+		if deepCall.MatchString(c) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// deepCall matches a deep stage's call, by its output under the run directory's deep/.
+var deepCall = regexp.MustCompile(`--output \S*/deep/`)
 
 func (f *fakeUV) setCalls(t *testing.T) []string {
 	t.Helper()
@@ -150,7 +181,7 @@ var recorded = map[string]struct {
 func TestQualityEmbedding(t *testing.T) {
 	h := newHarness(t, embedding)
 	rep := h.run(t, "", nil)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}
@@ -320,7 +351,7 @@ const (
 func TestQualityAudio(t *testing.T) {
 	h := newHarness(t, gemmaE4B)
 	rep := h.run(t, "", nil)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}

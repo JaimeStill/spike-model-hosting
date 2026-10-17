@@ -1,8 +1,7 @@
 // Package gate runs evaluate's gated stages for one model of a profile's set against the router:
 // admission, fitness, capacity, quality, set and deep, in that order, stopping at the first that
-// fails. Admission, fitness, capacity, quality and set are built; deep is a named stage a run
-// reports as not built yet, which later work fills in. A set run, with no model, takes the set
-// stage alone for the set.
+// fails, so the deep stage runs only once every gate passed. A set run, with no model, takes the
+// set stage alone for the set.
 //
 //   - Admission judges the model on paper, from the profile and the router's build: licence and
 //     origin recorded (failing only when missing), the set's roles declared, the profile's
@@ -94,6 +93,27 @@
 //     one checked. A load whose every finished request errored fails it too. Its output is in the
 //     run's set/alone and set/concurrent. A run resumed at the set stage needs the quality
 //     records it reuses, and is refused without them.
+//   - Deep records and never judges; a measurement that couldn't be taken fails it, as in every
+//     stage. For the agent role it runs τ2 airline and retail (Tau2Domains), 12 seeded tasks each
+//     (evaluation/tiers/agent-tau2-<domain>.txt), each task Tau2Trials times, through the suites
+//     project's tau2_quality.py: inspect_evals' stock τ2 tasks, unforked, the model under test
+//     through Inspect's openai-api provider, the simulated user Sonnet through the laptop's pinned
+//     Claude Code on the subscription login, claude_code.py's claude-code/sonnet provider (claude
+//     -p, tools off, its own system prompt, no session persistence). inspect_evals' airline
+//     scorer has no model grader, so the simulator is the only Claude Code use. Each domain
+//     records pass^1 and pass^2 (τ-bench's C(c,k)/C(n,k) a task, averaged), the wall and working
+//     time, the simulator's calls and the model Claude Code reported for them, and the model's
+//     own failed calls; a simulator call that failed past its retries makes the domain a
+//     measurement that couldn't be taken, since the stock task carries on with a silent user.
+//     The tau2 simulator check rolls the calls and reported models up. For a generative model it
+//     runs the GuideLLM grid (GridCells: short 512/256 and agentic 8192/512 at 1 and 4 streams,
+//     as evaluation/scripts/baseline.sh does, the prompt cut by the card's tokenizer), each cell's
+//     client figures beside the engine's from /metrics; and prefix reuse, a PrefixTokens prefix
+//     then four warm requests, as evaluate prefix sends them. Last, cold load: with
+//     Runner.Restarts, it asks for two restarts, ColdLoadWarm and then ColdLoadCold, root
+//     commands the architect runs on the router's host, and times each with the coldload
+//     package's Tracker until every model of the set (the startup set) is loaded again; without
+//     it, it is recorded not run, naming the commands. Its output is in the run's deep/.
 //
 // Every request carries autoload=false; a run refuses a model the router doesn't list loaded
 // before any stage, and never loads one.
@@ -126,6 +146,13 @@
 //     ASRResult, whose WER and RTFx are the set's. MTEBVersion and InspectVersion are the MTEB
 //     and Inspect AI the project pins (package evaluation/suites). AudioSets name the ASR sets,
 //     ASRTier a set's tier, and TiersDir where the tier lists are.
+//   - Tau2 runs one τ2 domain, UV through tau2_quality.py, its simulator UV.Claude on the
+//     UV.ClaudeConfig login; ReadTau2 reads its Inspect log into a Tau2Result, whose PassK is
+//     pass^k. Tau2Domains, Tau2Trials, Tau2Check and Tau2Simulator name the domains, trials,
+//     check and list, and simulator. Grid runs one GuideLLM cell, GuideLLM with the pinned
+//     executable; ReadGrid reads its JSON into a GridResult; GridCells and GridCell.Name name
+//     the cells. PrefixTokens is prefix reuse's prefix; ColdLoadWarm and ColdLoadCold are cold
+//     load's root commands.
 //   - Media are the image and audio clip the stages send, the probe's (LoadMedia); WAVSeconds
 //     is a clip's length.
 package gate

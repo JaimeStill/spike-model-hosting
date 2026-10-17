@@ -22,29 +22,46 @@ import (
 // timeout passes first, saying how far the restart got. It only reads /models; it never loads a
 // model or starts a restart.
 func Watch(ctx context.Context, base string, models []string, interval, timeout time.Duration, w io.Writer) error {
+	var werr error
+	t, err := Follow(ctx, base, models, interval, timeout, func(n int) {
+		_, werr = fmt.Fprintf(w, "watching %s: %d models loaded; restart the router now\n", base, n)
+	})
+	if err != nil {
+		return err
+	}
+	if werr != nil {
+		return werr
+	}
+	return t.Write(w)
+}
+
+// Follow is Watch without the writing: it polls until the restart has every one of models loaded
+// again and returns the Tracker that followed it, calling ready once, with the number of models
+// it waits for, when the first poll has them all loaded and the restart may start.
+func Follow(ctx context.Context, base string, models []string, interval, timeout time.Duration, ready func(n int)) (*Tracker, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	hc := &http.Client{Timeout: max(interval, 2*time.Second)}
-	t := Tracker{Models: models}
+	t := &Tracker{Models: models}
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	announced := false
 	for {
 		status, err := router.Statuses(ctx, hc, base)
 		if ctx.Err() != nil {
-			return fmt.Errorf("gave up after %s: %s", timeout, t.Progress())
+			return t, fmt.Errorf("gave up after %s: %s", timeout, t.Progress())
 		}
 		if err := t.Observe(time.Now(), status, err); err != nil {
-			return err
+			return t, err
 		}
 		if !announced && t.Ready() {
 			announced = true
-			if _, err := fmt.Fprintf(w, "watching %s: %d models loaded; restart the router now\n", base, len(t.models)); err != nil {
-				return err
+			if ready != nil {
+				ready(len(t.models))
 			}
 		}
 		if t.Done() {
-			return t.Write(w)
+			return t, nil
 		}
 		select {
 		case <-ctx.Done():
@@ -190,6 +207,29 @@ func (t *Tracker) Write(w io.Writer) error {
 	}
 	_, _ = fmt.Fprintf(tw, "all loaded\t%s\t\n", sec(t.loaded[order[len(order)-1]].Sub(t.start)))
 	return tw.Flush()
+}
+
+// Times are a finished restart's times, each from its start: Up, when the router answered again
+// (zero when it was never seen down); Loaded, when each model was listed loaded again; and All,
+// when the last of them was.
+type Times struct {
+	Up     time.Duration
+	Loaded map[string]time.Duration
+	All    time.Duration
+}
+
+// Times returns the restart's times; it is meaningful once Done.
+func (t *Tracker) Times() Times {
+	out := Times{Loaded: map[string]time.Duration{}}
+	if t.down && !t.up.IsZero() {
+		out.Up = t.up.Sub(t.start)
+	}
+	for id, at := range t.loaded {
+		d := at.Sub(t.start)
+		out.Loaded[id] = d
+		out.All = max(out.All, d)
+	}
+	return out
 }
 
 // sec formats d in seconds, to the tenth.

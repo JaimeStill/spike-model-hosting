@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"maps"
 	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -40,6 +42,14 @@ type fakeRouter struct {
 
 	mu       sync.Mutex
 	requests []string
+	// prefixes are the long prompts' first words seen, which a later prompt starting the same way
+	// finds cached, as llama.cpp's prompt cache would.
+	prefixes map[string]bool
+	// vocab and words are the fake tokenizer's vocabulary: each word's ID, and each ID's word.
+	vocab map[string]int
+	words []string
+	// restarting is set while a fake restart has the router down.
+	restarting bool
 	// audio are the chat completions' bodies that carried an audio clip, in order.
 	audio []map[string]any
 }
@@ -50,7 +60,7 @@ var fakeNonce = regexp.MustCompile(`nonce-[0-9a-f]{16}`)
 const crossedNonce = "nonce-0123456789abcdef"
 
 func newFakeRouter(t *testing.T, models ...string) *fakeRouter {
-	f := &fakeRouter{status: map[string]string{}, build: "b11669-620d2225c", decode: 50, prefill: 700}
+	f := &fakeRouter{status: map[string]string{}, prefixes: map[string]bool{}, vocab: map[string]int{}, build: "b11669-620d2225c", decode: 50, prefill: 700}
 	for _, m := range models {
 		f.status[m] = "loaded"
 	}
@@ -72,6 +82,51 @@ func (f *fakeRouter) count(prefix string) int {
 	return n
 }
 
+// metrics answers GET /metrics for a model with llama.cpp's counters, each grown by a fixed step
+// a request: 1000 prompt tokens over 2 seconds, 300 predicted over 6, 50 cached.
+func (f *fakeRouter) metrics(w http.ResponseWriter, q url.Values) {
+	if q.Get("autoload") != "false" {
+		http.Error(w, "a model-routed request without autoload=false", http.StatusBadRequest)
+		return
+	}
+	f.record("metrics " + q.Get("model"))
+	n := float64(f.count("metrics " + q.Get("model")))
+	for _, c := range []struct {
+		name string
+		step float64
+	}{{"prompt_tokens_total", 1000}, {"prompt_seconds_total", 2}, {"tokens_predicted_total", 300},
+		{"tokens_predicted_seconds_total", 6}, {"prompt_tokens_cached_total", 50}} {
+		_, _ = fmt.Fprintf(w, "# TYPE llamacpp:%s counter\nllamacpp:%s %g\n", c.name, c.name, c.step*n)
+	}
+}
+
+// restart takes the router down, as a restart does, then brings it back with each model listed
+// unloaded, then loaded.
+func (f *fakeRouter) restart(pause time.Duration) {
+	f.mu.Lock()
+	f.restarting = true
+	f.mu.Unlock()
+	time.Sleep(pause)
+	f.mu.Lock()
+	f.restarting = false
+	saved := maps.Clone(f.status)
+	for m := range f.status {
+		f.status[m] = "unloaded"
+	}
+	f.mu.Unlock()
+	time.Sleep(pause)
+	f.mu.Lock()
+	maps.Copy(f.status, saved)
+	f.mu.Unlock()
+}
+
+// down reports whether a fake restart has the router down.
+func (f *fakeRouter) down() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.restarting
+}
+
 func (f *fakeRouter) record(s string) {
 	f.mu.Lock()
 	f.requests = append(f.requests, s)
@@ -89,7 +144,11 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "a model-routed request without autoload=false", http.StatusBadRequest)
 			return
 		}
-		if m, _ := body["model"].(string); f.status[m] != "loaded" {
+		m, _ := body["model"].(string)
+		f.mu.Lock()
+		status := f.status[m]
+		f.mu.Unlock()
+		if status != "loaded" {
 			http.Error(w, "model not loaded: "+m, http.StatusBadRequest)
 			return
 		} else if m != "" && m == f.refuse {
@@ -102,10 +161,16 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/models":
 		f.record("models")
+		if f.down() {
+			http.Error(w, "restarting", http.StatusServiceUnavailable)
+			return
+		}
 		var data []map[string]any
+		f.mu.Lock()
 		for id, s := range f.status {
 			data = append(data, map[string]any{"id": id, "status": map[string]any{"value": s}})
 		}
+		f.mu.Unlock()
 		reply(map[string]any{"data": data})
 	case "/props":
 		f.record("props")
@@ -113,13 +178,33 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 	case "/v1/messages":
 		f.record("messages")
 		reply(map[string]any{"content": []map[string]any{{"type": "tool_use", "name": "get_weather", "input": map[string]any{"city": "Paris"}}}})
+	case "/metrics":
+		f.metrics(w, r.URL.Query())
 	case "/tokenize":
+		// A word is a token, its ID its place in the fake's vocabulary, so text detokenizes back
+		// to its own words, a run's nonce among them.
 		content, _ := body["content"].(string)
-		toks := make([]int, len(strings.Fields(content)))
+		var toks []int
+		f.mu.Lock()
+		for w := range strings.FieldsSeq(content) {
+			id, ok := f.vocab[w]
+			if !ok {
+				id = len(f.words)
+				f.vocab[w], f.words = id, append(f.words, w)
+			}
+			toks = append(toks, id)
+		}
+		f.mu.Unlock()
 		reply(map[string]any{"tokens": toks})
 	case "/detokenize":
 		toks, _ := body["tokens"].([]any)
-		reply(map[string]any{"content": strings.Repeat("w ", len(toks))})
+		words := make([]string, len(toks))
+		f.mu.Lock()
+		for i, id := range toks {
+			words[i] = f.words[int(id.(float64))]
+		}
+		f.mu.Unlock()
+		reply(map[string]any{"content": strings.Join(words, " ")})
 	case "/v1/embeddings":
 		f.embeddings(body, reply)
 	case "/v1/chat/completions":
@@ -177,6 +262,16 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 	timings := map[string]any{
 		"prompt_n": len(strings.Fields(text.String())), "prompt_per_second": f.prefill,
 		"predicted_n": 10, "predicted_per_second": f.decode,
+	}
+	// A long prompt whose start was sent before finds all but its last ten words cached.
+	if words := strings.Fields(text.String()); len(words) > 1000 {
+		key := fmt.Sprint(body["model"], strings.Join(words[:1000], " "))
+		f.mu.Lock()
+		if f.prefixes[key] {
+			timings["cache_n"], timings["prompt_n"] = len(words)-10, 10
+		}
+		f.prefixes[key] = true
+		f.mu.Unlock()
 	}
 	if !stream {
 		reply(map[string]any{

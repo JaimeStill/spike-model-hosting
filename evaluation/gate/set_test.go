@@ -42,7 +42,7 @@ func TestSetRun(t *testing.T) {
 	// A bar V*Bench's recorded score falls short of: the quality stage would fail it and stop it early.
 	h.runner.Bars = tier.Bars{"vision-vstar": {Value: 0.99}}
 	rep := h.run(t, "", nil)
-	want := []string{"admission not run", "fitness not run", "capacity not run", "quality not run", "set pass", "deep not built"}
+	want := []string{"admission not run", "fitness not run", "capacity not run", "quality not run", "set pass", "deep not run"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}
@@ -202,7 +202,7 @@ func TestSetModelRun(t *testing.T) {
 	h.runner.LoadWorkers = 2
 	rep := h.run(t, gate.StageSet, first)
 	loads(t, rep, 2)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep not built"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) || !rep.Stage(gate.StageQuality).Reused || rep.Stage(gate.StageSet).Reused {
 		t.Fatalf("resumed %q; want %q, quality reused, set run", got, want)
 	}
