@@ -88,9 +88,14 @@ Behaviors     1. The repository has five areas: hosting (the Go tooling for
               9. Vision (inspect_evals): the probe image x5, V*Bench 100,
                  DocVQA 150, MMMU 200.
               10. Agent, in cost order: BFCL single-turn 100 and multi-turn
-                 20 (inspect_evals), then conform pass^5, judged against
-                 gpt-oss-120b's comparison row (Pi 9/9 with 0 invalid;
-                 Claude Code each cell at or above it; OpenCode measured).
+                 20 (inspect_evals; the model, through the API), then
+                 harness fit: conform pass^5 through every pinned harness
+                 (Pi, Claude Code, OpenCode), each held to one absolute bar
+                 (every applicable capability 5/5, 0 invalid; a capability
+                 a harness can't exercise is excluded and noted). A harness
+                 drops at its first failed trial. The report gives the fit
+                 profile: which harnesses fit, and each failed cell with its
+                 reason. The role fails only if no harness fits.
               11. The set stage runs each role's tier 1 alone, then every
                  role's at once, with at least 3 GiB of the pool free at the
                  peak and no crossed answer.
@@ -558,6 +563,8 @@ slices 7/12 committed · standards — · spec — · editor —
 - evaluation (r3): τ2 runs airline and retail only; rejected telecom, whose simulated user needs tools.
 - evaluation (r3): the hour's counts are BFCL 100 and 20 + conform pass^5; vision 5/100/150/200; audio 150 per set x 6; embedding's four tasks in full; τ2 12 tasks per domain x 2 trials in the deep stage.
 - evaluation (r3, architect): speed floors are absolute and task-based, initial values to tune as metrics come in: agent decode 20 tok/s, prefill 500 tok/s, 8k TTFT 20 s, 10 tok/s per stream at 4; vision 10 s per image question; audio RTFx 5, 1 per stream at 4; embedding 4,300 tok/s, 250 ms per query. Supersedes main-model r1's 24 tok/s floor (carried to candidates) and r1's 40%-of-ceiling gate; ceiling efficiency is a recorded diagnostic.
+- evaluation (slice 7, architect): harness fit is evaluated, not assumed. Conform judges every pinned harness against one absolute bar (each applicable capability 5/5, 0 invalid), not against gpt-oss-120b's comparison row; the agent role needs any harness to fit, and the report records the fit profile per model, engine and harness. Supersedes behavior 10's comparison-row judgment; the row stays in the findings as context. Prompted by gpt-oss-120b failing its own row (Claude Code audio-tool 5/5 on b11669, 3/5 on b11572).
+- evaluation (slice 7, architect): fit profiles, with each failed cell's reason, are design input for the native Go harness spike: what a harness must do for a local model (force the tool call when offering respond, round-trip reasoning, no blind resend on a parse 500, drop images for a model without vision). The fit tier takes harnesses as a list, so that spike's harness joins it as one more.
 
 ## Pending edits
 
@@ -604,3 +611,6 @@ slices 7/12 committed · standards — · spec — · editor —
   `context/tool-reliability.md` to `docs/findings/tool-reliability.md`.
 - coordinator · ai-hosting.md, "Experiment: spike-model-hosting": candidates are judged by
   evaluation's absolute floors and set A's per-tier bars, not the 24 tok/s floor.
+- coordinator · roadmap, experiment.ai's native Go harness spike: it joins this spike's harness-fit
+  tier as one more harness, and reads the fit profiles' failed cells and reasons (forcing the tool
+  call, reasoning round-trip, resend on a parse 500, image drop) as its design input.
