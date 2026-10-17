@@ -130,3 +130,107 @@ gemma-4-E4B and EmbeddingGemma 2 are in every set and stayed loaded through all 
 With the files cached, a swap is about half a minute: set A back in 23.0s, and each
 candidate's own load from the cache 23s by the router log, so a cached swap to either candidate
 would take about 25s. A first swap to a candidate is bound by the download.
+
+## Gemma 4 26B-A4B's growth under vision use, b11669
+
+Set A fails the set stage's 3072MiB pool floor (2968-2990MiB free in three runs) because Gemma 4
+26B-A4B grows under vision use and holds what it grows until it is reloaded. The growth is a high-water
+mark, not a leak: the image encoder's working buffers size up from their warm-up size to the largest
+image batch the model has encoded, and Vulkan's scratch buffers to the largest operation it has run.
+Each step happens once and holds. Two settings bound part of it. Neither could be tested live: the router
+takes no arguments on a load, and a scratch preset needs a root edit.
+
+### What was measured
+
+Each step below is one controlled load on b11669 (`b11669-620d2225c`) on 2026-10-17, sent
+through the router's API with the other three models of set A loaded and idle. The 26B-A4B was
+reloaded over the API (`/models/unload`, `/models/load`) before each sequence. Each reading
+is `amdgpu_top -p` for the 26B-A4B's process: VRAM + GTT, and the "Requested" split between
+device-local and host-visible memory. Beside it are the pool's free memory and the process's
+RSS from `ps`. Images are V*Bench's (craigwu/vstar_bench, 1500-3300px a side); a 512-token image
+is one at the server's cap; requests ran at temperature 0 with 32-64 tokens out. Figures in MiB:
+
+| After | 26B-A4B, VRAM + GTT | Change from fresh | Requested device-local / host-visible | Pool free | RSS |
+|---|---|---|---|---|---|
+| a fresh load | 17336-17337 | | 16522 / 814 | 3241 | 208 |
+| one image of 255 tokens (912x576), under the warm-up size | 17380 | +44 | 16533 / 847 | 3205 | 293 |
+| one 512-token image | 17538-17549 | +202-213 | 16677 / 861 | 3041-3047 | 398-600 |
+| more single images, one at a time or 4 in flight | 17538-17550 | no further change | | | |
+| two images of the same size in one prompt, the first images it saw | 17873-17874 | +537 | 17004 / 869 | 2716-2718 | 498-513 |
+| two images of different sizes (2258x1500, 2505x1500) in one prompt, the first images it saw | 17549 | +213, as one image | 16685 / 864 | 3041 | 600 |
+| 4 prompts of 6027 text tokens at once, before any image | 17457 | +120 | 16628 / 830 | 3128 | 1856 |
+| the same text after the vision steps | 17963 | +80-90 over them | 17093 / 870 | 2623 | 3442 |
+| further multi-image, single-image and concurrent prompts | 17963 | no further change | | | 5750-7504 |
+
+The set stage's tier 1 sends single images (the probe and V*Bench), so it reaches the single-image
+level plus the text step: about +300MiB, 17600-17640. That matches the growth seen in the set runs. The
+set run of 2026-10-17 (14:04Z) read 3241MiB free at its fresh start, while the agent's tier ran
+alone, and 2990MiB from the vision role's tier on, through the rest of the stage. A model that sees
+multi-image prompts (MMMU's, or a user's) reaches +627MiB: 17963, with 2623MiB of the pool free.
+
+### Which buffer
+
+Each candidate is ruled in or out by the evidence:
+
+- **The image encoder's compute buffer, ruled in.** The mmproj's graph is reserved at load for a
+  warm-up image of 256 tokens. That is fixed for Gemma 4's projector "to avoid OOM on warmup"
+  (`tools/mtmd/clip.cpp`, `set_warmup_n_tokens(256)`, at b11669). The server lets each image
+  reach 512 tokens: the log's `cap image_max_tokens (original=1120) to 512 (n_ubatch = 512)`.
+  It also encodes consecutive images that resize to the same patch grid in one batch, up to
+  `--mtmd-batch-max-tokens` (default 1024; `encode_mtmd_chunk` in
+  `tools/server/server-context.cpp`). An image under 256 tokens grows the model 44MiB. The first
+  512-token image grows it a further ~160MiB, and the first two-image batch (~980 tokens) a further
+  ~330MiB, so the growth scales with the encoder's batch tokens past the warm-up size. Two images
+  of different sizes in one prompt are encoded one at a time and grow the model only as one image
+  does. Once the largest batch has run, nothing grows: the scheduler reallocates the buffer
+  larger and never shrinks it.
+- **Vulkan's scratch buffers, ruled in, the smaller part.** ggml-vulkan's `prealloc_x`, `prealloc_y` and
+  `prealloc_split_k` grow to the largest dequantization or split-k operation a graph runs, and
+  are never freed (`ggml_vk_preallocate_buffers`). Its host-visible staging grows the same way.
+  The host-visible share rose 814 to 870MiB. The text-only step, +120MiB on the first full
+  512-token ubatches, is this kind of growth in the language model's backend: the server's
+  warm-up decodes a couple of tokens, not a full ubatch.
+- **The language model's graph re-reservation, ruled out.** Every task's timings in the router log
+  read `graph reallocs = 0 / 0 (same size) / (changed size)`, image tasks included.
+- **KV and slots, ruled out.** The unified KV for the 4 slots is allocated whole at load.
+- **The prompt cache (`--cache-ram`, `--cache-reuse`), ruled out.** It lives in system RAM. RSS rose
+  from 208MiB to 7.5GiB over the steps, under its 8192MiB default, while the pool figure stood
+  still. The log's `making room for prompt cache entry` lines are its evictions.
+- **The multimodal embedding cache, ruled out as a pool cost.** Image embeddings are host-side
+  copies of each batch's output, in RSS with the prompt cache.
+- **Allocator fragmentation, ruled out.** The figures repeat to within 2MiB across the six fresh
+  loads, and repeated loads add nothing once the largest batch has run.
+
+### What caps it, and what it would cost
+
+- **`mtmd-batch-max-tokens = 512`** caps the multi-image step (+324-335MiB), since it keeps each
+  image in a batch of its own. The model still sees the same tokens, one image at a time. Its
+  cost, read from the log: a two-image prompt's prefill took 3120-3162ms batched (999 tokens)
+  and 3151ms unbatched (1006 tokens), within 1%. It leaves the single-image step.
+- **`image-max-tokens = 256`** (or `-ub 256`, which caps images to the same through the server's
+  ubatch check) would keep the encoder within its warm-up reservation, and cap the single-image
+  step too. It halves the tokens each image gets. V*Bench asks about small details in images of
+  1500-3300px, so its cost is the vision score, which only a run would measure.
+- **Nothing caps Vulkan's scratch growth** short of the `GGML_VK_*` environment of the router's
+  unit, a root change. None of the variables found reduces it.
+
+Neither setting was tested. `POST /models/load` takes the model's name and no arguments
+(`post_router_models_load` in `tools/server/server-models.cpp`). A `--models-dir` entry,
+which the user could add, loads with only the global section's options. So a scratch preset
+needs a section in the root-owned `/etc/llama-router/models.ini`, which is the architect's to add.
+
+### Recommendation
+
+(a), a profile setting for Gemma 4 26B-A4B. Set `mtmd-batch-max-tokens = 512`, which takes the
+multi-image step off at no measured cost. With it the model's worst case is bounded at the
+single-image level, about fresh + 300MiB (17640), leaving about 2940MiB free with the other three
+idle. That is still under 3072. To keep the 3GiB floor, also set `c = 16384` on the 26B-A4B: its
+5 full-attention layers' KV at 20,480 bytes a token falls from 640 to 320MiB (an estimate by
+the method above, not yet measured). Set A gives it the vision role alone, and its largest
+prompt measured here is 2001 tokens, four images. Both changes need a scratch-preset run of the
+vision tier 1, for score, time and memory, before they go into the profile.
+
+(b), a lower floor, is the alternative if `c` stays at 32768: with the batch cap set, 2816MiB
+(2.75GiB) passes the bounded single-image case with about 120MiB to spare. (c), a reload in the
+procedure, doesn't help. The growth happens within the set stage, on its first V*Bench image,
+so a reload before the stage only resets the figure the stage then grows again.
