@@ -572,6 +572,7 @@ slices 8/12 committed · standards — · spec — · editor —
 - evaluation (slice 8, architect): the hour becomes ~85 min for a chat-and-vision model that passes every gate (measured ~105-120 min before harness fit and the set-stage change); sample counts hold; the set stage in a model's run reuses the model's quality tier 1 as its alone figure, and the set's other roles generate load only while the model's tiers run. Supersedes r2's 1-hour target.
 - evaluation (slice 8, architect): set A fails the set stage's 3 GiB floor (2968-2990 MiB) because Gemma 4 26B's memory grows ~250-270 MiB under heavy vision use and holds until reload; diagnose which buffer grows and whether a server setting caps it before choosing between a profile setting, a lower floor, or a reload in the procedure.
 - evaluation (slice 8, architect): the pool floor drops from 3072 to 2816 MiB (2.75 GiB), and the vision model's preset caps the image-encoder batch (mtmd-batch-max-tokens = 512; measured cost under 1% on two-image prefill), keeping c 32768. The growth is a high-water mark, not a leak: one image over 256 tokens +200 MiB, a two-image batch +330 MiB, Vulkan scratch +100 MiB. Rejected c 16384 (4 slots sharing 16k against MMMU's 4096-token answers) and image-max-tokens 256 (halves image detail, V*Bench's subject). The preset installs with slice 10's build move, in one root session.
+- evaluation (architect, for candidates): a host keeps installed only the models that passed evaluation on it; candidates that fail are deleted from that host once their verdict is recorded. Sets, and the profiles' presets, group only models that passed together, so a host never loads a model whose set did not pass as a whole.
 
 ## Pending edits
 
@@ -621,3 +622,6 @@ slices 8/12 committed · standards — · spec — · editor —
 - coordinator · roadmap, experiment.ai's native Go harness spike: it joins this spike's harness-fit
   tier as one more harness, and reads the fit profiles' failed cells and reasons (forcing the tool
   call, reasoning round-trip, resend on a parse 500, image drop) as its design input.
+- coordinator · roadmap, the spike's candidates summary: a host keeps only the models that passed on it
+  (failed candidates are deleted after their verdict is recorded), and sets load only models that
+  passed together.
