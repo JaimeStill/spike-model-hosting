@@ -9,8 +9,13 @@ user Sonnet through the laptop's pinned Claude Code (claude_code.py's provider).
 
     uv run --project evaluation/suites python evaluation/suites/tau2_quality.py ids --domain retail
 
-eval runs the domain and writes its Inspect JSON log under DIR; evaluate's deep stage (package
-evaluation/gate) reads it. ids prints the domain's dataset, as a tier list's "# dataset" header,
+eval runs the domain, writes its Inspect log under DIR, and beside it SUMMARY_FILE, the account of
+it evaluate's deep stage (package evaluation/gate) reads. The log is Inspect's compressed .eval:
+the stock task keeps the domain's whole database in each sample's store and store events, some
+28 MB of JSON a sample, 3 MB compressed, so a JSON log of 24 samples would run to gigabytes. The
+summary holds what the deep stage needs of it, read back through Inspect one sample at a time:
+the log's status, task, packages and metadata, and each sample's ID, trial, score, working time,
+simulator store and failed model calls, by role. ids prints the domain's dataset, as a tier list's "# dataset" header,
 then every task ID of it the domain draws from: the pool the command evaluation/cmd/tierlist
 draws a list from (mise run //evaluation:deep-tiers).
 
@@ -34,17 +39,20 @@ airline tasks, 114 retail). Telecom is left out: its simulated user needs tools.
 
 Each task runs --trials times (Inspect's epochs), so the log holds one sample a task and trial,
 from which evaluate takes pass^k. Four samples run at once, the router's slots; the simulator
-keeps at most its provider's two calls in flight. The log's metadata names the domain, its
+keeps at most its provider's two calls in flight, whatever the eval's max_connections. The log's metadata names the domain, its
 dataset, the trials, the simulator, and the Claude Code version that simulated.
 """
 
 import argparse
+import json
 import subprocess
 import sys
+from pathlib import Path
 
 import claude_code  # noqa: F401  (registers the claude-code provider)
 from inspect_ai import eval as inspect_eval
-from inspect_ai.model import GenerateConfig, get_model
+from inspect_ai.log import read_eval_log, read_eval_log_sample, read_eval_log_sample_summaries
+from inspect_ai.model import get_model
 from inspect_evals.tau2 import tau2_airline, tau2_retail
 from inspect_evals.tau2.tau2 import EVAL_VERSION
 
@@ -61,6 +69,35 @@ SIMULATOR = "claude-code/sonnet"
 
 # The router's slots: the samples a domain runs at once.
 SLOTS = 4
+
+# The run's account, written beside its log.
+SUMMARY_FILE = "tau2.json"
+
+# The sample store keys claude_code.py records each call under.
+STORE_KEYS = (claude_code.STORE_CALLS, claude_code.STORE_MODELS, claude_code.STORE_RETRIES, claude_code.STORE_SECONDS)
+
+
+def summarize(location: str) -> dict:
+    """The run's account, from its log: the header's facts, and each sample's, read one at a time."""
+    header = read_eval_log(location, header_only=True)
+    samples = []
+    for summary in read_eval_log_sample_summaries(location):
+        s = read_eval_log_sample(location, id=summary.id, epoch=summary.epoch)
+        errors = {"user": 0, "agent": 0}
+        for e in s.events:
+            if e.event == "model" and e.error:
+                errors["user" if e.role == "user" else "agent"] += 1
+        [score] = s.scores.values() if s.scores else [None]
+        samples.append({
+            "id": str(s.id), "epoch": s.epoch, "score": score.value if score else None,
+            "working_time": s.working_time, "error": s.error.message if s.error else None,
+            "store": {k: s.store[k] for k in STORE_KEYS if k in s.store},
+            "simulator_errors": errors["user"], "agent_errors": errors["agent"],
+        })
+    return {
+        "status": header.status, "task": header.eval.task, "packages": header.eval.packages,
+        "metadata": header.eval.metadata, "log": Path(location).name, "samples": samples,
+    }
 
 
 def dataset(domain: str) -> str:
@@ -99,11 +136,10 @@ def main():
         f"openai-api/router/{a.model}", base_url=a.router.rstrip("/") + "/v1", api_key="none",
         default_query={"autoload": "false"},
     )
-    user = get_model(SIMULATOR, command=a.claude, config_dir=a.claude_config,
-                     config=GenerateConfig(max_connections=claude_code.MAX_CONNECTIONS))
+    user = get_model(SIMULATOR, command=a.claude, config_dir=a.claude_config)
     [log] = inspect_eval(
         stock, model=agent, model_roles={"user": user}, sample_id=ids, epochs=a.trials,
-        log_dir=a.output, log_format="json",
+        log_dir=a.output, log_format="eval", log_samples=True,
         metadata={
             "domain": a.domain, "dataset": dataset(a.domain), "trials": a.trials,
             "simulator": SIMULATOR, "claude_code_version": version, "simulator_settings": claude_code.GENERATE,
@@ -112,6 +148,7 @@ def main():
     )
     if log.status != "success":
         sys.exit(f"inspect eval tau2 {a.domain}: {log.status}: {log.error.message if log.error else ''}")
+    (Path(a.output) / SUMMARY_FILE).write_text(json.dumps(summarize(log.location), indent=1) + "\n")
 
 
 if __name__ == "__main__":

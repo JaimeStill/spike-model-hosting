@@ -25,8 +25,9 @@ import (
 // Framework, trimmed to testdata/tiers/vision-<tier>.txt, or testdata/vision/<tier>-stopped
 // given a bar; a BFCL tier with testdata/agent/<tier>, a live run of gpt-oss-120b trimmed to
 // testdata/tiers/agent-<tier>.txt, or testdata/agent/<tier>-stopped given a bar; a τ2 domain with
-// testdata/tau2/<domain>, a log of testdata/tiers/agent-tau2-<domain>.txt's tasks, two trials
-// each, in the shape tau2_quality.py writes, synthesized until a live run is recorded. Each result is stamped with the suites project's pin of MTEB, Inspect AI or
+// testdata/tau2/<domain>, the summary (tau2.json) of testdata/tiers/agent-tau2-<domain>.txt's
+// tasks, two trials each, in the shape tau2_quality.py writes, synthesized until a live run is
+// recorded. Each result is stamped with the suites project's pin of MTEB, Inspect AI or
 // inspect_evals, since the check refuses another's and a pin moves on while the recording stays
 // the same.
 type fakeUV struct {
@@ -86,7 +87,7 @@ vision|agent)
 	sed -i -e 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' -e 's/"inspect_evals": "[^"]*"/"inspect_evals": "%[6]s"/' "$out"/*.json ;;
 tau2)
 	[ "$domain" = %[2]q ] && exit 1
-	mkdir -p "$out" && cp %[3]q/tau2/"$domain"/*.json "$out"/ || exit 1
+	mkdir -p "$out" && cp %[3]q/tau2/"$domain"/* "$out"/ || exit 1
 	sed -i -e 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' -e 's/"inspect_evals": "[^"]*"/"inspect_evals": "%[6]s"/' "$out"/*.json ;;
 *) exit 2 ;;
 esac

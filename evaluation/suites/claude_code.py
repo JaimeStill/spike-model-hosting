@@ -36,7 +36,8 @@ mode takes a single user turn: the turns so far as a tagged transcript, oldest f
 request for the assistant's next message (render). Claude Code takes no temperature or seed, so a
 config's are not applied; GENERATE notes it.
 
-Rate and volume: at most max_connections calls at once (MAX_CONNECTIONS, two, by default), and a
+Rate and volume: at most connections calls at once (MAX_CONNECTIONS, two, by default), held by
+the provider itself, since an eval's max_connections would otherwise set every model's, and a
 call that fails transiently (an overloaded, rate-limited or server-error status, or a timeout) is
 retried after RETRY_WAIT seconds, doubling, at most MAX_RETRIES times; any other failure is not
 retried. Inspect's own retries are off for this provider (should_retry), so the backoff is this
@@ -69,7 +70,7 @@ from inspect_ai.model import (
     modelapi,
 )
 from inspect_ai.tool import ToolChoice, ToolInfo
-from inspect_ai.util import store
+from inspect_ai.util import concurrency, store
 
 # The provider's name, as a model string's prefix: claude-code/sonnet.
 PROVIDER = "claude-code"
@@ -198,8 +199,8 @@ def record(model: str, retries: int, seconds: float) -> None:
 class ClaudeCodeAPI(ModelAPI):
     """Claude Code in print mode as an Inspect model. model_args: command, the claude executable
     (required: evaluate passes the pinned one); config_dir, its configuration directory holding the
-    subscription login (required); timeout, retry_wait and max_retries, a call's bound and its
-    transient retries."""
+    subscription login (required); connections, the calls in flight at once; timeout, retry_wait
+    and max_retries, a call's bound and its transient retries."""
 
     def __init__(
         self,
@@ -209,6 +210,7 @@ class ClaudeCodeAPI(ModelAPI):
         config: GenerateConfig = GenerateConfig(),
         command: str | None = None,
         config_dir: str | None = None,
+        connections: int = MAX_CONNECTIONS,
         timeout: float = TIMEOUT,
         retry_wait: float = RETRY_WAIT,
         max_retries: int = MAX_RETRIES,
@@ -216,13 +218,13 @@ class ClaudeCodeAPI(ModelAPI):
         super().__init__(model_name=model_name, base_url=base_url, api_key=api_key, config=config)
         if not command or not config_dir:
             raise ValueError("the claude-code provider needs command, the claude executable, and config_dir, its login's directory")
-        self.command, self.config_dir = command, config_dir
+        self.command, self.config_dir, self.connections = command, config_dir, connections
         self.timeout, self.retry_wait_s, self.retries = timeout, retry_wait, max_retries
         # An empty working directory, so Claude Code finds no project CLAUDE.md.
         self.workdir = tempfile.mkdtemp(prefix="claude-code-")
 
     def max_connections(self) -> int:
-        return MAX_CONNECTIONS
+        return self.connections
 
     def should_retry(self, ex: Exception) -> bool:
         # The provider retries transient failures itself (generate); Inspect's retries would add to
@@ -245,7 +247,8 @@ class ClaudeCodeAPI(ModelAPI):
         began = time.monotonic()
         for attempt in range(self.retries + 1):
             try:
-                result = await self.call(args, prompt, env)
+                async with concurrency(PROVIDER, self.connections, visible=False):
+                    result = await self.call(args, prompt, env)
                 break
             except ClaudeCodeError as e:
                 if not e.transient or attempt == self.retries:

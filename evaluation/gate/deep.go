@@ -36,7 +36,7 @@ func Tau2Check(domain string) string { return "agent-tau2-" + domain }
 const Tau2Simulator = "claude-code/sonnet"
 
 // Tau2 runs one τ2 domain on a router's agent model, its task list at list, each task trials
-// times, and leaves Inspect AI's JSON log in out (ReadTau2).
+// times, and leaves Inspect AI's log and its summary, Tau2Summary, in out (ReadTau2).
 type Tau2 interface {
 	Tau2(ctx context.Context, router, model, domain, list, out string, trials int) error
 }
@@ -58,7 +58,7 @@ func (u UV) Tau2(ctx context.Context, router, model, domain, list, out string, t
 	return nil
 }
 
-// Tau2Result is one τ2 domain's run, read from its Inspect AI JSON log.
+// Tau2Result is one τ2 domain's run, read from its summary.
 type Tau2Result struct {
 	// Domain, Dataset and Trials are the run's metadata; Inspect and InspectEvals the releases
 	// that wrote the log, Task the task with its inspect_evals version; Simulator the simulated
@@ -77,77 +77,61 @@ type Tau2Result struct {
 	SimulatorModels                  map[string]int
 	// SimulatorErrors and AgentErrors count the model calls that failed, after their retries,
 	// the simulator's (the "user" role's) and the model's under test: the stock task carries on
-	// past either, so they show only in the log's events.
+	// past either, so they show only in the log's model events, which the summary counts.
 	SimulatorErrors, AgentErrors int
 }
 
-// tau2Sample is the part of a τ2 log's sample ReadTau2 reads: one task's trial (its epoch), its
-// score, the simulator's calls in its store, and its model events' errors.
+// Tau2Summary is the account of a τ2 run tau2_quality.py writes beside its Inspect log: the log
+// is Inspect's compressed .eval, since the stock task keeps the domain's database in every
+// sample's store (some 28 MB of JSON a sample), and the summary holds what the deep stage reads
+// of it.
+const Tau2Summary = "tau2.json"
+
+// tau2Sample is one sample of a τ2 summary: a task's trial (its epoch), its score, the simulator's
+// calls from its store, and its failed model calls by role.
 type tau2Sample struct {
-	ID          sampleID `json:"id"`
-	Epoch       int      `json:"epoch"`
-	WorkingTime float64  `json:"working_time"`
-	Scores      map[string]struct {
-		Value json.RawMessage `json:"value"`
-	} `json:"scores"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error"`
-	Store struct {
+	ID          sampleID        `json:"id"`
+	Epoch       int             `json:"epoch"`
+	Score       json.RawMessage `json:"score"`
+	WorkingTime float64         `json:"working_time"`
+	Error       *string         `json:"error"`
+	Store       struct {
 		Calls   int            `json:"claude_code:calls"`
 		Models  map[string]int `json:"claude_code:models"`
 		Retries int            `json:"claude_code:retries"`
 		Seconds float64        `json:"claude_code:seconds"`
 	} `json:"store"`
-	Events []struct {
-		Event string  `json:"event"`
-		Role  *string `json:"role"`
-		Error *string `json:"error"`
-	} `json:"events"`
+	SimulatorErrors int `json:"simulator_errors"`
+	AgentErrors     int `json:"agent_errors"`
 }
 
-// ReadTau2 reads the Inspect JSON log tau2_quality.py left in out, the only one there. A log of a
-// run that didn't succeed, or with a sample that errored or went unscored, fails.
+// ReadTau2 reads the summary tau2_quality.py left in out (Tau2Summary). A run that didn't
+// succeed, or with a sample that errored or went unscored, fails.
 func ReadTau2(out string) (Tau2Result, error) {
 	res := Tau2Result{Passed: map[string][]bool{}, SimulatorModels: map[string]int{}}
-	entries, err := os.ReadDir(out)
-	if err != nil {
-		return res, err
-	}
-	var logs []string
-	for _, e := range entries {
-		if inspectLogName.MatchString(e.Name()) {
-			logs = append(logs, e.Name())
-		}
-	}
-	if len(logs) != 1 {
-		return res, fmt.Errorf("%s holds %d Inspect logs; want one", out, len(logs))
-	}
 	var raw struct {
-		Status string `json:"status"`
-		Eval   struct {
-			Task     string            `json:"task"`
-			Packages map[string]string `json:"packages"`
-			Metadata struct {
-				Domain, Dataset, Simulator string
-				Trials                     int
-				ClaudeCode                 string `json:"claude_code_version"`
-				FullTaskVersion            string `json:"full_task_version"`
-			} `json:"metadata"`
-		} `json:"eval"`
+		Status   string            `json:"status"`
+		Task     string            `json:"task"`
+		Packages map[string]string `json:"packages"`
+		Metadata struct {
+			Domain, Dataset, Simulator string
+			Trials                     int
+			ClaudeCode                 string `json:"claude_code_version"`
+			FullTaskVersion            string `json:"full_task_version"`
+		} `json:"metadata"`
 		Samples []tau2Sample `json:"samples"`
 	}
-	path := filepath.Join(out, logs[0])
+	path := filepath.Join(out, Tau2Summary)
 	if err := readJSON(path, &raw, true); err != nil {
 		return res, err
 	}
 	if raw.Status != "success" {
 		return res, fmt.Errorf("%s: the run's status is %q", path, raw.Status)
 	}
-	m := raw.Eval.Metadata
+	m := raw.Metadata
 	res.Domain, res.Dataset, res.Trials, res.Simulator, res.ClaudeCode = m.Domain, m.Dataset, m.Trials, m.Simulator, m.ClaudeCode
-	res.Inspect, res.InspectEvals = raw.Eval.Packages["inspect_ai"], raw.Eval.Packages["inspect_evals"]
-	res.Task = raw.Eval.Task
+	res.Inspect, res.InspectEvals = raw.Packages["inspect_ai"], raw.Packages["inspect_evals"]
+	res.Task = raw.Task
 	if m.FullTaskVersion != "" {
 		res.Task += "@" + m.FullTaskVersion
 	}
@@ -155,16 +139,14 @@ func ReadTau2(out string) (Tau2Result, error) {
 	slices.SortStableFunc(samples, func(a, b tau2Sample) int { return a.Epoch - b.Epoch })
 	for _, s := range samples {
 		if s.Error != nil {
-			return res, fmt.Errorf("%s: sample %s, trial %d, errored: %s", path, s.ID, s.Epoch, s.Error.Message)
+			return res, fmt.Errorf("%s: sample %s, trial %d, errored: %s", path, s.ID, s.Epoch, *s.Error)
 		}
-		if len(s.Scores) != 1 {
-			return res, fmt.Errorf("%s: sample %s, trial %d, has %d scores; want one", path, s.ID, s.Epoch, len(s.Scores))
+		if len(s.Score) == 0 || string(s.Score) == "null" {
+			return res, fmt.Errorf("%s: sample %s, trial %d, has no score", path, s.ID, s.Epoch)
 		}
-		var score float64
-		for _, sc := range s.Scores {
-			if score, err = scoreValue(sc.Value); err != nil {
-				return res, fmt.Errorf("%s: sample %s: %w", path, s.ID, err)
-			}
+		score, err := scoreValue(s.Score)
+		if err != nil {
+			return res, fmt.Errorf("%s: sample %s: %w", path, s.ID, err)
 		}
 		res.Passed[string(s.ID)] = append(res.Passed[string(s.ID)], score >= passAt)
 		res.WorkingS += s.WorkingTime
@@ -174,16 +156,8 @@ func ReadTau2(out string) (Tau2Result, error) {
 		for model, n := range s.Store.Models {
 			res.SimulatorModels[model] += n
 		}
-		for _, e := range s.Events {
-			if e.Event != "model" || e.Error == nil {
-				continue
-			}
-			if e.Role != nil && *e.Role == "user" {
-				res.SimulatorErrors++
-			} else {
-				res.AgentErrors++
-			}
-		}
+		res.SimulatorErrors += s.SimulatorErrors
+		res.AgentErrors += s.AgentErrors
 	}
 	if len(res.Passed) == 0 {
 		return res, fmt.Errorf("%s: no sample scored", path)

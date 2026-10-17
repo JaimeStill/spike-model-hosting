@@ -49,8 +49,8 @@
 //
 // The deep stage, reached once every gate passed, runs the agent role's τ2 airline and retail
 // through the same uv project, their simulated user the pinned Claude Code (-claude, SPIKE_CLAUDE
-// or the pin) on the state directory's claude/ login, each domain's Inspect log in the run
-// directory's deep/tau2/<domain>; then, for a generative model, the GuideLLM grid, with GuideLLM
+// or the pin) on the state directory's claude/ login, each domain's Inspect log and its summary in
+// the run directory's deep/tau2/<domain>; then, for a generative model, the GuideLLM grid, with GuideLLM
 // from -guidellm, or SPIKE_GUIDELLM, or else the consumers mise environment's pin, its tokenizers
 // fetched into the state directory's hf/ and its files in the run directory's deep/grid; then
 // prefix reuse; then cold load. Cold load restarts the router twice, root commands the run

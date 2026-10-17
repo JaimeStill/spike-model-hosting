@@ -213,24 +213,20 @@ func TestDeepBroken(t *testing.T) {
 	if err := os.CopyFS(testdata, os.DirFS("testdata")); err != nil {
 		t.Fatal(err)
 	}
-	logs, err := filepath.Glob(filepath.Join(testdata, "tau2", "airline", "*.json"))
-	if err != nil || len(logs) != 1 {
-		t.Fatalf("airline recording %v, %v", logs, err)
-	}
+	summary := filepath.Join(testdata, "tau2", "airline", gate.Tau2Summary)
 	var log map[string]any
-	b, err := os.ReadFile(logs[0])
+	b, err := os.ReadFile(summary)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := json.Unmarshal(b, &log); err != nil {
 		t.Fatal(err)
 	}
-	sample := log["samples"].([]any)[0].(map[string]any)
-	sample["events"] = append(sample["events"].([]any), map[string]any{"event": "model", "role": "user", "error": "claude exited 1, status 401"})
+	log["samples"].([]any)[0].(map[string]any)["simulator_errors"] = 1
 	if b, err = json.Marshal(log); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(logs[0], b, 0o600); err != nil {
+	if err := os.WriteFile(summary, b, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h.uv.testdata = testdata

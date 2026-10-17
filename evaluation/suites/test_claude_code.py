@@ -42,14 +42,15 @@ FAKE = textwrap.dedent("""\
     responses = json.load(open(queue))
     response, rest = responses[0], responses[1:]
     json.dump(rest, open(queue, "w"))
+    import time
+    began = time.time()
+    if "sleep" in response:
+        time.sleep(response["sleep"])
     with open(os.environ["FAKE_LOG"], "a") as log:
         log.write(json.dumps({{
-            "args": sys.argv[1:], "stdin": sys.stdin.read(), "cwd": os.getcwd(),
+            "args": sys.argv[1:], "stdin": sys.stdin.read(), "cwd": os.getcwd(), "began": began, "ended": time.time(),
             "env": {{k: v for k, v in os.environ.items() if k.startswith(("ANTHROPIC_", "CLAUDE"))}},
         }}) + "\\n")
-    if "sleep" in response:
-        import time
-        time.sleep(response["sleep"])
     sys.stdout.write(response["stdout"])
     sys.exit(response.get("code", 0))
 """)
@@ -160,6 +161,20 @@ class ClaudeCodeTest(unittest.TestCase):
         out = asyncio.run(self.model(timeout=0.5).generate([ChatMessageUser(content="Begin.")]))
         self.assertEqual(out.completion, "ok")
         self.assertEqual(out.metadata["claude_code_retries"], 1)
+
+    def test_connections(self):
+        """At most two calls run at once, however many generates are in flight."""
+        self.respond(*[dict(success("ok"), sleep=0.3)] * 5)
+        model = self.model()
+
+        async def five():
+            await asyncio.gather(*[model.generate([ChatMessageUser(content=f"Begin {i}.")]) for i in range(5)])
+
+        asyncio.run(five())
+        calls = self.calls()
+        self.assertEqual(len(calls), 5)
+        most = max(sum(1 for o in calls if o["began"] < c["began"] + 0.05 < o["ended"]) for c in calls)
+        self.assertEqual(most, 2)
 
     def test_retries_bounded(self):
         """Transient failures stop being retried after max_retries."""

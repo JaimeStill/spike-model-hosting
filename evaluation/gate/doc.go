@@ -147,9 +147,9 @@
 //     and Inspect AI the project pins (package evaluation/suites). AudioSets name the ASR sets,
 //     ASRTier a set's tier, and TiersDir where the tier lists are.
 //   - Tau2 runs one τ2 domain, UV through tau2_quality.py, its simulator UV.Claude on the
-//     UV.ClaudeConfig login; ReadTau2 reads its Inspect log into a Tau2Result, whose PassK is
-//     pass^k. Tau2Domains, Tau2Trials, Tau2Check and Tau2Simulator name the domains, trials,
-//     check and list, and simulator. Grid runs one GuideLLM cell, GuideLLM with the pinned
+//     UV.ClaudeConfig login; ReadTau2 reads its summary (Tau2Summary, beside its compressed
+//     Inspect log) into a Tau2Result, whose PassK is pass^k. Tau2Domains, Tau2Trials,
+//     Tau2Check and Tau2Simulator name the domains, trials, check and list, and simulator. Grid runs one GuideLLM cell, GuideLLM with the pinned
 //     executable; ReadGrid reads its JSON into a GridResult; GridCells and GridCell.Name name
 //     the cells. PrefixTokens is prefix reuse's prefix; ColdLoadWarm and ColdLoadCold are cold
 //     load's root commands.
