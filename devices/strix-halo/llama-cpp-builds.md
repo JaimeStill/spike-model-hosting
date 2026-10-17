@@ -415,5 +415,35 @@ Their footprints and the swap timings are in
 ### The move
 
 The root commands, in the order the architect runs them, are in
-[`build-move.md`](build-move.md). The install, the probe and the re-verification on b11715 are
-recorded here once the move has run.
+[`build-move.md`](build-move.md). The architect ran its steps a to d on 2026-10-17.
+
+- **The install.** b11715 is installed at `/opt/llama.cpp/b11715` (`llama-server --version`:
+  `version: 0.7.0-dev (build 11715, commit 9d1878a43)`). The rendered `models.ini` is installed;
+  its diff against the b11669 one is the nine expected lines, ending
+  `mtmd-batch-max-tokens = 512`. The unit is unchanged. The b11669 files are kept as
+  `/etc/llama-router/*.b11669`, and b11669 stays in its versioned directory.
+- **The switch.** `current` points at b11715 and `llama-router` restarted. All four of set A's
+  models loaded with no manual load, and `/props` reports `b11715-9d1878a43`.
+- **The probe.** `SPIKE_ROUTER_URL=http://framework:8080 mise run integration` passed on
+  b11715, set a: every package ok, in 11.2s.
+- **The image batch cap.** The 26B-A4B's child process runs with
+  `--mtmd-batch-max-tokens 512` (`ps -eo args` on the Framework, read over user-level SSH).
+- **The idle pool.** With set A loaded and idle, `amdgpu_top -p --no-pc` read
+  `GTT 94795/98304 MiB` twice, at 22:53:03 and 22:53:18 UTC: 3509 MiB free, above the 2816 MiB
+  floor.
+- **Cold load.** `evaluate coldload -set a` timed each restart from the laptop, in one sitting,
+  from the restart seen to each model listed loaded. The router's load mode is its default,
+  `auto` (mmap). A cold restart dropped the page cache first (`sync` and `drop_caches`); a warm
+  one didn't. The logs are in `.state/coldload/`. These are the baseline's cold-load figures:
+
+  | Restart | Router up | EmbeddingGemma 2 | gemma-4-E4B | 26B-A4B | gpt-oss-120b, all loaded |
+  |---|---|---|---|---|---|
+  | switch to b11715 | 1.2s | 3.0s | 8.7s | 12.0s | 21.5s |
+  | warm | 0.5s | 2.0s | 7.2s | 10.0s | 18.0s |
+  | warm, again | 0.5s | 2.3s | 7.3s | 10.0s | 17.0s |
+  | cold | 0.5s | 2.5s | 8.2s | 10.8s | 20.8s |
+  | cold, again | 0.5s | 2.3s | 7.8s | 11.5s | 21.0s |
+
+  Cold is about 3s slower than warm for some 85 GB of weights. That gap is small enough that
+  loading looks bound by the copy into device memory more than by reading the disk; this is an
+  observation from two pairs, not a measured cause.
