@@ -244,7 +244,7 @@ var piThinkingLevels = []string{"off", "minimal", "low", "medium", "high", "xhig
 var reservedArgs = []string{
 	"jinja", "n-gpu-layers", "metrics", "checkpoint-min-step", "parallel", "kv-unified",
 	"load-on-startup", "hf-repo", "hf", "hfr", "c", "temp", "top-p", "top-k", "min-p",
-	"chat-template-kwargs",
+	"chat-template-kwargs", "mtmd-batch-max-tokens",
 }
 
 // hostArgs are the keys the unit or the host owns, which a model's raw Args may not set either:
@@ -299,6 +299,15 @@ type Model struct {
 	BitsPerWeight float64 `toml:"bits_per_weight"`
 	// CReason says why the model runs at C. It renders as a comment above the model's section.
 	CReason string `toml:"c_reason"`
+	// MtmdBatchMaxTokens caps the image tokens the model's image encoder takes in one batch
+	// (llama-server's --mtmd-batch-max-tokens, 1024 by default), so images that would batch
+	// together are encoded one batch at a time: the encoder's compute buffer, which grows to the
+	// largest batch it has run and never shrinks, stays bounded. Optional; zero leaves llama.cpp's
+	// default. Only a model that declares RoleVision sets it, with its reason.
+	MtmdBatchMaxTokens int `toml:"mtmd_batch_max_tokens"`
+	// MtmdBatchMaxTokensReason says why the model caps its image batch at MtmdBatchMaxTokens;
+	// required with it. It renders as a comment above the model's section.
+	MtmdBatchMaxTokensReason string `toml:"mtmd_batch_max_tokens_reason"`
 	// Kind is KindGenerative or KindEmbedding.
 	Kind string `toml:"kind"`
 	// Dims is an embedding model's output width, as its card states it: required for an
@@ -529,6 +538,7 @@ func (p *Profile) Validate() error {
 			errs = append(errs, fmt.Errorf("%s: %d is over the card's context, %d", field("c"), m.C, m.CardContext))
 		}
 		required(field("c_reason"), m.CReason)
+		errs = append(errs, m.validateImageBatch(field("mtmd_batch_max_tokens"))...)
 		switch {
 		case m.ActiveParamsB < 0 || m.BitsPerWeight < 0:
 			errs = append(errs, fmt.Errorf("%s: active_params_b and bits_per_weight are positive", field("active_params_b")))
@@ -695,6 +705,26 @@ func (m Model) validateRoles(prefix string) []error {
 		errs = append(errs, fmt.Errorf("%s: an embedding model takes the %s role alone", prefix, RoleEmbedding))
 	case m.Kind == KindGenerative && embedding:
 		errs = append(errs, fmt.Errorf("%s: a generative model can't take the %s role", prefix, RoleEmbedding))
+	}
+	return errs
+}
+
+// validateImageBatch reports an image batch cap that isn't positive, one on a model that
+// declares no vision role, and a cap or a reason without the other, under the key path field.
+// A model that sets neither has nothing to report.
+func (m Model) validateImageBatch(field string) []error {
+	if m.MtmdBatchMaxTokens == 0 && m.MtmdBatchMaxTokensReason == "" {
+		return nil
+	}
+	var errs []error
+	if m.MtmdBatchMaxTokens <= 0 {
+		errs = append(errs, fmt.Errorf("%s: required with its reason, a positive integer", field))
+	}
+	if !slices.Contains(m.Roles, RoleVision) {
+		errs = append(errs, fmt.Errorf("%s: only a model with the %s role encodes images", field, RoleVision))
+	}
+	if m.MtmdBatchMaxTokensReason == "" {
+		errs = append(errs, fmt.Errorf("%s_reason: required", field))
 	}
 	return errs
 }

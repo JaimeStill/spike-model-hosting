@@ -187,6 +187,18 @@ windows. The shared budget binds here, not its trained 262144: at c = 65536, all
 with four requests in flight on each left 2.61GiB of the pool free, under the 3GiB bar, so this
 c, the first to drop, is 32768.
 """
+# The flag is --mtmd-batch-max-tokens in common/arg.cpp from b11452 (the minimum build) through
+# b11715; its default is 1024.
+mtmd_batch_max_tokens = 512
+mtmd_batch_max_tokens_reason = """
+mtmd-batch-max-tokens = 512 encodes each image in a batch of its own: the server caps an image
+at 512 tokens (its ubatch), and by default batches consecutive images of the same patch grid up
+to 1024. The image encoder's compute buffer, reserved at load for a 256-token warm-up image,
+grows to the largest batch it has run and never shrinks: one 512-token image adds ~200MiB, a
+two-image batch ~330MiB more. The cap takes the two-image step off, so the model's worst case
+stays at the single-image level, at a measured cost within 1% on a two-image prompt's prefill
+(docs/findings/memory-budget.md, "Gemma 4 26B-A4B's growth under vision use").
+"""
 
 [models.sampling]
 source = "https://huggingface.co/google/gemma-4-26B-A4B-it"

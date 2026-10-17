@@ -11,8 +11,9 @@
   the router passes a section's hf-repo to the model's process, and a section without one gets
   it only by merging with the router's entry for a model already in its Hugging Face cache, so a
   model not yet downloaded would start with no model at all (llama-server then runs as a second
-  router). A model's typed sampling renders as llama.cpp's keys; its raw args render after them,
-  in key order, as given.
+  router). A model's image batch cap renders as mtmd-batch-max-tokens after its c, only when set,
+  so the server's default stands otherwise. A model's typed sampling renders as llama.cpp's
+  keys; its raw args render after them, in key order, as given.
 */ -}}
 ; llama.cpp router presets for the {{.HostClass}} host class, rendered from its profile.
 ; Engine: {{.Engine.Name}} ({{.Engine.Backend}}), build {{.Engine.MinBuild}} or later.
@@ -35,6 +36,8 @@ kv-unified = true
 {{- end}}
 ;
 {{comment .CReason -}}
+{{- if .MtmdBatchMaxTokensReason}};
+{{comment .MtmdBatchMaxTokensReason}}{{end -}}
 {{- with .Sampling}};
 {{comment .Reason}}{{end -}}
 {{- if .ArgsReason}};
@@ -45,6 +48,9 @@ load-on-startup = true
 {{- end}}
 hf-repo = {{.ID}}
 c = {{.C}}
+{{- if .MtmdBatchMaxTokens}}
+mtmd-batch-max-tokens = {{.MtmdBatchMaxTokens}}
+{{- end}}
 {{- with .Sampling}}
 temp = {{.Temperature}}
 top-p = {{.TopP}}

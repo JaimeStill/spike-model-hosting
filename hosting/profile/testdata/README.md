@@ -10,6 +10,7 @@
   `profiles/unified-96gb.ini` at commit `d7be0e81c0d1fe4663d5b3528e3afadae00b4ec8`, copied
   unchanged. The Strix Halo profile's render of set A, its startup set, must equal it in
   sections, keys and values, apart from the `load-on-startup = true` and `hf-repo = <section
-  name>` the profile adds to each of set A's four sections. The candidate sets' sections, which the copy predates, are left out of
+  name>` the profile adds to each of set A's four sections, and the `mtmd-batch-max-tokens` it
+  adds to a model that caps its image batch (Gemma 4 26B-A4B's 512). The candidate sets' sections, which the copy predates, are left out of
   the comparison and render without `load-on-startup`. It is a pin, not a live link: a change
   upstream reaches this spike only when the copy is refreshed on purpose.

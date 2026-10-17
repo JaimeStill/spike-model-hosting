@@ -313,3 +313,107 @@ Their footprints and the swap timings are in
   square, and a green triangle on a white background").
 - **Back to set A.** `swap a` reloaded gpt-oss-120b and the 26B-A4B from the cache in 23.0s,
   and `mise run integration` on set A passed.
+
+## b11669 to b11715, 2026-10-17
+
+- **From:** b11669 (`b11669-620d2225c`), installed by `main-model`.
+- **To:** b11715 (`b11715-9d1878a43`), the newest b-tag when `evaluation` slice 10 began. Its
+  Vulkan x64 asset is `llama-b11715-bin-ubuntu-vulkan-x64.tar.gz`, sha256
+  `b3405b06ab9b56975d0b1bc8dcdd15a8bace74fc5e4cf1e66c1677a99e590364`.
+- **Reviewed:** the 46 commits in `b11669...b11715` (`gh api
+  repos/ggml-org/llama.cpp/compare/b11669...b11715`), read for the router, Vulkan, mtmd and the
+  image encoder (the `mtmd-batch-max-tokens` cap and Gemma 4's image warm-up), the RAM prompt
+  cache, gpt-oss tool-call parsing, the embeddings endpoint, and audio. Where a question needed
+  the source, the review read it at the `b11715` tag. No commit in the range touches
+  `tools/server/server-context.cpp`, `server-task.cpp`, `server-chat.cpp`, `common/arg.cpp`,
+  `common/preset.cpp`, `src/llama-kv-cache.cpp`, `src/llama-context.cpp`,
+  `common/parsers/gpt-oss.cpp`, `common/parsers/gemma4.cpp`, or the Gemma 4, gpt-oss and
+  EmbeddingGemma graphs (`src/models/gemma4.cpp`, `openai-moe.cpp`, `gemma-embedding2.cpp`).
+
+### What the notes change for set A
+
+- **The router.** [#29584](https://github.com/ggml-org/llama.cpp/pull/29584) (the web UI's
+  model discovery) changes the router's download API and its listing, not loading. `GET /models`
+  gains each cached model's `sidecars` (such as `["mmproj"]`), an `incomplete_sidecars` list, and
+  an `incomplete` status for a download that never finished. `POST /models` takes a `sidecars`
+  list, `["mmproj"]` by default as `-hf` pulls. `/models/unload` on a downloading model now
+  pauses it and keeps its partial files, where it cancelled and deleted them before; `DELETE
+  /models` drops them. The router remembers unfinished downloads in
+  `$HF_HOME/unfinished-downloads.json`, inside the cache the service user owns. Loading,
+  unloading, the presets, `load-on-startup` and `--models-max` are unchanged, and a set-A tag
+  resolves the same files: `find_best_model` and `find_best_sibling` are as on b11669, with the
+  sidecar keywords moved into one list. `hosting/router` reads only `status.value`, so the new
+  `incomplete` value reads as not loaded. [#21752](https://github.com/ggml-org/llama.cpp/pull/21752)
+  makes the HTTP client honor `HTTP_PROXY` and `HTTPS_PROXY`; the unit sets neither.
+- **Vulkan.** [#30468](https://github.com/ggml-org/llama.cpp/pull/30468) turns off importing host
+  memory into GPU buffers on AMD ("amdgpu re-faults all pages of every imported host allocation
+  on each submission"). The import runs only with more than one Vulkan device
+  (`vk_instance.multi_device`), so on Strix Halo's one device nothing changes; only a warning's
+  wording does.
+- **mtmd and the image encoder.** The range adds Muse Spark's vision and audio
+  ([#30616](https://github.com/ggml-org/llama.cpp/pull/30616)) and Voxtral Realtime's streamed
+  audio ([#30629](https://github.com/ggml-org/llama.cpp/pull/30629)), and lets LightOnOCR keep an
+  image's native size ([#30600](https://github.com/ggml-org/llama.cpp/pull/30600)). Each adds a
+  projector type or changes one set A doesn't run. Gemma 4's image projector still reserves its
+  graph for a 256-token warm-up image (`set_warmup_n_tokens(256)` in `tools/mtmd/clip.cpp`), so
+  the growth `memory-budget.md` measured on b11669 has the same cause on b11715.
+  `--mtmd-batch-max-tokens` is unchanged: default 1024, passed to mtmd as `batch_max_tokens`
+  (`tools/server/server-context.cpp`), and a preset key without its dashes, since
+  `common/preset.cpp` maps each key to the argument it names. The flag arrived with mtmd's
+  batching API ([#24384](https://github.com/ggml-org/llama.cpp/pull/24384), 2026-06-13) and
+  is in b11452, the profile's minimum build, so the vision model's new `mtmd-batch-max-tokens =
+  512` needs no higher minimum.
+- **Audio.** #30629 makes mtmd's audio preprocessor optional, for Voxtral Realtime's
+  stream-only input. Gemma 4's audio projector (`GEMMA4UA`) keeps its raw-waveform path, now
+  one of three encoder-free projectors in the same list. gemma-4-E4B's audio is as on b11669.
+- **The RAM prompt cache (`--cache-ram`).** Unchanged: the server code that saves, evicts
+  ("making room for prompt cache entry") and restores slot states has no commit in the range.
+  Nothing in the range matches gemma-4-E4B answering only `<unused32>` after those evictions, seen
+  once in slice 8b and not since. Two open reports are near it. In
+  [#27148](https://github.com/ggml-org/llama.cpp/issues/27148), the RAM prompt cache restores an
+  unrelated conversation into a fresh slot; it was reproduced on Strix Halo with `kv_unified`
+  true and sequential requests, and its fix, [#27624](https://github.com/ggml-org/llama.cpp/pull/27624)
+  (clear stale state when reusing an LRU-selected slot), is open. In
+  [#26088](https://github.com/ggml-org/llama.cpp/issues/26088), Gemma 4 emits only `<unusedNN>`
+  tokens after a long idle, reproduced on CUDA and ROCm and not on Vulkan. The symptom, if it
+  recurs, is to be recorded with the router log around it.
+- **gpt-oss tool calls.** [#30670](https://github.com/ggml-org/llama.cpp/pull/30670) (Beam) adds a
+  Harmony XML handler, detected before gpt-oss's only for a template with `<|constrain|>xml` and
+  `rfl:parameter`. gpt-oss's template has neither, so it keeps the GPT-OSS handler, whose parser
+  is unchanged. The `<|constrain|>` final that fails the peg-native parse with a 500
+  (`tool-reliability.md`) fails the same way;
+  [#25332](https://github.com/ggml-org/llama.cpp/pull/25332), which would accept it, is open and
+  unchanged since 2026-07-06. #30616 adds a Muse Spark handler, after gpt-oss's in the detection
+  order.
+- **Templates and vocabularies.** #30670 adds a `list` filter for an object to the template
+  engine, which set A's templates already render without. #30616 adds `<|eot|>` to the token
+  texts read as end of generation; `/tokenize` on the router splits `<|eot|>` into ordinary
+  pieces for gpt-oss-120b, the 26B-A4B and gemma-4-E4B, so none of their vocabularies holds it.
+  #30670's rule for a normal `</s>` applies only to a vocabulary with Beam's
+  `<rfl:parameter name="` token.
+- **The embeddings endpoint.** Unchanged: no commit touches the server's embedding path or
+  EmbeddingGemma 2's graph.
+- **Graphs.** The shared mixture-of-experts graph gains an optional post-expert norm (#30616),
+  passed only by Muse Spark, and Mellum joins Mistral Small 4 in asking for F32 precision on the
+  expert down-projection ([#30584](https://github.com/ggml-org/llama.cpp/pull/30584)). Vulkan
+  still refuses that precision, and [#30105](https://github.com/ggml-org/llama.cpp/pull/30105) is
+  open and unchanged since 2026-10-08, so Mistral Small 4's down-projections stay on the CPU.
+  [#30613](https://github.com/ggml-org/llama.cpp/pull/30613) shares K-pool views only in
+  GLM-5-Next and Qwen4-Exp. The attention-temperature input gains a power form (#30670), used
+  only when a model's GGUF asks for it; set A's don't.
+- **Other.** New models: Kolibri-1, Beam, Muse Spark, Mellum 2.1's MTP, and Granite Switch's
+  decision heads (which add a `text` and `decisions` output for one model type). The rest is
+  CUDA, SYCL, OpenCL, Hexagon, CPU on s390x, conversion, CI and the web UI.
+- **Sampling defaults.** Unchanged: `common/common.h` gains only a decision-model type. The GGUF
+  `general.sampling.*` defaults and the presets' values apply as before.
+- **Flags and preset keys.** `common/arg.cpp` and `common/preset.cpp` have no commit in the range,
+  so no flag or preset key is added, renamed or removed, and router mode, `--models-max` and
+  `load-on-startup` are unchanged. No note requires a preset change or a higher minimum build.
+  The presets change for this move only by the vision model's image batch cap, which
+  `evaluation` slice 8 chose on b11669 and which installs with the move.
+
+### The move
+
+The root commands, in the order the architect runs them, are in
+[`build-move.md`](build-move.md). The install, the probe and the re-verification on b11715 are
+recorded here once the move has run.

@@ -166,7 +166,9 @@ func TestRenderPresets(t *testing.T) {
 // TestStrixHaloMatchesPinnedPreset renders the Strix Halo profile and compares the sections, keys
 // and values of set A, its startup set, with the pinned copy of personal-agents' 96GiB preset. The
 // differences allowed are load-on-startup = true and hf-repo = the section's name on each of set
-// A's sections, which the profile renders and the pinned copy lacks. Every other set's model
+// A's sections, and mtmd-batch-max-tokens on a model that caps its image batch (the vision
+// model's, from evaluation's slice 8), which the profile renders and the pinned copy lacks. Every
+// other set's model
 // renders without load-on-startup and is left out of the comparison: the pinned copy predates the
 // candidates.
 func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
@@ -206,6 +208,12 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 		}
 		delete(keys, "load-on-startup")
 		delete(keys, "hf-repo")
+		if m := p.Model(name); m != nil && m.MtmdBatchMaxTokens != 0 {
+			if want := strconv.Itoa(m.MtmdBatchMaxTokens); keys["mtmd-batch-max-tokens"] != want {
+				t.Errorf("[%s] mtmd-batch-max-tokens = %q; want %s", name, keys["mtmd-batch-max-tokens"], want)
+			}
+			delete(keys, "mtmd-batch-max-tokens")
+		}
 	}
 	if models != 4 {
 		t.Errorf("rendered %d of set A's model sections; want 4", models)
@@ -495,6 +503,65 @@ func TestRenderPresetsCommentsReasons(t *testing.T) {
 		if at < 0 || section < 0 || at > section || strings.Contains(got[at:section], "\n[") {
 			t.Errorf("%q does not render in the comment above %s", tt.phrase, tt.section)
 		}
+	}
+}
+
+// TestRenderPresetsImageBatch shows a model's image batch cap renders as llama.cpp's
+// mtmd-batch-max-tokens in its own section, with its reason in the comment above it, and that a
+// model without a cap renders no such key, leaving the server's default.
+func TestRenderPresetsImageBatch(t *testing.T) {
+	const vision = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+	got := render(t, strixHalo)
+	for name, keys := range parseINI(t, got) {
+		v, ok := keys["mtmd-batch-max-tokens"]
+		switch {
+		case name == vision && v != "512":
+			t.Errorf("[%s] mtmd-batch-max-tokens = %q; want 512", name, v)
+		case name != vision && ok:
+			t.Errorf("[%s] mtmd-batch-max-tokens = %q; want the key absent", name, v)
+		}
+	}
+	at := strings.Index(got, "; mtmd-batch-max-tokens = 512 encodes each image")
+	section := strings.Index(got, "["+vision+"]")
+	if at < 0 || section < 0 || at > section || strings.Contains(got[at:section], "\n[") {
+		t.Errorf("the image batch cap's reason does not render in the comment above [%s]", vision)
+	}
+}
+
+// TestLoadNamesInvalidImageBatch shows an image batch cap needs a positive value, its reason and
+// a model with the vision role, and that a raw arg may not set it beside the typed field.
+func TestLoadNamesInvalidImageBatch(t *testing.T) {
+	base, err := os.ReadFile(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const (
+		value  = "mtmd_batch_max_tokens = 512\n"
+		reason = "mtmd_batch_max_tokens_reason = \"\"\"\n"
+	)
+	text := string(base)
+	cut := strings.Index(text, reason)
+	end := strings.Index(text[cut+len(reason):], `"""`) + cut + len(reason) + len(`"""`)
+	noReason := text[:cut] + text[end:]
+	tests := []struct {
+		name, text, want string
+	}{
+		{"zero", replace(t, text, value, "mtmd_batch_max_tokens = 0\n"),
+			"models[1].mtmd_batch_max_tokens: required with its reason, a positive integer"},
+		{"negative", replace(t, text, value, "mtmd_batch_max_tokens = -1\n"),
+			"models[1].mtmd_batch_max_tokens: required with its reason, a positive integer"},
+		{"no reason", noReason, "models[1].mtmd_batch_max_tokens_reason: required"},
+		{"no vision role", replace(t, text, `roles = ["chat", "vision"]
+card_url = "https://huggingface.co/google/gemma-4-26B-A4B-it"`, `roles = ["chat"]
+card_url = "https://huggingface.co/google/gemma-4-26B-A4B-it"`),
+			"models[1].mtmd_batch_max_tokens: only a model with the vision role encodes images"},
+		{"raw arg", addLine(t, text, "ub =", "mtmd-batch-max-tokens = 512"),
+			"models[3].args.mtmd-batch-max-tokens: rendered from the profile's typed fields"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertFails(t, writeProfile(t, tt.text), tt.want)
+		})
 	}
 }
 

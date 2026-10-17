@@ -22,10 +22,11 @@
 //   - Each Model declares its roles and its licence beside its origin, its card's context
 //     (CardContext, which C may not pass), optionally its active parameters and bits per weight
 //     (ActiveParamsB, BitsPerWeight: the bytes a decoded token reads), and an embedding model
-//     its output width, Dims; Profile.Model looks one up by router ID. A profile's optional
-//     MemoryBandwidthGBs is its host class's memory bandwidth, the ceiling decode is compared
-//     with. RouterTag is the tag the router lists a model by, the one a Model's ID must end
-//     with.
+//     its output width, Dims; Profile.Model looks one up by router ID. A vision Model may cap
+//     the image tokens its encoder takes in one batch (MtmdBatchMaxTokens, with its reason). A
+//     profile's optional MemoryBandwidthGBs is its host class's memory bandwidth, the ceiling
+//     decode is compared with. RouterTag is the tag the router lists a model by, the one a
+//     Model's ID must end with.
 //   - A chat Model's ConsumerReasoning is the reasoning setting the coding agents send with its
 //     requests, Pi's thinking level and OpenCode's options, each one its template accepts. It
 //     configures the consumers, not the router, and renders into no preset.
