@@ -187,7 +187,7 @@ func TestRunStopsAtFirstFailure(t *testing.T) {
 	t.Run("admission", func(t *testing.T) {
 		h := newHarness(t, gptOSS)
 		set := *h.runner.Set
-		set.MemoryBudget.MeasuredMiB = 97000 // 1304MiB free, under the 3072 floor
+		set.MemoryBudget.MeasuredMiB = 97000 // 1304MiB free, under the 2816 floor
 		h.runner.Set = &set
 		rep := h.run(t, "", nil)
 		want := []string{"admission fail", "fitness not run", "capacity not run", "quality not run", "set not run", "deep not run"}
@@ -291,8 +291,8 @@ func TestFloors(t *testing.T) {
 		{"query passes", embedding, gate.StageFitness, gate.RoleEmbedding, "query 32", func(*harness) {}, true},
 		{"query fails", embedding, gate.StageFitness, gate.RoleEmbedding, "query 32", func(h *harness) { h.runner.Floors.Embedding.Query32MS = tiny }, false},
 		{"idle pool passes", gptOSS, gate.StageFitness, "", "idle pool free", func(*harness) {}, true},
-		{"idle pool fails", gptOSS, gate.StageFitness, "", "idle pool free", func(h *harness) { h.footprint.free = []int{3000} }, false},
-		{"peak pool fails", embedding, gate.StageCapacity, gate.RoleEmbedding, "peak pool free", func(h *harness) { h.footprint.free = []int{3333, 3000} }, false},
+		{"idle pool fails", gptOSS, gate.StageFitness, "", "idle pool free", func(h *harness) { h.footprint.free = []int{2700} }, false},
+		{"peak pool fails", embedding, gate.StageCapacity, gate.RoleEmbedding, "peak pool free", func(h *harness) { h.footprint.free = []int{3333, 2700} }, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -430,7 +430,7 @@ func TestLoadFloors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if f.Agent.DecodeTokS != 20 || f.Pool.FreeMiB != 3072 || f.Embedding.ThroughputTokS != 4300 || f.Audio.Stream4RTFx != 1 {
+	if f.Agent.DecodeTokS != 20 || f.Pool.FreeMiB != 2816 || f.Embedding.ThroughputTokS != 4300 || f.Audio.Stream4RTFx != 1 {
 		t.Errorf("floors %+v", f)
 	}
 	dir := t.TempDir()

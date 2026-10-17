@@ -85,8 +85,8 @@ func TestSetRun(t *testing.T) {
 		t.Errorf("crossing %+v; want passed, with the embedding batch each round", x)
 	}
 	p := check(t, rep, gate.StageSet, "", "peak pool free")
-	if !p.Passed || *p.Measured != 3333 || *p.Floor != 3072 {
-		t.Errorf("peak pool free %+v; want 3333 against 3072", p)
+	if !p.Passed || *p.Measured != 3333 || *p.Floor != 2816 {
+		t.Errorf("peak pool free %+v; want 3333 against 2816", p)
 	}
 
 	// Each unit ran twice, once a phase, on its role's model, with no bar.
@@ -252,7 +252,7 @@ func TestSetModelRunGates(t *testing.T) {
 			// capacity sends them only to the model's.
 			if inSet || h.router.count("capacity true "+gptOSS)+h.router.count("capacity false "+gptOSS) > 0 {
 				inSet = true
-				return 3000
+				return 2700
 			}
 			return 3333
 		})
@@ -260,8 +260,8 @@ func TestSetModelRunGates(t *testing.T) {
 		if s := rep.Stage(gate.StageSet).Status; s != gate.StatusFail || rep.Passed {
 			t.Errorf("set %s, passed %v; want failed", s, rep.Passed)
 		}
-		if p := check(t, rep, gate.StageSet, "", "peak pool free"); p.Passed || *p.Measured != 3000 {
-			t.Errorf("peak pool free %+v; want a failure at 3000", p)
+		if p := check(t, rep, gate.StageSet, "", "peak pool free"); p.Passed || *p.Measured != 2700 {
+			t.Errorf("peak pool free %+v; want a failure at 2700", p)
 		}
 	})
 	t.Run("load refused", func(t *testing.T) {
@@ -287,7 +287,7 @@ func TestSetGates(t *testing.T) {
 		// Only the crossing probe, in the concurrent phase, sends nonce requests in a set run.
 		h.runner.Footprint = footprintFunc(func() int {
 			if h.router.count("capacity") > 0 {
-				return 3000
+				return 2700
 			}
 			return 3333
 		})
@@ -295,8 +295,8 @@ func TestSetGates(t *testing.T) {
 		if s := rep.Stage(gate.StageSet).Status; s != gate.StatusFail || rep.Passed {
 			t.Errorf("set %s, passed %v; want failed", s, rep.Passed)
 		}
-		if p := check(t, rep, gate.StageSet, "", "peak pool free"); p.Passed || *p.Measured != 3000 {
-			t.Errorf("peak pool free %+v; want a failure at 3000", p)
+		if p := check(t, rep, gate.StageSet, "", "peak pool free"); p.Passed || *p.Measured != 2700 {
+			t.Errorf("peak pool free %+v; want a failure at 2700", p)
 		}
 		if s := check(t, rep, gate.StageSet, gate.RoleAudio, "tier 1 slowdown"); s.Values["alone_pool_free_min_mib"] != 3333 {
 			t.Errorf("audio's alone pool %v; want 3333, the alone phase's, ungated", s.Values)
