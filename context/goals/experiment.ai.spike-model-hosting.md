@@ -100,7 +100,11 @@ Behaviors     1. The repository has five areas: hosting (the Go tooling for
                  role's at once, with at least 3 GiB of the pool free at the
                  peak and no crossed answer.
               12. One model's run, admission through the set stage, fits in
-                 1 hour for a chat-and-vision model at set A's rates.
+                 ~85 min for a chat-and-vision model that passes every gate
+                 at set A's rates; a failing model stops at its first failed
+                 gate. Sample counts hold; in a model's run the set stage
+                 reuses its quality tier 1 as the alone figure, and the set's
+                 other roles load the pool only while its tiers run.
               13. The deep stage runs only after every gate passes: τ2
                  airline and retail, 12 tasks each x 2 trials, whose user
                  simulator and airline grader are Sonnet through the
@@ -565,6 +569,8 @@ slices 8/12 committed · standards — · spec — · editor —
 - evaluation (r3, architect): speed floors are absolute and task-based, initial values to tune as metrics come in: agent decode 20 tok/s, prefill 500 tok/s, 8k TTFT 20 s, 10 tok/s per stream at 4; vision 10 s per image question; audio RTFx 5, 1 per stream at 4; embedding 4,300 tok/s, 250 ms per query. Supersedes main-model r1's 24 tok/s floor (carried to candidates) and r1's 40%-of-ceiling gate; ceiling efficiency is a recorded diagnostic.
 - evaluation (slice 7, architect): harness fit is evaluated, not assumed. Conform judges every pinned harness against one absolute bar (each applicable capability 5/5, 0 invalid), not against gpt-oss-120b's comparison row; the agent role needs any harness to fit, and the report records the fit profile per model, engine and harness. Supersedes behavior 10's comparison-row judgment; the row stays in the findings as context. Prompted by gpt-oss-120b failing its own row (Claude Code audio-tool 5/5 on b11669, 3/5 on b11572).
 - evaluation (slice 7, architect): fit profiles, with each failed cell's reason, are design input for the native Go harness spike: what a harness must do for a local model (force the tool call when offering respond, round-trip reasoning, no blind resend on a parse 500, drop images for a model without vision). The fit tier takes harnesses as a list, so that spike's harness joins it as one more.
+- evaluation (slice 8, architect): the hour becomes ~85 min for a chat-and-vision model that passes every gate (measured ~105-120 min before harness fit and the set-stage change); sample counts hold; the set stage in a model's run reuses the model's quality tier 1 as its alone figure, and the set's other roles generate load only while the model's tiers run. Supersedes r2's 1-hour target.
+- evaluation (slice 8, architect): set A fails the set stage's 3 GiB floor (2968-2990 MiB) because Gemma 4 26B's memory grows ~250-270 MiB under heavy vision use and holds until reload; diagnose which buffer grows and whether a server setting caps it before choosing between a profile setting, a lower floor, or a reload in the procedure.
 
 ## Pending edits
 
