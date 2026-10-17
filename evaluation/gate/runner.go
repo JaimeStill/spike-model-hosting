@@ -11,14 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JaimeStill/spike-model-hosting/evaluation/passk"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/tier"
 	"github.com/JaimeStill/spike-model-hosting/hosting/profile"
 	"github.com/JaimeStill/spike-model-hosting/hosting/router"
 )
 
-// The stages, in the order a run takes them. Admission, fitness and capacity are built; quality
-// is built for the embedding, audio and vision roles; set and deep, and quality for the agent
-// role, are named so a run reports them, and later work fills them in.
+// The stages, in the order a run takes them. Admission, fitness, capacity and quality are built;
+// set and deep are named so a run reports them, and later work fills them in.
 const (
 	StageAdmission = "admission"
 	StageFitness   = "fitness"
@@ -61,11 +61,17 @@ type Runner struct {
 	MTEB MTEB
 	ASR  ASR
 	// Vision runs the vision role's tiers, each tier's Inspect logs kept in the run's
-	// vision/<tier>.
+	// vision/<tier>, and Agent the agent role's BFCL tiers, kept in its agent/<tier>.
 	Vision Vision
+	Agent  Agent
 	Dir    string
-	// Tiers is the directory of the tier lists the ASR sets and vision tiers run (TiersDir,
-	// under the module root).
+	// Conform runs the agent role's conform tier through the consumers, its recordings and table
+	// kept in the run's conform/, judged against Comparison, gpt-oss-120b's row
+	// (evaluation/comparison.toml).
+	Conform    Conform
+	Comparison *passk.Comparison
+	// Tiers is the directory of the tier lists the ASR sets, vision tiers and BFCL tiers run
+	// (TiersDir, under the module root).
 	Tiers string
 }
 
@@ -130,14 +136,9 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 		StageCapacity:  r.capacity,
 		StageQuality:   r.quality,
 	}
-	// A stage with a function may still have nothing built for the run's roles.
-	builtFor := map[string]func(*Report) bool{StageQuality: qualityBuilt}
 	failed := ""
 	for _, name := range Stages[start:] {
 		run, built := stages[name]
-		if b, ok := builtFor[name]; ok && built {
-			built = b(rep)
-		}
 		switch {
 		case failed != "":
 			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: failed + " failed"})

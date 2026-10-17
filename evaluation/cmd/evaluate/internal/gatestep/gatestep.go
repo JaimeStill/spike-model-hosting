@@ -1,10 +1,10 @@
 // Package gatestep is evaluate's gated run, which takes one model through the evaluation
-// package gate's stages: admission, fitness, capacity, quality (built for the embedding, audio
-// and vision roles), then set and deep, which are not built yet.
+// package gate's stages: admission, fitness, capacity, quality, then set and deep, which are not
+// built yet.
 //
 // Usage:
 //
-//	evaluate [-router url] [-profile name|path] [-set name] (-role role | -model id) [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-state dir]
+//	evaluate [-router url] [-profile name|path] [-set name] (-role role | -model id) [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-comparison path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]
 //
 // The model is -model, by router ID, or the model the set assigns -role: agent (the profile's
 // chat role; chat is accepted), vision, audio or embedding. The set is -set, or SPIKE_SET, or
@@ -20,16 +20,22 @@
 // The report is <state>/evaluate/<UTC time>-<model>/report.json, the state directory being
 // -state, or SPIKE_STATE_DIR, or else the module root's untracked .state/. A summary of it goes
 // to stdout, and a line as each stage starts to stderr. The floors are -floors, the module
-// root's evaluation/floors.toml by default, and the quality stage's bars -bars, the module
-// root's evaluation/bars.toml by default. The pool is read over ssh with amdgpu_top, on -ssh,
-// by default the router URL's host.
+// root's evaluation/floors.toml by default, the quality stage's bars -bars, the module root's
+// evaluation/bars.toml by default, and the comparison row the agent role's conform tier is judged
+// against -comparison, the module root's evaluation/comparison.toml by default. The pool is read
+// over ssh with amdgpu_top, on -ssh, by default the router URL's host.
 //
-// The embedding role's quality stage runs MTEB, and the audio and vision roles' run Inspect AI
-// on the ASR sets' and vision tiers' lists (evaluation/tiers), through the uv project
-// evaluation/suites, with uv and Python from -uv and -python, or SPIKE_UV and SPIKE_PYTHON, or
-// else the consumers mise environment's pins. MTEB's output for each task goes in the run
-// directory's mteb/<task>, Inspect's JSON log for each ASR set in its asr/<set>, and each vision
-// tier's logs in its vision/<tier>/logs; the datasets download into the state directory's cache/.
+// The embedding role's quality stage runs MTEB, and the audio, vision and agent roles' run Inspect
+// AI on the ASR sets', vision tiers' and BFCL tiers' lists (evaluation/tiers), through the uv
+// project evaluation/suites, with uv and Python from -uv and -python, or SPIKE_UV and
+// SPIKE_PYTHON, or else the consumers mise environment's pins. MTEB's output for each task goes
+// in the run directory's mteb/<task>, Inspect's JSON log for each ASR set in its asr/<set>, each
+// vision tier's logs in its vision/<tier>/logs and each BFCL tier's in its agent/<tier>/logs; the
+// datasets download into the state directory's cache/. The agent role's conform tier runs Pi,
+// Claude Code and OpenCode, each -pi, -claude and -opencode, or SPIKE_PI, SPIKE_CLAUDE and
+// SPIKE_OPENCODE, or else the consumers mise environment's pin, their state under the state
+// directory's conform/, Claude Code's login in its claude/ (as evaluate conform keeps them), and
+// the run's recordings and conform table in the run directory's conform/.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. The model must be loaded already: the run
 // checks GET /models first, and refuses an unloaded model before any stage; every request
@@ -55,12 +61,13 @@ import (
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/consumers"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/gate"
+	"github.com/JaimeStill/spike-model-hosting/evaluation/passk"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/tier"
 	"github.com/JaimeStill/spike-model-hosting/hosting/profile"
 )
 
 // Usage is the run's usage line, which evaluate's own usage lists.
-const Usage = "evaluate [-router url] [-profile name|path] [-set name] (-role role | -model id) [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-state dir]"
+const Usage = "evaluate [-router url] [-profile name|path] [-set name] (-role role | -model id) [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-comparison path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]"
 
 const usage = "usage:\n  " + Usage + "\n"
 
@@ -68,7 +75,9 @@ const usage = "usage:\n  " + Usage + "\n"
 var errUsage = errors.New("usage")
 
 type options struct {
-	router, profile, set, role, model, from, run, ssh, floors, bars, uv, python, state string
+	router, profile, set, role, model, from, run, ssh, floors, bars, comparison, uv, python, state string
+	// consumers are the conform tier's consumer executables, by name; empty asks mise.
+	consumers map[string]string
 }
 
 // Run runs the gated stages with args, reading the environment through getenv, and returns its
@@ -103,7 +112,7 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs := flag.NewFlagSet("evaluate", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {}
-	var o options
+	o := options{consumers: map[string]string{}}
 	fs.StringVar(&o.router, "router", getenv("SPIKE_ROUTER_URL"), "the router's root URL (SPIKE_ROUTER_URL)")
 	fs.StringVar(&o.profile, "profile", profile.HostStrixHalo, "the profile the router serves: a host class or a TOML file's path")
 	fs.StringVar(&o.set, "set", getenv("SPIKE_SET"), "the profile's set (SPIKE_SET); empty is the startup set")
@@ -114,14 +123,23 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs.StringVar(&o.ssh, "ssh", "", "the ssh destination the pool is read on; default the router's host")
 	fs.StringVar(&o.floors, "floors", "", "the floors file; default the module root's evaluation/floors.toml")
 	fs.StringVar(&o.bars, "bars", "", "the quality stage's bars file; default the module root's evaluation/bars.toml")
+	fs.StringVar(&o.comparison, "comparison", "", "the conform tier's comparison row; default the module root's evaluation/comparison.toml")
 	fs.StringVar(&o.uv, "uv", getenv("SPIKE_UV"), "the uv executable (SPIKE_UV); empty asks mise for the pinned one")
 	fs.StringVar(&o.python, "python", getenv("SPIKE_PYTHON"), "the Python uv runs (SPIKE_PYTHON); empty asks mise for the pinned one")
+	consumerFlags := map[string]*string{}
+	for _, name := range passk.ConsumerNames {
+		env := "SPIKE_" + strings.ToUpper(name)
+		consumerFlags[name] = fs.String(name, getenv(env), "the "+name+" executable ("+env+"); empty asks mise for the pinned one")
+	}
 	fs.StringVar(&o.state, "state", getenv("SPIKE_STATE_DIR"), "the state directory (SPIKE_STATE_DIR); default the module root's .state")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return o, err
 		}
 		return o, fmt.Errorf("%w: %v", errUsage, err)
+	}
+	for name, p := range consumerFlags {
+		o.consumers[name] = *p
 	}
 	switch {
 	case fs.NArg() != 0:
@@ -212,7 +230,7 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 		Footprint: gate.SSH{Dest: o.ssh}, Media: media, Log: stderr, Bars: bars, Dir: dir,
 	}
 	roles := r.Roles()
-	if slices.Contains(roles, gate.RoleEmbedding) || slices.Contains(roles, gate.RoleAudio) || slices.Contains(roles, gate.RoleVision) {
+	if len(roles) > 0 {
 		uv, err := consumers.Executable(ctx, o.uv, "uv")
 		if err != nil {
 			return false, err
@@ -225,7 +243,12 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 			Exe: uv, Python: python, Project: filepath.Join(root, gate.SuitesDir),
 			Cache: filepath.Join(state, "cache"), Log: stderr,
 		}
-		r.MTEB, r.ASR, r.Vision, r.Tiers = suites, suites, suites, filepath.Join(root, gate.TiersDir)
+		r.MTEB, r.ASR, r.Vision, r.Agent, r.Tiers = suites, suites, suites, suites, filepath.Join(root, gate.TiersDir)
+	}
+	if slices.Contains(roles, gate.RoleAgent) {
+		if r.Conform, r.Comparison, err = conformRunner(ctx, o, root, state, stderr); err != nil {
+			return false, err
+		}
 	}
 	rep, err := r.Run(ctx, o.from, prior)
 	if rep == nil {
@@ -242,6 +265,34 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 	}
 	return rep.Passed, err
 }
+
+// conformRunner returns the agent role's conform tier's runner, the consumers' executables found,
+// their state under the state directory as evaluate conform keeps it, and the comparison row it is
+// judged against.
+func conformRunner(ctx context.Context, o options, root, state string, log io.Writer) (gate.Conform, *passk.Comparison, error) {
+	row, err := passk.LoadComparison(cmp.Or(o.comparison, filepath.Join(root, "evaluation", "comparison.toml")))
+	if err != nil {
+		return nil, nil, err
+	}
+	// The consumers run in working directories of their own and read the paths their drivers give
+	// them from there, so the state directory is made absolute.
+	if state, err = filepath.Abs(state); err != nil {
+		return nil, nil, err
+	}
+	commands := map[string]string{}
+	for _, name := range passk.ConsumerNames {
+		if commands[name], err = consumers.Executable(ctx, o.consumers[name], name); err != nil {
+			return nil, nil, err
+		}
+	}
+	return passk.Runner{
+		Commands: commands, State: filepath.Join(state, "conform"), ClaudeConfig: filepath.Join(state, "claude"),
+		Timeout: conformTimeout, Log: log,
+	}, &row, nil
+}
+
+// conformTimeout bounds one conform capability, as evaluate conform's -timeout does by default.
+const conformTimeout = 10 * time.Minute
 
 // pick returns the set and the model the options name.
 func pick(p *profile.Profile, o options) (*profile.Set, string, error) {

@@ -44,7 +44,7 @@ sampling and the template's default reasoning, since pass^5 measures the served 
 reliability. Four requests in flight, the profile's slots; the early stop judges samples as they
 complete.
 
-Early stop (PassStop, with a bar): the tier's screening fifth runs whole, then, before each
+Early stop (pass_stop.py's PassStop, shared with agent_quality.py, with a bar): the tier's screening fifth runs whole, then, before each
 further sample, the tier stops once the one-sided 95% Wilson upper bound on its pass rate is
 below the bar (package evaluation/tier's rule). A sample passes at a score of 0.5 or more: a
 correct choice, or an ANLS of 0.5 or more, which ANLS's own threshold makes any ANLS above 0.
@@ -57,7 +57,6 @@ samples it stopped and why, is written beside the logs as early_stop.json.
 import argparse
 import contextlib
 import json
-import math
 import sys
 from pathlib import Path
 
@@ -67,7 +66,6 @@ from inspect_ai.dataset import MemoryDataset, Sample
 from inspect_ai.model import ChatMessageUser, ContentImage, ContentText, GenerateConfig, get_model
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Target, accuracy, scorer
 from inspect_ai.solver import TaskState, generate
-from inspect_ai.util import EarlyStop
 from inspect_evals.docvqa import docvqa
 from inspect_evals.docvqa.docvqa import DATASET_PATH as DOCVQA_REPO
 from inspect_evals.docvqa.docvqa import DOCVQA_DATASET_REVISION
@@ -76,6 +74,8 @@ from inspect_evals.mmmu.utils import MMMU_DATASET_REVISION
 from inspect_evals.vstar_bench import vstar_bench_attribute_recognition, vstar_bench_spatial_relationship_reasoning
 from inspect_evals.vstar_bench.vstar_bench import HUGGINGFACE_REPO_ID as VSTAR_REPO
 from inspect_evals.vstar_bench.vstar_bench import VSTAR_BENCH_DATASET_REVISION
+
+from pass_stop import EARLY_STOP_FILE, PassStop, read_list
 
 # The tiers' tasks, in the order they run, and each one's dataset as a tier list's header names
 # it.
@@ -112,86 +112,6 @@ PROBE_REPEATS = 5
 # The router's slots: the requests a tier keeps in flight.
 SLOTS = 4
 
-# The standard normal quantile of a one-sided 95% bound.
-Z95 = 1.6448536269514722
-
-
-def upper_bound(passes: int, n: int) -> float:
-    """The one-sided 95% Wilson score upper bound on a pass rate, package evaluation/tier's
-    UpperBound, and 1 for no samples."""
-    if n <= 0:
-        return 1.0
-    p, z2 = passes / n, Z95 * Z95
-    centre = p + z2 / (2 * n)
-    margin = Z95 * math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))
-    return min(1.0, (centre + margin) / (1 + z2 / n))
-
-
-def score_value(value) -> float:
-    """A sample's score as a number: choice()'s C and I as 1 and 0, ANLS as it is."""
-    if value == CORRECT:
-        return 1.0
-    if value == INCORRECT:
-        return 0.0
-    return float(value)
-
-
-# A sample passes at a score of this or more.
-PASS_AT = 0.5
-
-
-class PassStop:
-    """Inspect early stopping on a pass-rate bar, shared by every task of a tier: the screening
-    fifth of the tier's size runs whole, then, before each further sample, the tier stops once
-    the Wilson upper bound on its pass rate is below the bar. With four requests in flight, a
-    sample is scheduled before the three ahead of it complete, so the stop can come up to three
-    samples after the bound first falls under the bar.
-
-    Inspect records a task's early stops in its log's results, but a task whose every sample
-    stopped (V*Bench's second task, when the first stopped the tier) is logged with neither
-    samples nor results; so the tier's account, summary(), is written beside the logs as
-    EARLY_STOP_FILE, which evaluate reads instead."""
-
-    def __init__(self, bar: float, size: int):
-        self.bar, self.size = bar, size
-        self.screening = math.ceil(size / 5)
-        self.passes = self.run = 0
-        self.stopped: list[str] = []
-        self.reason = ""
-
-    async def start_task(self, task, samples, epochs) -> str:
-        return "pass_rate_upper_bound"
-
-    async def schedule_sample(self, id, epoch) -> EarlyStop | None:
-        if not self.stopped and self.screening <= self.run < self.size:
-            bound = upper_bound(self.passes, self.run)
-            if bound < self.bar:
-                self.reason = f"the 95% upper bound {bound:.4f} on the pass rate ({self.passes}/{self.run}) is below the bar {self.bar}"
-        if not self.reason:
-            return None
-        self.stopped.append(str(id))
-        return EarlyStop(id=id, epoch=epoch, reason=self.reason)
-
-    async def complete_sample(self, id, epoch, scores) -> None:
-        [score] = scores.values()
-        self.run += 1
-        if score_value(score.score.value) >= PASS_AT:
-            self.passes += 1
-
-    async def complete_task(self) -> dict:
-        return self.summary()
-
-    def summary(self) -> dict:
-        return {
-            "bar": self.bar, "size": self.size, "screening": self.screening, "run": self.run,
-            "passes": self.passes, "upper_bound": upper_bound(self.passes, self.run),
-            "stopped": self.stopped, "reason": self.reason,
-        }
-
-
-# The tier's early stop account, written beside its logs when it runs with a bar.
-EARLY_STOP_FILE = "early_stop.json"
-
 
 @scorer(metrics=[accuracy()])
 def names_shapes():
@@ -217,18 +137,6 @@ def vision_probe(image: str):
     ]
     return Task(dataset=MemoryDataset(samples, name="probe"), solver=generate(), scorer=names_shapes(),
                 config=GenerateConfig(max_tokens=4096))
-
-
-def read_list(path: str) -> tuple[str, list[str]]:
-    """A tier list's dataset header and IDs (package evaluation/tier's format)."""
-    dataset, ids = "", []
-    for line in Path(path).read_text().splitlines():
-        line = line.strip()
-        if line.startswith("# dataset "):
-            dataset = line.removeprefix("# dataset ")
-        elif line and not line.startswith("#"):
-            ids.append(line)
-    return dataset, ids
 
 
 def main():

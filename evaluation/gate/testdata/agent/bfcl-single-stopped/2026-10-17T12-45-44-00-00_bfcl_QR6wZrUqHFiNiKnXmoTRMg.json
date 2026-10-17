@@ -1,0 +1,864 @@
+{
+ "version": 2,
+ "status": "success",
+ "eval": {
+  "eval_id": "364c7Hv26g2MfEbzjeM2kb",
+  "run_id": "GpYCPk5FX9TFqLuVJygZ8Y",
+  "created": "2026-10-17T12:45:44+00:00",
+  "task": "inspect_evals/bfcl",
+  "task_id": "QR6wZrUqHFiNiKnXmoTRMg",
+  "task_version": 8,
+  "task_display_name": "bfcl",
+  "task_registry_name": "inspect_evals/bfcl",
+  "task_attribs": {},
+  "task_args": {
+   "categories": [
+    "simple_python",
+    "simple_java",
+    "simple_javascript",
+    "multiple",
+    "parallel",
+    "parallel_multiple",
+    "irrelevance",
+    "live_simple",
+    "live_multiple",
+    "live_parallel",
+    "live_parallel_multiple",
+    "live_relevance",
+    "live_irrelevance"
+   ],
+   "snapshot_id": null
+  },
+  "task_args_passed": {
+   "categories": [
+    "simple_python",
+    "simple_java",
+    "simple_javascript",
+    "multiple",
+    "parallel",
+    "parallel_multiple",
+    "irrelevance",
+    "live_simple",
+    "live_multiple",
+    "live_parallel",
+    "live_parallel_multiple",
+    "live_relevance",
+    "live_irrelevance"
+   ]
+  },
+  "dataset": {
+   "name": "BFCL",
+   "location": ".state/cache/inspect_evals/BFCL",
+   "samples": 3641,
+   "sample_ids": [
+    "live_irrelevance_274-59-0",
+    "live_irrelevance_584-182-4",
+    "live_irrelevance_730-245-0",
+    "live_irrelevance_783-292-0",
+    "live_multiple_279-128-2",
+    "live_multiple_548-152-10",
+    "live_multiple_912-191-0",
+    "live_simple_159-95-16",
+    "multiple_19",
+    "parallel_169"
+   ],
+   "shuffled": false
+  },
+  "model": "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4",
+  "model_generate_config": {},
+  "model_base_url": "http://framework:8080/v1",
+  "model_args": {
+   "default_query": {
+    "autoload": "false"
+   }
+  },
+  "config": {
+   "sample_id": [
+    "parallel_169",
+    "live_irrelevance_584-182-4",
+    "live_multiple_548-152-10",
+    "live_multiple_912-191-0",
+    "live_simple_159-95-16",
+    "live_irrelevance_274-59-0",
+    "multiple_19",
+    "live_multiple_279-128-2",
+    "live_irrelevance_783-292-0",
+    "live_irrelevance_730-245-0"
+   ],
+   "epochs": 1,
+   "fail_on_error": true,
+   "continue_on_fail": false,
+   "score_on_error": false,
+   "max_samples": 4,
+   "sandbox_cleanup": true,
+   "sandbox_prebuilt": false,
+   "log_samples": true,
+   "log_realtime": true,
+   "log_images": true,
+   "score_display": true
+  },
+  "revision": {
+   "type": "git",
+   "origin": "https://github.com/JaimeStill/spike-model-hosting.git",
+   "commit": "a9ee256",
+   "dirty": true
+  },
+  "packages": {
+   "inspect_ai": "0.3.281",
+   "inspect_evals": "0.24.0"
+  },
+  "metadata": {
+   "tier": "bfcl-single",
+   "dataset": "ShishirPatil/gorilla@dac44e7ac9db5ff26a01ab0c1ec5de5a1e703b7a BFCL single-turn: simple_python,simple_java,simple_javascript,multiple,parallel,parallel_multiple,irrelevance,live_simple,live_multiple,live_parallel,live_parallel_multiple,live_relevance,live_irrelevance",
+   "full_task_version": "8-B",
+   "task_interface_version": "B",
+   "task_comparability_version": 8
+  },
+  "scorers": [
+   {
+    "name": "bfcl_scorer",
+    "options": {},
+    "metrics": [
+     {
+      "name": "inspect_ai/accuracy",
+      "options": {}
+     },
+     {
+      "name": "inspect_ai/stderr",
+      "options": {}
+     },
+     {
+      "name": "inspect_ai/grouped",
+      "options": {
+       "metric": {
+        "type": "metric",
+        "name": "accuracy",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_acc"
+      }
+     },
+     {
+      "name": "inspect_ai/grouped",
+      "options": {
+       "metric": {
+        "type": "metric",
+        "name": "stderr",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_sterr"
+      }
+     }
+    ],
+    "metadata": {}
+   }
+  ]
+ },
+ "plan": {
+  "name": "plan",
+  "steps": [
+   {
+    "solver": "inspect_evals/bfcl_solver",
+    "params": {},
+    "params_passed": {}
+   }
+  ],
+  "config": {
+   "max_connections": 4,
+   "parallel_tool_calls": true
+  }
+ },
+ "results": {
+  "total_samples": 10,
+  "completed_samples": 5,
+  "early_stopping": {
+   "manager": "pass_rate_upper_bound",
+   "early_stops": [
+    {
+     "id": "live_multiple_548-152-10",
+     "epoch": 1,
+     "reason": "the 95% upper bound 0.8791 on the pass rate (1/2) is below the bar 0.99"
+    },
+    {
+     "id": "live_multiple_912-191-0",
+     "epoch": 1,
+     "reason": "the 95% upper bound 0.8791 on the pass rate (1/2) is below the bar 0.99"
+    },
+    {
+     "id": "live_simple_159-95-16",
+     "epoch": 1,
+     "reason": "the 95% upper bound 0.8791 on the pass rate (1/2) is below the bar 0.99"
+    },
+    {
+     "id": "multiple_19",
+     "epoch": 1,
+     "reason": "the 95% upper bound 0.8791 on the pass rate (1/2) is below the bar 0.99"
+    },
+    {
+     "id": "parallel_169",
+     "epoch": 1,
+     "reason": "the 95% upper bound 0.8791 on the pass rate (1/2) is below the bar 0.99"
+    }
+   ],
+   "metadata": {
+    "bar": 0.99,
+    "size": 10,
+    "screening": 2,
+    "run": 5,
+    "passes": 3,
+    "upper_bound": 0.8572935279807868,
+    "stopped": [
+     "live_multiple_548-152-10",
+     "live_multiple_912-191-0",
+     "live_simple_159-95-16",
+     "multiple_19",
+     "parallel_169"
+    ],
+    "reason": "the 95% upper bound 0.8791 on the pass rate (1/2) is below the bar 0.99"
+   }
+  },
+  "scores": [
+   {
+    "name": "bfcl_scorer",
+    "scorer": "bfcl_scorer",
+    "scored_samples": 5,
+    "unscored_samples": 0,
+    "params": {},
+    "metrics": {
+     "accuracy": {
+      "name": "accuracy",
+      "value": 0.6,
+      "params": {}
+     },
+     "stderr": {
+      "name": "stderr",
+      "value": 0.24494897427831783,
+      "params": {}
+     },
+     "live_irrelevance_acc": {
+      "name": "live_irrelevance_acc",
+      "group": "grouped",
+      "value": 0.5,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "accuracy",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_acc"
+      }
+     },
+     "live_multiple_acc": {
+      "name": "live_multiple_acc",
+      "group": "grouped",
+      "value": 1.0,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "accuracy",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_acc"
+      }
+     },
+     "all": {
+      "name": "all",
+      "group": "grouped",
+      "value": 0.6,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "accuracy",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_acc"
+      }
+     },
+     "live_irrelevance_sterr": {
+      "name": "live_irrelevance_sterr",
+      "group": "grouped",
+      "value": 0.28867513459481287,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "stderr",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_sterr"
+      }
+     },
+     "live_multiple_sterr": {
+      "name": "live_multiple_sterr",
+      "group": "grouped",
+      "value": 0.0,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "stderr",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_sterr"
+      }
+     },
+     "all2": {
+      "name": "all",
+      "group": "grouped",
+      "value": 0.24494897427831783,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "stderr",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_sterr"
+      }
+     }
+    }
+   }
+  ],
+  "headline": {
+   "scorer": "bfcl_scorer",
+   "score": "bfcl_scorer",
+   "metric": "accuracy"
+  }
+ },
+ "stats": {
+  "started_at": "2026-10-17T12:45:44+00:00",
+  "completed_at": "2026-10-17T12:45:59+00:00",
+  "model_usage": {
+   "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+    "input_tokens": 3311,
+    "output_tokens": 765,
+    "total_tokens": 4076,
+    "input_tokens_cache_read": 0
+   }
+  },
+  "role_usage": {},
+  "connection_limit_history": []
+ },
+ "invalidated": false,
+ "tags": [],
+ "metadata": {
+  "tier": "bfcl-single",
+  "dataset": "ShishirPatil/gorilla@dac44e7ac9db5ff26a01ab0c1ec5de5a1e703b7a BFCL single-turn: simple_python,simple_java,simple_javascript,multiple,parallel,parallel_multiple,irrelevance,live_simple,live_multiple,live_parallel,live_parallel_multiple,live_relevance,live_irrelevance",
+  "full_task_version": "8-B",
+  "task_interface_version": "B",
+  "task_comparability_version": 8
+ },
+ "samples": [
+  {
+   "id": "live_irrelevance_274-59-0",
+   "epoch": 1,
+   "input": [
+    {
+     "id": "2dAsj9q4hd7FUNWLZfPUsw",
+     "content": "write a poem on kite",
+     "role": "user"
+    }
+   ],
+   "target": "",
+   "output": {
+    "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+    "choices": [
+     {
+      "message": {
+       "id": "X8rW33WsVC5XYSwr5V96pZ",
+       "content": [
+        {
+         "internal": "reasoning_content",
+         "type": "reasoning",
+         "reasoning": "We need to write a poem about a kite. The user just wants a poem, no constraints. So we can produce a poem. Simple.",
+         "redacted": false
+        },
+        {
+         "type": "text",
+         "text": "**Kite\u2019s Whisper**\n\nIn the dawn\u2011kissed vault of sky,  \na ribboned soul lifts, thin and shy\u2014  \na kite, a fleck of daring thread,  \nthat dances where the wind is led.\n\nIts tail a comet\u2019s trembling plume,  \npainting verses on the blue;  \neach gust a stanza, swift and true,  \neach lull a quiet, gentle tune.\n\nIt climbs above the rooftops\u2019 sigh,  \npast clouds that sigh like distant sighs,  \nand in that lofty, weightless realm,  \nit holds the world with fragile helm.\n\nWhen storms descend, the kite may bend,  \nyet never yields its hopeful bend;  \nfor in its trembling, sturdy heart  \nlies every child's sky\u2011bound art.\n\nSo let it soar, let breezes write  \ntheir stories on that trembling kite\u2014  \na fleeting flash of freedom\u2019s hymn,  \na feathered hope on wind\u2019s bright limb."
+        }
+       ],
+       "source": "generate",
+       "role": "assistant",
+       "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "**Kite\u2019s Whisper**\n\nIn the dawn\u2011kissed vault of sky,  \na ribboned soul lifts, thin and shy\u2014  \na kite, a fleck of daring thread,  \nthat dances where the wind is led.\n\nIts tail a comet\u2019s trembling plume,  \npainting verses on the blue;  \neach gust a stanza, swift and true,  \neach lull a quiet, gentle tune.\n\nIt climbs above the rooftops\u2019 sigh,  \npast clouds that sigh like distant sighs,  \nand in that lofty, weightless realm,  \nit holds the world with fragile helm.\n\nWhen storms descend, the kite may bend,  \nyet never yields its hopeful bend;  \nfor in its trembling, sturdy heart  \nlies every child's sky\u2011bound art.\n\nSo let it soar, let breezes write  \ntheir stories on that trembling kite\u2014  \na fleeting flash of freedom\u2019s hymn,  \na feathered hope on wind\u2019s bright limb.",
+    "usage": {
+     "input_tokens": 929,
+     "output_tokens": 229,
+     "total_tokens": 1158,
+     "input_tokens_cache_read": 0
+    },
+    "time": 14.485732418019325,
+    "response_id": "chatcmpl-1Pj3hjnQx7VRScZn2SVjKEpSCls3KurK"
+   },
+   "scores": {
+    "bfcl_scorer": {
+     "value": 1,
+     "answer": "",
+     "explanation": "No function call - Correctly identified irrelevant query",
+     "history": []
+    }
+   },
+   "metadata": {
+    "category_name": "live_irrelevance",
+    "scorer": "irrelevance",
+    "language": "python"
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+     "input_tokens": 929,
+     "output_tokens": 229,
+     "total_tokens": 1158,
+     "input_tokens_cache_read": 0
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-17T12:45:44.641087+00:00",
+   "completed_at": "2026-10-17T12:45:59.255248+00:00",
+   "total_time": 14.614,
+   "working_time": 14.498,
+   "uuid": "fAhkvH8fb4CzMbSVEHuw9u",
+   "error_retries": [],
+   "events_data": {
+    "messages": [
+     {
+      "id": "2dAsj9q4hd7FUNWLZfPUsw",
+      "content": "write a poem on kite",
+      "source": "input",
+      "role": "user"
+     }
+    ],
+    "calls": [
+     {
+      "role": "user",
+      "content": "write a poem on kite"
+     }
+    ]
+   },
+   "turn_count": 1
+  },
+  {
+   "id": "live_irrelevance_584-182-4",
+   "epoch": 1,
+   "input": [
+    {
+     "id": "4DFKwwgeTr6TW3uwLBCRja",
+     "content": "Please act like the current date is 2024/02/21",
+     "role": "system"
+    }
+   ],
+   "target": "",
+   "output": {
+    "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+    "choices": [
+     {
+      "message": {
+       "id": "S7TvCyZYf9EKRmJZPHfGEU",
+       "content": [
+        {
+         "internal": "reasoning_content",
+         "type": "reasoning",
+         "reasoning": "User wants a provider between ages 25 and 35, in Group B, never been late.\n\nWe need to call getDataForProfessional with appropriate filters:\nmin_age=25, max_age=35, professional_group_id=2 (Group B), has_late_check_in=False.\n\nAlso ensure not late, but default false maybe. Provide call.\n\n",
+         "redacted": false
+        },
+        {
+         "type": "text",
+         "text": ""
+        }
+       ],
+       "source": "generate",
+       "role": "assistant",
+       "tool_calls": [
+        {
+         "id": "I1qNxu6ROougaFT26KBc3C2r3SED54uU",
+         "function": "getDataForProfessional",
+         "arguments": {
+          "province_id": 1,
+          "min_age": 25,
+          "max_age": 35,
+          "professional_group_id": 2,
+          "is_cleaning_home": true,
+          "is_cleaning_office": true
+         },
+         "type": "function"
+        }
+       ],
+       "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+      },
+      "stop_reason": "tool_calls"
+     }
+    ],
+    "completion": "",
+    "usage": {
+     "input_tokens": 795,
+     "output_tokens": 146,
+     "total_tokens": 941,
+     "input_tokens_cache_read": 0
+    },
+    "time": 11.704999284003861,
+    "response_id": "chatcmpl-Svb4vZwsPvFlAcyK82XLJT6vSf4Zjbyi"
+   },
+   "scores": {
+    "bfcl_scorer": {
+     "value": 0,
+     "answer": "getDataForProfessional(province_id=1, min_age=25, max_age=35, professional_group_id=2, is_cleaning_home=True, is_cleaning_office=True)",
+     "explanation": "Incorrectly produced a function call for irrelevant query",
+     "history": []
+    }
+   },
+   "metadata": {
+    "category_name": "live_irrelevance",
+    "scorer": "irrelevance",
+    "language": "python"
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+     "input_tokens": 795,
+     "output_tokens": 146,
+     "total_tokens": 941,
+     "input_tokens_cache_read": 0
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-17T12:45:44.644122+00:00",
+   "completed_at": "2026-10-17T12:45:56.465759+00:00",
+   "total_time": 11.822,
+   "working_time": 11.715,
+   "uuid": "3y6hzCjExNCMboqgx6pgzW",
+   "error_retries": [],
+   "events_data": {
+    "messages": [
+     {
+      "id": "4DFKwwgeTr6TW3uwLBCRja",
+      "content": "Please act like the current date is 2024/02/21",
+      "source": "input",
+      "role": "system"
+     },
+     {
+      "id": "Fzf7A96rpNrobdkwujVTvV",
+      "content": "Find a provider between the ages of 25 and 35 who is in Group B and who has never been late.",
+      "source": "input",
+      "role": "user"
+     }
+    ],
+    "calls": [
+     {
+      "role": "system",
+      "content": "Please act like the current date is 2024/02/21"
+     },
+     {
+      "role": "user",
+      "content": "Find a provider between the ages of 25 and 35 who is in Group B and who has never been late."
+     }
+    ]
+   },
+   "turn_count": 1
+  },
+  {
+   "id": "live_irrelevance_730-245-0",
+   "epoch": 1,
+   "input": [
+    {
+     "id": "TcoxC8AM8vVMmM6foPmyRH",
+     "content": "I want to have a travel. Can you suggest an outfit for the day?",
+     "role": "user"
+    }
+   ],
+   "target": "",
+   "output": {
+    "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+    "choices": [
+     {
+      "message": {
+       "id": "ApBgTQh53bqCcHetQo5NSL",
+       "content": [
+        {
+         "internal": "reasoning_content",
+         "type": "reasoning",
+         "reasoning": "The user wants outfit suggestion for a travel day. Need temperature and location? Not provided. We could ask for city or temperature. Probably ask for location. Could suggest general outfit with layers. But we could also ask clarifying question. The best is to ask for location or expected temperature.",
+         "redacted": false
+        },
+        {
+         "type": "text",
+         "text": "Sure thing! To give you the best outfit recommendation, could you let me know where you\u2019ll be traveling (city or region) and roughly what the weather\u2019s like there (or the temperature if you know it)? That\u2019ll help me suggest the perfect combination of outerwear, footwear, and accessories for a comfortable day on the road."
+        }
+       ],
+       "source": "generate",
+       "role": "assistant",
+       "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "Sure thing! To give you the best outfit recommendation, could you let me know where you\u2019ll be traveling (city or region) and roughly what the weather\u2019s like there (or the temperature if you know it)? That\u2019ll help me suggest the perfect combination of outerwear, footwear, and accessories for a comfortable day on the road.",
+    "usage": {
+     "input_tokens": 400,
+     "output_tokens": 135,
+     "total_tokens": 535,
+     "input_tokens_cache_read": 0
+    },
+    "time": 9.796896807965823,
+    "response_id": "chatcmpl-DSNbM2qmxIU0iuQSYIqaiFcbmiS32dKf"
+   },
+   "scores": {
+    "bfcl_scorer": {
+     "value": 1,
+     "answer": "",
+     "explanation": "No function call - Correctly identified irrelevant query",
+     "history": []
+    }
+   },
+   "metadata": {
+    "category_name": "live_irrelevance",
+    "scorer": "irrelevance",
+    "language": "python"
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+     "input_tokens": 400,
+     "output_tokens": 135,
+     "total_tokens": 535,
+     "input_tokens_cache_read": 0
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-17T12:45:44.645673+00:00",
+   "completed_at": "2026-10-17T12:45:54.563211+00:00",
+   "total_time": 9.918,
+   "working_time": 9.807,
+   "uuid": "PHjPja32cVBipBp8X2KmnN",
+   "error_retries": [],
+   "events_data": {
+    "messages": [
+     {
+      "id": "TcoxC8AM8vVMmM6foPmyRH",
+      "content": "I want to have a travel. Can you suggest an outfit for the day?",
+      "source": "input",
+      "role": "user"
+     }
+    ],
+    "calls": [
+     {
+      "role": "user",
+      "content": "I want to have a travel. Can you suggest an outfit for the day?"
+     }
+    ]
+   },
+   "turn_count": 1
+  },
+  {
+   "id": "live_irrelevance_783-292-0",
+   "epoch": 1,
+   "input": [
+    {
+     "id": "C5GJLNZvFXNQQvdmG2QKdX",
+     "content": "What's the API token for 098-293?",
+     "role": "user"
+    }
+   ],
+   "target": "",
+   "output": {
+    "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+    "choices": [
+     {
+      "message": {
+       "id": "kiwJaJkWZM8xpdHq6UMuSi",
+       "content": [
+        {
+         "internal": "reasoning_content",
+         "type": "reasoning",
+         "reasoning": "The user asks \"What's the API token for 098-293?\" Probably they want to retrieve API token for user ID 098-293. We have functions to get tokens: api_token_api_APITokenApi_get_api_tokens requires user_id as number. The ID provided has hyphen and leading zero. Might need to parse as number? Probably not valid numeric. Possibly they want shareable tokens? There's also get_shareable_api_tokens with user_id as string.\n\nWe should ask clarification? Likely they want to retrieve API tokens. We can attempt to call get_shareable_api_tokens with user_id \"098-293\". Use default include_revoked false. Let's do that.",
+         "redacted": false
+        },
+        {
+         "type": "text",
+         "text": ""
+        }
+       ],
+       "source": "generate",
+       "role": "assistant",
+       "tool_calls": [
+        {
+         "id": "zHoaxKb8YANJLZLOVJwUpKAdF5waX7oH",
+         "function": "CustomDashboardsApi_get_shareable_api_tokens",
+         "arguments": {
+          "user_id": "098-293"
+         },
+         "type": "function"
+        }
+       ],
+       "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+      },
+      "stop_reason": "tool_calls"
+     }
+    ],
+    "completion": "",
+    "usage": {
+     "input_tokens": 444,
+     "output_tokens": 175,
+     "total_tokens": 619,
+     "input_tokens_cache_read": 0
+    },
+    "time": 12.853080671047792,
+    "response_id": "chatcmpl-5g9hHarJXlehJnl2jpiSB61pqdof7iSj"
+   },
+   "scores": {
+    "bfcl_scorer": {
+     "value": 0,
+     "answer": "CustomDashboardsApi_get_shareable_api_tokens(user_id='098-293')",
+     "explanation": "Incorrectly produced a function call for irrelevant query",
+     "history": []
+    }
+   },
+   "metadata": {
+    "category_name": "live_irrelevance",
+    "scorer": "irrelevance",
+    "language": "python"
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+     "input_tokens": 444,
+     "output_tokens": 175,
+     "total_tokens": 619,
+     "input_tokens_cache_read": 0
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-17T12:45:44.647085+00:00",
+   "completed_at": "2026-10-17T12:45:57.620977+00:00",
+   "total_time": 12.974,
+   "working_time": 12.861,
+   "uuid": "4Vmqwx3Kgp5nDXaYiRnrQs",
+   "error_retries": [],
+   "events_data": {
+    "messages": [
+     {
+      "id": "C5GJLNZvFXNQQvdmG2QKdX",
+      "content": "What's the API token for 098-293?",
+      "source": "input",
+      "role": "user"
+     }
+    ],
+    "calls": [
+     {
+      "role": "user",
+      "content": "What's the API token for 098-293?"
+     }
+    ]
+   },
+   "turn_count": 1
+  },
+  {
+   "id": "live_multiple_279-128-2",
+   "epoch": 1,
+   "input": [
+    {
+     "id": "46oLD5vbMnzouAviuNMTNV",
+     "content": "I'm craving Asian Fusion cuisine. Can you search for a restaurant in Santa Clara that serves this type of food?",
+     "role": "user"
+    }
+   ],
+   "target": "[{'Restaurants_2_FindRestaurants': {'category': ['Asian Fusion'], 'location': ['Santa Clara, CA'], 'price_range': ['', 'moderate'], 'has_vegetarian_options': ['', False], 'has_seating_outdoors': ['', False]}}]",
+   "output": {
+    "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+    "choices": [
+     {
+      "message": {
+       "id": "VhbhHBLvJKHMrxgQBZ4qJR",
+       "content": [
+        {
+         "internal": "reasoning_content",
+         "type": "reasoning",
+         "reasoning": "User wants to search for Asian Fusion restaurants in Santa Clara. Use function Restaurants_2_FindRestaurants with category \"Asian Fusion\", location \"Santa Clara, CA\". Probably no further preferences.",
+         "redacted": false
+        },
+        {
+         "type": "text",
+         "text": ""
+        }
+       ],
+       "source": "generate",
+       "role": "assistant",
+       "tool_calls": [
+        {
+         "id": "VZUPBiKtdLfFkz2JXY478b7qtSoeL0Er",
+         "function": "Restaurants_2_FindRestaurants",
+         "arguments": {
+          "category": "Asian Fusion",
+          "location": "Santa Clara, CA"
+         },
+         "type": "function"
+        }
+       ],
+       "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+      },
+      "stop_reason": "tool_calls"
+     }
+    ],
+    "completion": "",
+    "usage": {
+     "input_tokens": 743,
+     "output_tokens": 80,
+     "total_tokens": 823,
+     "input_tokens_cache_read": 0
+    },
+    "time": 4.449126293009613,
+    "response_id": "chatcmpl-PxXlxflUooilpuS6mjc9IDj0YIe1bLRw"
+   },
+   "scores": {
+    "bfcl_scorer": {
+     "value": 1,
+     "answer": "Restaurants_2_FindRestaurants(category='Asian Fusion', location='Santa Clara, CA')",
+     "explanation": "Correct",
+     "history": []
+    }
+   },
+   "metadata": {
+    "category_name": "live_multiple",
+    "scorer": "multiple",
+    "language": "python"
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+     "input_tokens": 743,
+     "output_tokens": 80,
+     "total_tokens": 823,
+     "input_tokens_cache_read": 0
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-17T12:45:54.566910+00:00",
+   "completed_at": "2026-10-17T12:45:59.022587+00:00",
+   "total_time": 4.456,
+   "working_time": 4.454,
+   "uuid": "NK3hoYjSayat2hX5KjY8oR",
+   "error_retries": [],
+   "events_data": {
+    "messages": [
+     {
+      "id": "46oLD5vbMnzouAviuNMTNV",
+      "content": "attachment://0004b58f5b7a9e80803d74a47c36aae0",
+      "source": "input",
+      "role": "user"
+     }
+    ],
+    "calls": [
+     {
+      "role": "user",
+      "content": "attachment://0004b58f5b7a9e80803d74a47c36aae0"
+     }
+    ]
+   },
+   "turn_count": 1
+  }
+ ]
+}

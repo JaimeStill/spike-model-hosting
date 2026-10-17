@@ -179,19 +179,20 @@ func readJSON(path string, v any, python bool) error {
 	return nil
 }
 
-// qualityBuilt reports whether the quality stage has a suite for any of the run's roles: so far,
-// the embedding role's MTEB tasks, the audio role's ASR sets and the vision role's tiers.
-func qualityBuilt(rep *Report) bool {
-	return slices.Contains(rep.Roles, RoleEmbedding) || slices.Contains(rep.Roles, RoleAudio) ||
-		slices.Contains(rep.Roles, RoleVision)
-}
-
-// quality runs each role's quality suite that is built, one check a task or set, each judged
-// against its bar, by name, in r.Bars, and recorded, passed, when there is none. The embedding
-// role runs EmbeddingTasks through r.MTEB; the audio role, AudioSets through r.ASR; the vision
-// role, VisionTiers through r.Vision, cheapest first, stopping at the first tier that fails.
+// quality runs each role's quality suite, one check a task, set or tier, each judged against its
+// bar, by name, in r.Bars, and recorded, passed, when there is none. The agent role runs
+// AgentTiers, BFCL through r.Agent and conform through r.Conform; the embedding role,
+// EmbeddingTasks through r.MTEB; the audio role, AudioSets through r.ASR; the vision role,
+// VisionTiers through r.Vision. The agent's and vision's tiers run cheapest first, stopping at
+// the first tier that fails.
 func (r *Runner) quality(ctx context.Context, rep *Report) []Check {
 	var checks []Check
+	if slices.Contains(rep.Roles, RoleAgent) {
+		checks = append(checks, r.agentTiers(ctx)...)
+		if ctx.Err() != nil {
+			return checks
+		}
+	}
 	if slices.Contains(rep.Roles, RoleEmbedding) {
 		for _, task := range EmbeddingTasks {
 			checks = append(checks, r.mtebTask(ctx, task))

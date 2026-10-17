@@ -1,0 +1,29 @@
+# The comparison row: gpt-oss-120b's conform pass^5 on b11669, the bar the agent role's conform
+# tier judges every agent model's consumers against (package evaluation/passk's Comparison,
+# package evaluation/gate's quality stage). Each consumer's cells are the trials of k that passed,
+# a capability per key; invalid, its model requests the router answered with an error.
+#
+# A gated consumer must reach each of its cells and stay at or under its invalid count. Pi's row,
+# 5/5 in every cell with 0 invalid, is "Pi 9/9 with 0 invalid"; Claude Code's is "each cell at or
+# above the row's", 0 invalid. dropped-image is n/a for Claude Code (it drops no image), which
+# counts 0. OpenCode is measured, not gated: its row is recorded beside its run, never judged.
+model = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+build = "b11669-620d2225c"
+date = "2026-10-15"
+source = 'docs/findings/tool-reliability.md, "The comparison row: pass^5 on b11669"'
+k = 5
+
+[consumers.pi]
+gated = true
+invalid = 0
+cells = { exchange = 5, cancel = 5, resume = 5, tool = 5, skill = 5, structured = 5, vision = 5, dropped-image = 5, audio-tool = 5 }
+
+[consumers.claude]
+gated = true
+invalid = 0
+cells = { exchange = 5, cancel = 5, resume = 5, tool = 0, skill = 0, structured = 5, vision = 5, dropped-image = 0, audio-tool = 5 }
+
+[consumers.opencode]
+gated = false
+invalid = 18
+cells = { exchange = 5, cancel = 5, resume = 5, tool = 4, skill = 3, structured = 5, vision = 5, dropped-image = 5, audio-tool = 3 }

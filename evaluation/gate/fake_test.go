@@ -13,7 +13,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/JaimeStill/spike-harness-driver/clutch/conform"
+
 	"github.com/JaimeStill/spike-model-hosting/evaluation/gate"
+	"github.com/JaimeStill/spike-model-hosting/evaluation/passk"
+	"github.com/JaimeStill/spike-model-hosting/evaluation/wire"
 )
 
 // fakeRouter is an httptest llama.cpp router: it lists models with their statuses, answers
@@ -215,4 +219,62 @@ func (f *fakeFootprint) Read(context.Context) (gate.Pool, error) {
 	free := f.free[min(f.n, len(f.free)-1)]
 	f.n++
 	return gate.Pool{UsedMiB: 98304 - free, TotalMiB: 98304}, nil
+}
+
+// fakeConform answers the conform tier with recorded trials, k a consumer, as passk.Runner would
+// have run them to the end, and records each plan it is given. Its Stop is the real runner's to
+// apply (TestQualityAgentConformStops runs that one).
+type fakeConform struct {
+	trials map[string][]passk.Trial
+	err    error
+	plans  []passk.Plan
+}
+
+// newFakeConform returns a fakeConform whose consumers match gpt-oss-120b's comparison row over
+// k trials: Pi passing every capability, Claude Code failing tool and skill and n/a on
+// dropped-image, and OpenCode failing skill twice with three invalid requests.
+func newFakeConform(k int) *fakeConform {
+	claude := conformReport("claude", map[string]conform.Status{"tool": conform.Fail, "skill": conform.Fail, "dropped-image": conform.NA})
+	f := &fakeConform{trials: map[string][]passk.Trial{}}
+	for i := range k {
+		f.trials["pi"] = append(f.trials["pi"], passk.Trial{Report: conformReport("pi", nil)})
+		f.trials["claude"] = append(f.trials["claude"], passk.Trial{Report: claude})
+		t := passk.Trial{Report: conformReport("opencode", nil)}
+		if i < 2 {
+			t.Report = conformReport("opencode", map[string]conform.Status{"skill": conform.Fail})
+			// Two invalid requests in the first trial, one in the second.
+			for range 2 - i {
+				t.Invalid = append(t.Invalid, wire.Exchange{Method: "POST", Path: "/v1/chat/completions", Status: 500})
+			}
+		}
+		f.trials["opencode"] = append(f.trials["opencode"], t)
+	}
+	return f
+}
+
+// conformReport is a consumer's trial in which every capability passed except those in
+// statuses.
+func conformReport(consumer string, statuses map[string]conform.Status) conform.Report {
+	rep := conform.Report{Harness: consumer, Provider: "llama.cpp", Version: consumer + " 1.0.0"}
+	for _, c := range conform.Capabilities {
+		s, ok := statuses[c.Name]
+		if !ok {
+			s = conform.Pass
+		}
+		rep.Results = append(rep.Results, conform.Result{Capability: c.Name, Status: s, Reason: c.Name + " " + s.String()})
+	}
+	return rep
+}
+
+func (f *fakeConform) Run(_ context.Context, plan passk.Plan) (passk.Result, error) {
+	f.plans = append(f.plans, plan)
+	if f.err != nil {
+		return passk.Result{}, f.err
+	}
+	res := passk.Result{Trials: map[string][]passk.Trial{}}
+	for _, name := range plan.Consumers {
+		res.Trials[name] = f.trials[name]
+		res.Rows = append(res.Rows, passk.Tally(name, f.trials[name]))
+	}
+	return res, nil
 }

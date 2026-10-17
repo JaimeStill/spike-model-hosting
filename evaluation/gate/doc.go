@@ -1,8 +1,7 @@
 // Package gate runs evaluate's gated stages for one model of a profile's set against the router:
 // admission, fitness, capacity, quality, set and deep, in that order, stopping at the first that
-// fails. Admission, fitness and capacity are built, and quality for the embedding, audio and
-// vision roles; set and deep, and quality for the agent role, are named stages a run reports as
-// not built yet, which later work fills in.
+// fails. Admission, fitness, capacity and quality are built; set and deep are named stages a run
+// reports as not built yet, which later work fills in.
 //
 //   - Admission judges the model on paper, from the profile and the router's build: licence and
 //     origin recorded (failing only when missing), the set's roles declared, the profile's
@@ -16,6 +15,23 @@
 //   - Capacity puts the profile's slots of requests in flight on the model per role, through
 //     the concurrent package's run: no crossed nonce, the embedding tolerance held, the pool's
 //     floor free at the peak, and the role's 4-stream floor.
+//   - Quality runs the agent role's tiers (AgentTiers), cheapest first, and stops at the first
+//     tier that fails. Tier 1 is BFCL's single-turn questions, 100 seeded across its 13
+//     leaderboard categories; tier 2 its multi-turn conversations, 20 seeded across its 4; both
+//     inspect_evals' stock bfcl task through the suites project's agent_quality.py, Inspect AI's
+//     openai-api provider at four requests in flight, at the router's defaults (the card's
+//     sampling, the template's reasoning) with parallel tool calls allowed. Each tier's accuracy
+//     is judged against its floor, by check name (agent-<tier>), under [bars] in
+//     evaluation/bars.toml, and recorded, never failing, without one; a floor stops the tier
+//     early as the vision tiers' does. Each check records the samples run and passed, their
+//     model requests and working time, the wall time, the data's Gorilla commit, the task's
+//     inspect_evals version and Inspect's release. Tier 3 is conform's pass^5 through Pi, Claude
+//     Code and OpenCode on the set's roles (passk.Runner), judged consumer by consumer against
+//     the comparison row, gpt-oss-120b's on b11669 (evaluation/comparison.toml): Pi and Claude
+//     Code must reach each of the row's cells with no more invalid requests than it, OpenCode is
+//     recorded. Every consumer runs its first trial, the screening fifth, then the tier stops once
+//     a gated consumer can't reach its row whatever its trials still to run do, an exact bound
+//     (passk.Comparison.Stop). Its recordings and table go in the run directory's conform/.
 //   - Quality runs the embedding role's MTEB tasks (EmbeddingTasks: STSBenchmark,
 //     Banking77Classification, SciFact, NFCorpus), each in full, through the uv project
 //     evaluation/suites, whose encoder sends the router's /v1/embeddings with EmbeddingGemma 2's
@@ -57,8 +73,8 @@
 // before any stage, and never loads one.
 //
 // The API:
-//   - Runner runs the stages, judging quality by its Bars (package tier's) and keeping MTEB's
-//     output in its Dir; Runner.Run returns the Report, and resumes from a named stage by
+//   - Runner runs the stages, judging quality by its Bars (package tier's) and the conform tier
+//     by its Comparison, and keeping the suites' output in its Dir; Runner.Run returns the Report, and resumes from a named stage by
 //     reusing a prior run's passed results for the stages before it. Runner.Roles are the roles
 //     the set assigns the model. ErrNotLoaded marks a refused run.
 //   - Stages and the Stage* constants name the stages; Roles and the Role* constants name the
@@ -71,11 +87,13 @@
 //     state root, as <state>/evaluate/<UTC time>-<Slug(model)>/report.json.
 //   - Footprint reads the pool; SSH reads it with amdgpu_top over ssh, and ParseAmdgpuTop parses
 //     that reading.
-//   - MTEB runs one MTEB task, ASR one ASR set's tier and Vision one vision tier; UV runs each
-//     through the suites project (SuitesDir) with uv. ReadVision reads a vision tier's Inspect
-//     logs into a VisionResult, whose Score and Passes are the tier's; VisionTiers name the
-//     tiers, VisionCheck a tier's check, list and bar name, and InspectEvalsVersion is the
-//     inspect_evals the project pins. ReadMTEB reads an MTEB result, MTEB's <task>.json and the
+//   - MTEB runs one MTEB task, ASR one ASR set's tier, Vision one vision tier and Agent one BFCL
+//     tier; UV runs each through the suites project (SuitesDir) with uv. ReadTier reads a vision
+//     or BFCL tier's Inspect logs into a TierResult, whose Score and Passes are the tier's;
+//     VisionTiers and AgentTiers name the tiers, VisionCheck and AgentCheck a tier's check, list
+//     and bar name, and InspectEvalsVersion is the inspect_evals the project pins. Conform runs
+//     the conform tier (passk.Runner), judged against a passk.Comparison; ConformTier names the
+//     tier and ConformReport its table's file. ReadMTEB reads an MTEB result, MTEB's <task>.json and the
 //     encoder's encoder.json, into an MTEBResult, and ReadASR an Inspect JSON log into an
 //     ASRResult, whose WER and RTFx are the set's. MTEBVersion and InspectVersion are the MTEB
 //     and Inspect AI the project pins (package evaluation/suites). AudioSets name the ASR sets,

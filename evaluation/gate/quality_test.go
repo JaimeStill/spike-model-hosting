@@ -22,12 +22,13 @@ import (
 // where there is one, a run early stopping ended. A vision tier is answered likewise with
 // testdata/vision/<tier>: the Inspect JSON logs of a live run of Gemma 4 26B-A4B on the
 // Framework, trimmed to testdata/tiers/vision-<tier>.txt, or testdata/vision/<tier>-stopped
-// given a bar. Each result is stamped with the suites project's pin of MTEB, Inspect AI or
+// given a bar; a BFCL tier with testdata/agent/<tier>, a live run of gpt-oss-120b trimmed to
+// testdata/tiers/agent-<tier>.txt, or testdata/agent/<tier>-stopped given a bar. Each result is stamped with the suites project's pin of MTEB, Inspect AI or
 // inspect_evals, since the check refuses another's and a pin moves on while the recording stays
 // the same.
 type fakeUV struct {
 	dir string
-	// fail names a task, set or vision tier the fake exits 1 on, writing nothing; mteb, inspect
+	// fail names a task, set, vision tier or BFCL tier the fake exits 1 on, writing nothing; mteb, inspect
 	// and evals, when set, are the versions stamped in place of the pins.
 	fail, mteb, inspect, evals string
 	// testdata, when set, is the directory the results are answered from in place of testdata.
@@ -52,6 +53,7 @@ while [ $# -gt 0 ]; do
 	*/mteb_quality.py) kind=mteb ;;
 	*/asr_quality.py) kind=asr ;;
 	*/vision_quality.py) kind=vision ;;
+	*/agent_quality.py) kind=agent ;;
 	--task) task=$2; shift ;;
 	--tier) tier=$2; shift ;;
 	--set) set=$2; shift ;;
@@ -71,9 +73,9 @@ asr)
 	[ -n "$bar" ] && [ -d "$src-stopped" ] && src=$src-stopped
 	mkdir -p "$out" && cp "$src"/*.json "$out"/ || exit 1
 	sed -i 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' "$out"/*.json ;;
-vision)
+vision|agent)
 	[ "$tier" = %[2]q ] && exit 1
-	src=%[3]q/vision/"$tier"
+	src=%[3]q/$kind/"$tier"
 	[ -n "$bar" ] && [ -d "$src-stopped" ] && src=$src-stopped
 	mkdir -p "$out" && cp "$src"/*.json "$out"/ || exit 1
 	sed -i -e 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' -e 's/"inspect_evals": "[^"]*"/"inspect_evals": "%[6]s"/' "$out"/*.json ;;

@@ -35,3 +35,9 @@ run = "{{config_root}}/scripts/asr-tiers.sh"
 [tasks.vision-tiers]
 description = "Draw the vision role's V*Bench, DocVQA and MMMU tier lists from their IDs with their seed"
 run = "{{config_root}}/scripts/vision-tiers.sh"
+
+# The agent role's BFCL tier lists, evaluation/tiers/agent-<tier>.txt, drawn again from their seed
+# and the Gorilla commit inspect_evals pins. It reads the network and rewrites the committed lists.
+[tasks.agent-tiers]
+description = "Draw the agent role's BFCL single-turn and multi-turn tier lists from their IDs with their seed"
+run = "{{config_root}}/scripts/agent-tiers.sh"

@@ -21,7 +21,7 @@ import (
 // of its own of the same ten V*Bench questions with a bar of 0.99, which early stopping ended
 // after six, its early_stop.json beside the logs: its spatial task's samples were all stopped, so
 // Inspect logged that task with no samples. The logs' results keep the whole run's metrics, which
-// ReadVision doesn't read.
+// ReadTier doesn't read.
 var recordedVision = map[string]struct {
 	samples, passes int
 	sum             float64
@@ -247,10 +247,10 @@ func TestQualityVisionProbe(t *testing.T) {
 	}
 }
 
-// TestReadVision reads a log's scores, choice()'s C and I as 1 and 0 and ANLS as it is, and
+// TestReadTier reads a log's scores, choice()'s C and I as 1 and 0 and ANLS as it is, and
 // refuses a log of a run that didn't succeed, with a sample that errored, went unscored or
 // scored something else, or beside a log of another tier.
-func TestReadVision(t *testing.T) {
+func TestReadTier(t *testing.T) {
 	write := func(t *testing.T, tierName string, edit func(log map[string]any)) string {
 		t.Helper()
 		name, log := visionLog(t, tierName)
@@ -267,9 +267,9 @@ func TestReadVision(t *testing.T) {
 	}
 	for _, name := range []string{"mmmu", "docvqa"} {
 		r := recordedVision[name]
-		res, err := gate.ReadVision(write(t, name, func(map[string]any) {}))
+		res, err := gate.ReadTier(write(t, name, func(map[string]any) {}))
 		if err != nil || len(res.IDs) != r.samples || res.Passes() != r.passes || res.Score() != r.sum/float64(r.samples) || res.Tier != name {
-			t.Errorf("%s: ReadVision = %+v, %v; want %d samples, %d passed, score %v", name, res, err, r.samples, r.passes, r.sum/float64(r.samples))
+			t.Errorf("%s: ReadTier = %+v, %v; want %d samples, %d passed, score %v", name, res, err, r.samples, r.passes, r.sum/float64(r.samples))
 		}
 	}
 	sample := func(log map[string]any) map[string]any { return log["samples"].([]any)[0].(map[string]any) }
@@ -282,7 +282,7 @@ func TestReadVision(t *testing.T) {
 		},
 		"no time": func(log map[string]any) { delete(sample(log)["output"].(map[string]any), "time") },
 	} {
-		if _, err := gate.ReadVision(write(t, "mmmu", edit)); err == nil {
+		if _, err := gate.ReadTier(write(t, "mmmu", edit)); err == nil {
 			t.Errorf("%s: read without error", name)
 		}
 	}
@@ -292,7 +292,7 @@ func TestReadVision(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(mixed, other), b, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gate.ReadVision(mixed); err == nil {
+	if _, err := gate.ReadTier(mixed); err == nil {
 		t.Error("two tiers' logs: read without error")
 	}
 }

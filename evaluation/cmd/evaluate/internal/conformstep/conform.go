@@ -42,26 +42,18 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/JaimeStill/spike-harness-driver/clutch/conform"
-
 	"github.com/JaimeStill/spike-model-hosting/evaluation/consumers"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/passk"
-	"github.com/JaimeStill/spike-model-hosting/evaluation/wire"
 	"github.com/JaimeStill/spike-model-hosting/hosting/profile"
 	"github.com/JaimeStill/spike-model-hosting/hosting/router"
 )
-
-// consumerNames are the consumers the step runs, in the order it runs and reports them.
-var consumerNames = []string{"pi", "claude", "opencode"}
 
 // errUsage marks an error in how the step was called, which exits 2 rather than 1.
 var errUsage = errors.New("usage")
@@ -123,9 +115,9 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs.StringVar(&o.profile, "profile", profile.HostStrixHalo, "the profile the router serves: a host class, found under the module root's devices/, or a TOML file's path")
 	fs.StringVar(&o.set, "set", getenv("SPIKE_SET"), "the profile's set to run on (SPIKE_SET); empty is the startup set")
 	fs.IntVar(&o.k, "k", 5, "the trials each consumer runs")
-	fs.StringVar(&consumers, "consumers", strings.Join(consumerNames, ","), "the consumers to run, comma-separated")
+	fs.StringVar(&consumers, "consumers", strings.Join(passk.ConsumerNames, ","), "the consumers to run, comma-separated")
 	cmds := map[string]*string{}
-	for _, name := range consumerNames {
+	for _, name := range passk.ConsumerNames {
 		env := "SPIKE_" + strings.ToUpper(name)
 		cmds[name] = fs.String(name, getenv(env), "the "+name+" executable ("+env+"); empty asks mise for the pinned one")
 	}
@@ -141,8 +133,8 @@ func parse(args []string, getenv func(string) string) (options, error) {
 		if c = strings.TrimSpace(c); c == "" {
 			continue
 		}
-		if !slices.Contains(consumerNames, c) {
-			return o, fmt.Errorf("%w: unknown consumer %q (known: %s)", errUsage, c, strings.Join(consumerNames, ", "))
+		if !slices.Contains(passk.ConsumerNames, c) {
+			return o, fmt.Errorf("%w: unknown consumer %q (known: %s)", errUsage, c, strings.Join(passk.ConsumerNames, ", "))
 		}
 		if !slices.Contains(o.consumers, c) {
 			o.consumers = append(o.consumers, c)
@@ -198,119 +190,35 @@ func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.R
 		}
 	}
 	root := filepath.Join(o.state, "conform")
-	if err := os.MkdirAll(filepath.Join(root, "wire"), 0o700); err != nil {
-		return nil, err
-	}
-	opts := conform.Options{
-		// The consumers mise environment's pins run, and a consumer that drifts from them runs
-		// too, its version marked with the pin.
-		AnyVersion: true,
-		Timeout:    o.timeout,
-		Progress: func(c conform.Cell, capability string) {
-			_, _ = fmt.Fprintf(stderr, "-- %s %s: %s\n", time.Now().Format(time.TimeOnly), c.Harness, cmp.Or(capability, "checking the consumer"))
-		},
+	runner := passk.Runner{
+		Commands: o.commands, State: root, ClaudeConfig: filepath.Join(o.state, "claude"),
+		Timeout: o.timeout, Log: stderr,
 	}
 	// Pi and OpenCode run the chat model at its consumer reasoning setting; a valid profile lists
 	// every role model.
-	chat := p.Model(set.Roles.Chat)
-	start := time.Now()
-	trials := map[string][]passk.Trial{}
-	for k := 1; k <= o.k; k++ {
-		for _, name := range o.consumers {
-			_, _ = fmt.Fprintf(stderr, "== trial %d/%d: %s\n", k, o.k, name)
-			t, err := trial(ctx, o, set.Roles, chat.Consumers, root, name, k, opts)
-			if err != nil {
-				return nil, err
-			}
-			trials[name] = append(trials[name], t)
-		}
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-	}
-	rows := make([]passk.Row, len(o.consumers))
-	for i, name := range o.consumers {
-		rows[i] = passk.Tally(name, trials[name])
-	}
-	return rows, write(stdout, rows, trials, o, build, set.Name, time.Since(start))
-}
-
-// trial runs one consumer's cell once, on the set's roles and the chat model's consumer
-// reasoning setting, through a Recorder of its own, and saves the recording.
-func trial(ctx context.Context, o options, roles profile.SetRoles, reasoning profile.ConsumerReasoning, root, name string, k int, opts conform.Options) (passk.Trial, error) {
-	target, err := url.Parse(o.router)
+	res, err := runner.Run(ctx, passk.Plan{
+		Router: o.router, Roles: set.Roles, Reasoning: p.Model(set.Roles.Chat).Consumers,
+		K: o.k, Consumers: o.consumers, Wire: filepath.Join(root, "wire"),
+	})
 	if err != nil {
-		return passk.Trial{}, err
+		return nil, err
 	}
-	rec := wire.New(target)
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return passk.Trial{}, err
-	}
-	srv := &http.Server{Handler: rec, ReadHeaderTimeout: time.Minute}
-	go func() { _ = srv.Serve(ln) }()
-	defer func() { _ = srv.Close() }()
-
-	cfg := passk.Config{
-		Command:      o.commands[name],
-		Router:       "http://" + ln.Addr().String(),
-		Direct:       o.router,
-		State:        root,
-		ClaudeConfig: filepath.Join(o.state, "claude"),
-		Roles:        roles,
-		Reasoning:    reasoning,
-	}
-	var cell conform.Cell
-	switch name {
-	case "pi":
-		if cell, err = passk.Pi(cfg); err != nil {
-			return passk.Trial{}, err
-		}
-	case "claude":
-		cell = passk.Claude(cfg)
-	default:
-		if cell, err = passk.OpenCode(cfg); err != nil {
-			return passk.Trial{}, err
-		}
-	}
-	rep := conform.Run(ctx, []conform.Cell{cell}, opts)[0]
-	path := filepath.Join(root, "wire", fmt.Sprintf("%s-%d-%s.jsonl", name, k, time.Now().Format("20060102T150405")))
-	if err := save(rec, path); err != nil {
-		return passk.Trial{}, err
-	}
-	return passk.Trial{Report: rep, Invalid: passk.Invalid(rec.Exchanges())}, nil
-}
-
-// save writes rec's exchanges to path, credentials redacted.
-func save(rec *wire.Recorder, path string) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return err
-	}
-	return errors.Join(rec.WriteJSONL(f), f.Close())
+	return res.Rows, write(stdout, res, o, build, set.Name)
 }
 
 // write writes the report: the table, each consumer's verdict, and the reason for every trial
 // that didn't pass and every invalid request.
-func write(w io.Writer, rows []passk.Row, trials map[string][]passk.Trial, o options, build, set string, elapsed time.Duration) error {
+func write(w io.Writer, res passk.Result, o options, build, set string) error {
 	host, _ := os.Hostname()
+	if _, err := fmt.Fprintf(w, "build %s, set %s, router %s, ran from %s, %d trials, %s\n\n", build, set, o.router, host, o.k, res.Elapsed.Round(time.Second)); err != nil {
+		return err
+	}
+	if err := passk.WriteTable(w, res.Rows); err != nil {
+		return err
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "build %s, set %s, router %s, ran from %s, %d trials, %s\n\n", build, set, o.router, host, o.k, elapsed.Round(time.Second))
-	b.WriteString("| Consumer | Version |")
-	for _, c := range conform.Capabilities {
-		b.WriteString(" " + c.Name + " |")
-	}
-	b.WriteString(" pass^k | invalid |\n|---|---|")
-	b.WriteString(strings.Repeat("---|", len(conform.Capabilities)+2) + "\n")
-	for _, r := range rows {
-		fmt.Fprintf(&b, "| %s | %s |", r.Consumer, cmp.Or(r.Version, "-"))
-		for _, c := range r.Cells {
-			fmt.Fprintf(&b, " %s |", cellText(c, r.K))
-		}
-		fmt.Fprintf(&b, " %d/%d (%.1f%%) | %d |\n", r.Passed(), len(r.Cells), 100*r.PassK(), r.Invalid)
-	}
 	b.WriteString("\n")
-	for _, r := range rows {
+	for _, r := range res.Rows {
 		verdict := "meets the bar"
 		if !r.MeetsBar() {
 			verdict = "FAILS the bar"
@@ -318,44 +226,8 @@ func write(w io.Writer, rows []passk.Row, trials map[string][]passk.Trial, o opt
 		fmt.Fprintf(&b, "%s: pass^%d %d/%d (%.1f%%), %d invalid: %s (0 invalid and pass^k >= %.0f%%)\n",
 			r.Consumer, r.K, r.Passed(), len(r.Cells), 100*r.PassK(), r.Invalid, verdict, 100*passk.Bar)
 	}
-	for _, r := range rows {
-		for _, s := range r.Skipped {
-			fmt.Fprintf(&b, "\n%s skipped a trial: %s", r.Consumer, oneLine(s))
-		}
-		for _, c := range r.Cells {
-			for _, reason := range c.Reasons {
-				fmt.Fprintf(&b, "\n%s %s: %s", r.Consumer, c.Capability, oneLine(reason))
-			}
-		}
-		for k, t := range trials[r.Consumer] {
-			for _, x := range t.Invalid {
-				fmt.Fprintf(&b, "\n%s trial %d invalid: %s %s -> %d %s", r.Consumer, k+1, x.Method, x.Path, x.Status, truncate(oneLine(x.Response), 200))
-			}
-		}
+	if _, err := io.WriteString(w, b.String()); err != nil {
+		return err
 	}
-	b.WriteString("\n")
-	_, err := io.WriteString(w, b.String())
-	return err
-}
-
-// cellText is a capability's trials that passed out of k, with n/a or skip noted when every
-// trial that didn't pass was one.
-func cellText(c passk.Cell, k int) string {
-	s := fmt.Sprintf("%d/%d", c.Pass, k)
-	switch {
-	case c.NA > 0 && c.NA == k-c.Pass:
-		s += " n/a"
-	case c.Skip > 0 && c.Skip == k-c.Pass:
-		s += " skip"
-	}
-	return s
-}
-
-func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "..."
+	return passk.WriteReasons(w, res.Rows, res.Trials)
 }
