@@ -9,22 +9,38 @@ import (
 	"github.com/JaimeStill/spike-harness-driver/clutch/conform"
 )
 
-// WriteTable writes rows as a Markdown table, a row per consumer and a column per capability,
-// each cell the trials that passed out of k, then each consumer's pass^k and invalid requests.
-func WriteTable(w io.Writer, rows []Row) error {
+// WriteTable writes fits as a Markdown table, a row per harness and a column per capability,
+// each cell the trials that passed out of those the harness ran, an excluded capability marked
+// n/a, then the trials it ran of k, its invalid requests, and whether it fits.
+func WriteTable(w io.Writer, fits []Fit) error {
 	var b strings.Builder
-	b.WriteString("| Consumer | Version |")
+	b.WriteString("| Harness | Version |")
 	for _, c := range conform.Capabilities {
 		b.WriteString(" " + c.Name + " |")
 	}
-	b.WriteString(" pass^k | invalid |\n|---|---|")
-	b.WriteString(strings.Repeat("---|", len(conform.Capabilities)+2) + "\n")
-	for _, r := range rows {
+	b.WriteString(" trials | invalid | fit |\n|---|---|")
+	b.WriteString(strings.Repeat("---|", len(conform.Capabilities)+3) + "\n")
+	for _, f := range fits {
+		r := f.Row
 		fmt.Fprintf(&b, "| %s | %s |", r.Consumer, cmp.Or(r.Version, "-"))
 		for _, c := range r.Cells {
 			fmt.Fprintf(&b, " %s |", cellText(c, r.K))
 		}
-		fmt.Fprintf(&b, " %d/%d (%.1f%%) | %d |\n", r.Passed(), len(r.Cells), 100*r.PassK(), r.Invalid)
+		fit := "no"
+		if f.Fits {
+			fit = "yes"
+		}
+		fmt.Fprintf(&b, " %d/%d | %d | %s |\n", r.K, f.K, r.Invalid, fit)
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+// WriteFits writes, a line each, every harness's verdict against the fit bar (Fit.Verdict).
+func WriteFits(w io.Writer, fits []Fit) error {
+	var b strings.Builder
+	for _, f := range fits {
+		fmt.Fprintf(&b, "%s: %s\n", f.Row.Consumer, f.Verdict())
 	}
 	_, err := io.WriteString(w, b.String())
 	return err
@@ -54,8 +70,8 @@ func WriteReasons(w io.Writer, rows []Row, trials map[string][]Trial) error {
 	return err
 }
 
-// cellText is a capability's trials that passed out of k, with n/a or skip noted when every
-// trial that didn't pass was one.
+// cellText is a capability's trials that passed out of the k run, with n/a or skip noted when
+// every trial that didn't pass was one.
 func cellText(c Cell, k int) string {
 	s := fmt.Sprintf("%d/%d", c.Pass, k)
 	switch {

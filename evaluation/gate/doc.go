@@ -26,13 +26,16 @@
 //     evaluation/bars.toml, and recorded, never failing, without one; a floor stops the tier
 //     early as the vision tiers' does. Each check records the samples run and passed, their
 //     model requests and working time, the wall time, the data's Gorilla commit, the task's
-//     inspect_evals version and Inspect's release. Tier 3 is conform's pass^5 through Pi, Claude
-//     Code and OpenCode on the set's roles (passk.Runner), judged consumer by consumer against
-//     the comparison row, gpt-oss-120b's on b11669 (evaluation/comparison.toml): Pi and Claude
-//     Code must reach each of the row's cells with no more invalid requests than it, OpenCode is
-//     recorded. Every consumer runs its first trial, the screening fifth, then the tier stops once
-//     a gated consumer can't reach its row whatever its trials still to run do, an exact bound
-//     (passk.Comparison.Stop). Its recordings and table go in the run directory's conform/.
+//     inspect_evals version and Inspect's release. Tier 3 is harness fit: conform's pass^5
+//     through every pinned harness (passk.Harnesses: Pi, Claude Code, OpenCode) on the set's
+//     roles (passk.Runner), each held to one absolute bar (passk.Judge): every applicable
+//     capability 5/5 and 0 invalid requests, a capability the harness reports n/a excluded and
+//     noted. A harness drops at its first failed trial; the tier ends once every harness has
+//     dropped or run all five. Each harness's fit is recorded, agent-conform-<harness>: whether
+//     it fits, the trials it ran, each cell's passes, its invalid requests, why its first failed
+//     trial failed and its wall time. The tier's verdict, agent-conform, fails only when no
+//     harness fits. Its recordings and table, the fit profile, go in the run directory's
+//     conform/.
 //   - Quality runs the embedding role's MTEB tasks (EmbeddingTasks: STSBenchmark,
 //     Banking77Classification, SciFact, NFCorpus), each in full, through the uv project
 //     evaluation/suites, whose encoder sends the router's /v1/embeddings with EmbeddingGemma 2's
@@ -88,7 +91,7 @@
 //
 // The API:
 //   - Runner runs the stages, judging quality by its Bars (package tier's) and the conform tier
-//     by its Comparison, and keeping the suites' output in its Dir; Runner.Run returns the
+//     by harness fit, and keeping the suites' output in its Dir; Runner.Run returns the
 //     Report, and resumes from a named stage by reusing a prior run's passed results for the
 //     stages before it. Runner.Roles are the roles the set assigns the model, or every role for
 //     a set run, a Runner with no Model, whose directory is named for SetSubject. ErrNotLoaded
@@ -108,8 +111,8 @@
 //     or BFCL tier's Inspect logs into a TierResult, whose Score and Passes are the tier's;
 //     VisionTiers and AgentTiers name the tiers, VisionCheck and AgentCheck a tier's check, list
 //     and bar name, and InspectEvalsVersion is the inspect_evals the project pins. Conform runs
-//     the conform tier (passk.Runner), judged against a passk.Comparison; ConformTier names the
-//     tier and ConformReport its table's file. ReadMTEB reads an MTEB result, MTEB's <task>.json and the
+//     the conform tier (passk.Runner); ConformTier names the tier, ConformK its trials and
+//     ConformReport its table's file. ReadMTEB reads an MTEB result, MTEB's <task>.json and the
 //     encoder's encoder.json, into an MTEBResult, and ReadASR an Inspect JSON log into an
 //     ASRResult, whose WER and RTFx are the set's. MTEBVersion and InspectVersion are the MTEB
 //     and Inspect AI the project pins (package evaluation/suites). AudioSets name the ASR sets,

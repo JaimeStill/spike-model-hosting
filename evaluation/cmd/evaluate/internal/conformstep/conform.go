@@ -1,24 +1,29 @@
 // Package conformstep is evaluate's conform step, which runs clutch's conformance suite k times for
-// each consumer over the router, and judges each consumer by pass^k against the bar for a gpt-oss
-// implementation.
+// each harness over the router, and judges each harness's fit by the bar the agent role's conform
+// tier holds every harness to (passk.Judge).
 //
 // Usage:
 //
 //	evaluate conform [-router url] [-profile name|path] [-set name] [-k n] [-consumers list] [-pi path] [-claude path] [-opencode path] [-state dir] [-timeout d]
 //
-// The consumers are Pi on its llama.cpp provider, Claude Code over the router's Anthropic messages,
-// and OpenCode with the chat model's interleaved setting on; the passk package says how each cell
-// is built. Every model they run on is one of the profile's set -set names, or SPIKE_SET, by its
+// The harnesses are the pinned ones (passk.Harnesses): Pi on its llama.cpp provider, Claude Code
+// over the router's Anthropic messages, and OpenCode with the chat model's interleaved setting
+// on; the passk package says how each cell is built. Every model they run on is one of the profile's set -set names, or SPIKE_SET, by its
 // roles: the chat model for every session, the vision model for images, the audio model for the
-// audio tool. With neither, the set is the profile's startup set. Each trial runs every consumer's
-// nine capabilities once, consumer after consumer, and the run makes -k trials. Every consumer's
+// audio tool. With neither, the set is the profile's startup set. Each trial runs every harness's
+// nine capabilities once, harness after harness, and the run makes -k trials, every one for every
+// harness: unlike the conform tier, the step drops no harness at its first failed trial, so each
+// cell's count is over all k. Every consumer's
 // model requests go through a recording proxy (wire.Recorder) in front of the router, one per
 // consumer and trial, whose recording is saved under the state directory's conform/wire/; a model
 // request the router answers with an error counts as invalid.
 //
-// The output names the build and the set it ran on, then a Markdown table, a row per consumer and a
-// column per capability, each cell the trials that passed out of k, then each consumer's pass^k,
-// invalid requests and verdict against the bar, and the reason for every trial that didn't pass.
+// The output names the build and the set it ran on, then a Markdown table, a row per harness and a
+// column per capability, each cell the trials that passed out of k, then each harness's trials,
+// invalid requests and fit; then each harness's verdict (fit, or the first failed trial and why),
+// and the reason for every trial that didn't pass. The bar: every applicable capability passed in
+// each of the k trials with no invalid request, a capability the harness reported n/a in every
+// trial excluded and noted.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. Every model of the set must be loaded
 // already: the step checks GET /models first and never loads one. Each consumer is its
@@ -31,8 +36,8 @@
 //
 // then /login.
 //
-// It exits 0 when every consumer meets the bar, 1 when one doesn't or the run can't start, and 2
-// on a usage error.
+// It exits 0 when every harness fits, 1 when one doesn't or the run can't start, and 2 on a usage
+// error.
 package conformstep
 
 import (
@@ -67,7 +72,7 @@ const usage = `usage:
 type options struct {
 	router, profile, set, state string
 	k                           int
-	consumers                   []string
+	harnesses                   []passk.Harness
 	commands                    map[string]string
 	timeout                     time.Duration
 }
@@ -77,11 +82,11 @@ type options struct {
 func Run(ctx context.Context, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
 	opts, err := parse(args, getenv)
 	if err == nil {
-		var rows []passk.Row
-		rows, err = runAll(ctx, opts, stdout, stderr)
+		var fits []passk.Fit
+		fits, err = runAll(ctx, opts, stdout, stderr)
 		if err == nil {
-			for _, r := range rows {
-				if !r.MeetsBar() {
+			for _, f := range fits {
+				if !f.Fits {
 					return 1
 				}
 			}
@@ -114,8 +119,8 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs.StringVar(&o.router, "router", getenv("SPIKE_ROUTER_URL"), "the router's root URL (SPIKE_ROUTER_URL)")
 	fs.StringVar(&o.profile, "profile", profile.HostStrixHalo, "the profile the router serves: a host class, found under the module root's devices/, or a TOML file's path")
 	fs.StringVar(&o.set, "set", getenv("SPIKE_SET"), "the profile's set to run on (SPIKE_SET); empty is the startup set")
-	fs.IntVar(&o.k, "k", 5, "the trials each consumer runs")
-	fs.StringVar(&consumers, "consumers", strings.Join(passk.ConsumerNames, ","), "the consumers to run, comma-separated")
+	fs.IntVar(&o.k, "k", 5, "the trials each harness runs")
+	fs.StringVar(&consumers, "consumers", strings.Join(passk.ConsumerNames, ","), "the harnesses to run, comma-separated")
 	cmds := map[string]*string{}
 	for _, name := range passk.ConsumerNames {
 		env := "SPIKE_" + strings.ToUpper(name)
@@ -133,11 +138,12 @@ func parse(args []string, getenv func(string) string) (options, error) {
 		if c = strings.TrimSpace(c); c == "" {
 			continue
 		}
-		if !slices.Contains(passk.ConsumerNames, c) {
+		h, ok := passk.LookupHarness(c)
+		if !ok {
 			return o, fmt.Errorf("%w: unknown consumer %q (known: %s)", errUsage, c, strings.Join(passk.ConsumerNames, ", "))
 		}
-		if !slices.Contains(o.consumers, c) {
-			o.consumers = append(o.consumers, c)
+		if !slices.ContainsFunc(o.harnesses, func(x passk.Harness) bool { return x.Name == c }) {
+			o.harnesses = append(o.harnesses, h)
 		}
 	}
 	switch {
@@ -147,7 +153,7 @@ func parse(args []string, getenv func(string) string) (options, error) {
 		return o, fmt.Errorf("%w: no router: set -router or SPIKE_ROUTER_URL", errUsage)
 	case o.k < 1:
 		return o, fmt.Errorf("%w: -k must be at least 1", errUsage)
-	case len(o.consumers) == 0:
+	case len(o.harnesses) == 0:
 		return o, fmt.Errorf("%w: -consumers names none", errUsage)
 	}
 	for name, p := range cmds {
@@ -165,7 +171,7 @@ func parse(args []string, getenv func(string) string) (options, error) {
 }
 
 // runAll checks the router, runs the trials, and writes the report.
-func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.Row, error) {
+func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.Fit, error) {
 	p, _, err := profile.Open(o.profile)
 	if err != nil {
 		return nil, err
@@ -184,8 +190,8 @@ func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.R
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range o.consumers {
-		if o.commands[name], err = consumers.Executable(ctx, o.commands[name], name); err != nil {
+	for _, h := range o.harnesses {
+		if o.commands[h.Name], err = consumers.Executable(ctx, o.commands[h.Name], h.Name); err != nil {
 			return nil, err
 		}
 	}
@@ -198,35 +204,28 @@ func runAll(ctx context.Context, o options, stdout, stderr io.Writer) ([]passk.R
 	// every role model.
 	res, err := runner.Run(ctx, passk.Plan{
 		Router: o.router, Roles: set.Roles, Reasoning: p.Model(set.Roles.Chat).Consumers,
-		K: o.k, Consumers: o.consumers, Wire: filepath.Join(root, "wire"),
+		K: o.k, Harnesses: o.harnesses, Wire: filepath.Join(root, "wire"),
 	})
 	if err != nil {
 		return nil, err
 	}
-	return res.Rows, write(stdout, res, o, build, set.Name)
+	return res.Fits, write(stdout, res, o, build, set.Name)
 }
 
-// write writes the report: the table, each consumer's verdict, and the reason for every trial
+// write writes the report: the table, each harness's verdict, and the reason for every trial
 // that didn't pass and every invalid request.
 func write(w io.Writer, res passk.Result, o options, build, set string) error {
 	host, _ := os.Hostname()
 	if _, err := fmt.Fprintf(w, "build %s, set %s, router %s, ran from %s, %d trials, %s\n\n", build, set, o.router, host, o.k, res.Elapsed.Round(time.Second)); err != nil {
 		return err
 	}
-	if err := passk.WriteTable(w, res.Rows); err != nil {
+	if err := passk.WriteTable(w, res.Fits); err != nil {
 		return err
 	}
-	var b strings.Builder
-	b.WriteString("\n")
-	for _, r := range res.Rows {
-		verdict := "meets the bar"
-		if !r.MeetsBar() {
-			verdict = "FAILS the bar"
-		}
-		fmt.Fprintf(&b, "%s: pass^%d %d/%d (%.1f%%), %d invalid: %s (0 invalid and pass^k >= %.0f%%)\n",
-			r.Consumer, r.K, r.Passed(), len(r.Cells), 100*r.PassK(), r.Invalid, verdict, 100*passk.Bar)
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
 	}
-	if _, err := io.WriteString(w, b.String()); err != nil {
+	if err := passk.WriteFits(w, res.Fits); err != nil {
 		return err
 	}
 	return passk.WriteReasons(w, res.Rows, res.Trials)

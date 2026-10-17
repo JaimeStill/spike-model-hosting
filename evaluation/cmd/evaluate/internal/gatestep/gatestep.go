@@ -4,7 +4,7 @@
 //
 // Usage:
 //
-//	evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-comparison path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]
+//	evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]
 //
 // The model is -model, by router ID, or the model the set assigns -role: agent (the profile's
 // chat role; chat is accepted), vision, audio or embedding. The set is -set, or SPIKE_SET, or
@@ -26,10 +26,9 @@
 // The report is <state>/evaluate/<UTC time>-<model>/report.json, the state directory being
 // -state, or SPIKE_STATE_DIR, or else the module root's untracked .state/. A summary of it goes
 // to stdout, and a line as each stage starts to stderr. The floors are -floors, the module
-// root's evaluation/floors.toml by default, the quality stage's bars -bars, the module root's
-// evaluation/bars.toml by default, and the comparison row the agent role's conform tier is judged
-// against -comparison, the module root's evaluation/comparison.toml by default. The pool is read
-// over ssh with amdgpu_top, on -ssh, by default the router URL's host.
+// root's evaluation/floors.toml by default, and the quality stage's bars -bars, the module root's
+// evaluation/bars.toml by default. The pool is read over ssh with amdgpu_top, on -ssh, by default
+// the router URL's host.
 //
 // The embedding role's quality stage runs MTEB, and the audio, vision and agent roles' run Inspect
 // AI on the ASR sets', vision tiers' and BFCL tiers' lists (evaluation/tiers), through the uv
@@ -39,11 +38,12 @@
 // vision tier's logs in its vision/<tier>/logs and each BFCL tier's in its agent/<tier>/logs; the
 // datasets download into the state directory's cache/. The set stage runs the same suites on
 // every role's tier 1, its output under the run directory's set/alone/ and set/concurrent/,
-// laid out as the quality stage's. The agent role's conform tier runs Pi,
-// Claude Code and OpenCode, each -pi, -claude and -opencode, or SPIKE_PI, SPIKE_CLAUDE and
-// SPIKE_OPENCODE, or else the consumers mise environment's pin, their state under the state
-// directory's conform/, Claude Code's login in its claude/ (as evaluate conform keeps them), and
-// the run's recordings and conform table in the run directory's conform/.
+// laid out as the quality stage's. The agent role's conform tier, harness fit, runs every pinned
+// harness (Pi, Claude Code and OpenCode), each -pi, -claude and -opencode, or SPIKE_PI,
+// SPIKE_CLAUDE and SPIKE_OPENCODE, or else the consumers mise environment's pin, their state
+// under the state directory's conform/, Claude Code's login in its claude/ (as evaluate conform
+// keeps them), and the run's recordings and conform table, the fit profile, in the run
+// directory's conform/.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. The model must be loaded already: the run
 // checks GET /models first, and refuses an unloaded model before any stage; every request
@@ -75,7 +75,7 @@ import (
 )
 
 // Usage is the run's usage line, which evaluate's own usage lists.
-const Usage = "evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-comparison path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]"
+const Usage = "evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-state dir]"
 
 const usage = "usage:\n  " + Usage + "\n"
 
@@ -83,7 +83,7 @@ const usage = "usage:\n  " + Usage + "\n"
 var errUsage = errors.New("usage")
 
 type options struct {
-	router, profile, set, role, model, from, run, ssh, floors, bars, comparison, uv, python, state string
+	router, profile, set, role, model, from, run, ssh, floors, bars, uv, python, state string
 	// consumers are the conform tier's consumer executables, by name; empty asks mise.
 	consumers map[string]string
 }
@@ -131,7 +131,6 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs.StringVar(&o.ssh, "ssh", "", "the ssh destination the pool is read on; default the router's host")
 	fs.StringVar(&o.floors, "floors", "", "the floors file; default the module root's evaluation/floors.toml")
 	fs.StringVar(&o.bars, "bars", "", "the quality stage's bars file; default the module root's evaluation/bars.toml")
-	fs.StringVar(&o.comparison, "comparison", "", "the conform tier's comparison row; default the module root's evaluation/comparison.toml")
 	fs.StringVar(&o.uv, "uv", getenv("SPIKE_UV"), "the uv executable (SPIKE_UV); empty asks mise for the pinned one")
 	fs.StringVar(&o.python, "python", getenv("SPIKE_PYTHON"), "the Python uv runs (SPIKE_PYTHON); empty asks mise for the pinned one")
 	consumerFlags := map[string]*string{}
@@ -267,7 +266,7 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 		r.MTEB, r.ASR, r.Vision, r.Agent, r.Tiers = suites, suites, suites, suites, filepath.Join(root, gate.TiersDir)
 	}
 	if !setRun && slices.Contains(roles, gate.RoleAgent) {
-		if r.Conform, r.Comparison, err = conformRunner(ctx, o, root, state, stderr); err != nil {
+		if r.Conform, err = conformRunner(ctx, o, state, stderr); err != nil {
 			return false, err
 		}
 	}
@@ -287,29 +286,25 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 	return rep.Passed, err
 }
 
-// conformRunner returns the agent role's conform tier's runner, the consumers' executables found,
-// their state under the state directory as evaluate conform keeps it, and the comparison row it is
-// judged against.
-func conformRunner(ctx context.Context, o options, root, state string, log io.Writer) (gate.Conform, *passk.Comparison, error) {
-	row, err := passk.LoadComparison(cmp.Or(o.comparison, filepath.Join(root, "evaluation", "comparison.toml")))
-	if err != nil {
-		return nil, nil, err
-	}
-	// The consumers run in working directories of their own and read the paths their drivers give
+// conformRunner returns the agent role's conform tier's runner, the harnesses' executables
+// found, their state under the state directory as evaluate conform keeps it.
+func conformRunner(ctx context.Context, o options, state string, log io.Writer) (gate.Conform, error) {
+	// The harnesses run in working directories of their own and read the paths their drivers give
 	// them from there, so the state directory is made absolute.
-	if state, err = filepath.Abs(state); err != nil {
-		return nil, nil, err
+	state, err := filepath.Abs(state)
+	if err != nil {
+		return nil, err
 	}
 	commands := map[string]string{}
 	for _, name := range passk.ConsumerNames {
 		if commands[name], err = consumers.Executable(ctx, o.consumers[name], name); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	return passk.Runner{
 		Commands: commands, State: filepath.Join(state, "conform"), ClaudeConfig: filepath.Join(state, "claude"),
 		Timeout: conformTimeout, Log: log,
-	}, &row, nil
+	}, nil
 }
 
 // conformTimeout bounds one conform capability, as evaluate conform's -timeout does by default.

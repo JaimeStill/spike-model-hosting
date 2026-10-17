@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JaimeStill/spike-model-hosting/evaluation/passk"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/tier"
 	"github.com/JaimeStill/spike-model-hosting/hosting/profile"
 	"github.com/JaimeStill/spike-model-hosting/hosting/router"
@@ -72,11 +71,9 @@ type Runner struct {
 	Vision Vision
 	Agent  Agent
 	Dir    string
-	// Conform runs the agent role's conform tier through the consumers, its recordings and table
-	// kept in the run's conform/, judged against Comparison, gpt-oss-120b's row
-	// (evaluation/comparison.toml).
-	Conform    Conform
-	Comparison *passk.Comparison
+	// Conform runs the agent role's conform tier, harness fit, through the harnesses, its
+	// recordings and table kept in the run's conform/.
+	Conform Conform
 	// Tiers is the directory of the tier lists the ASR sets, vision tiers and BFCL tiers run
 	// (TiersDir, under the module root).
 	Tiers string

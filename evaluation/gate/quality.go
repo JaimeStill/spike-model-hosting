@@ -189,7 +189,7 @@ func (r *Runner) quality(ctx context.Context, rep *Report) []Check {
 	t := target{model: r.Model, dir: r.Dir, judged: true}
 	var checks []Check
 	if slices.Contains(rep.Roles, RoleAgent) {
-		checks = append(checks, r.agentTiers(ctx, t)...)
+		checks = append(checks, r.agentTiers(ctx, rep, t)...)
 		if ctx.Err() != nil {
 			return checks
 		}

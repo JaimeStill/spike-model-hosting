@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/gate"
-	"github.com/JaimeStill/spike-model-hosting/evaluation/passk"
 	"github.com/JaimeStill/spike-model-hosting/hosting/profile"
 )
 
@@ -39,7 +38,7 @@ type harness struct {
 // newHarness returns a runner for model in set A against a fake router with set A loaded, the
 // committed floors, a pool with 3333MiB free, as set A left it idle on b11669, no bars, a fake uv
 // that answers each MTEB task, ASR set, vision tier and BFCL tier with its recorded result, and a
-// fake conform run whose consumers match the committed comparison row.
+// fake conform run in which Pi fits and Claude Code and OpenCode drop at their first trial.
 func newHarness(t *testing.T, model string) *harness {
 	t.Helper()
 	p, err := profile.Load(strixHalo)
@@ -59,11 +58,7 @@ func newHarness(t *testing.T, model string) *harness {
 		footprint: &fakeFootprint{free: []int{3333}},
 	}
 	h.uv = newFakeUV(t)
-	comparison, err := passk.LoadComparison("../comparison.toml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	h.conform = newFakeConform(comparison.K)
+	h.conform = newFakeConform(gate.ConformK)
 	tiers, err := filepath.Abs("testdata/tiers")
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +69,7 @@ func newHarness(t *testing.T, model string) *harness {
 		Footprint: h.footprint, SampleEvery: 5 * time.Millisecond, CrossEvery: 5 * time.Millisecond,
 		Media: gate.Media{PNG: []byte("png"), WAV: []byte("wav"), AudioSeconds: 6},
 		MTEB:  uv, ASR: uv, Vision: uv, Agent: uv, Dir: t.TempDir(), Tiers: tiers,
-		Conform: h.conform, Comparison: &comparison,
+		Conform: h.conform,
 	}
 	return h
 }

@@ -99,7 +99,7 @@ func TestConformRefusesUnknownSet(t *testing.T) {
 }
 
 // TestConformReportsSkippedConsumers shows a consumer whose cell can't run is reported, not
-// dropped: every trial skipped, every cell 0 of k, pass^k 0 and the bar failed, with the reason,
+// dropped: every trial skipped, every cell 0 of k, not fitting at its first trial, with the reason,
 // and the build named.
 func TestConformReportsSkippedConsumers(t *testing.T) {
 	var others atomic.Int32
@@ -114,7 +114,7 @@ func TestConformReportsSkippedConsumers(t *testing.T) {
 		"build b0-test, set a,",
 		"| pi | - | 0/2 skip | 0/2 skip |",
 		"| opencode | - |",
-		"pi: pass^2 0/9 (0.0%), 0 invalid: FAILS the bar",
+		"pi: does not fit: failed trial 1 of 2: skipped: need the pi executable",
 		"claude skipped a trial: need the claude executable",
 	} {
 		if !strings.Contains(out, want) {

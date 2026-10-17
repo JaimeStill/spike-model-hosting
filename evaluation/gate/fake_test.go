@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/JaimeStill/spike-harness-driver/clutch/conform"
 
@@ -235,18 +236,19 @@ func (f *fakeFootprint) Read(context.Context) (gate.Pool, error) {
 	return gate.Pool{UsedMiB: 98304 - free, TotalMiB: 98304}, nil
 }
 
-// fakeConform answers the conform tier with recorded trials, k a consumer, as passk.Runner would
-// have run them to the end, and records each plan it is given. Its Stop is the real runner's to
-// apply (TestQualityAgentConformStops runs that one).
+// fakeConform answers the conform tier with recorded trials, k a harness, and records each plan
+// it is given. With the plan's Drop it ends each harness's trials at its first failed one
+// (passk.Judge), as passk.Runner does, so a harness's trials past that never count.
 type fakeConform struct {
 	trials map[string][]passk.Trial
 	err    error
 	plans  []passk.Plan
 }
 
-// newFakeConform returns a fakeConform whose consumers match gpt-oss-120b's comparison row over
-// k trials: Pi passing every capability, Claude Code failing tool and skill and n/a on
-// dropped-image, and OpenCode failing skill twice with three invalid requests.
+// newFakeConform returns a fakeConform over k trials in which Pi passes every capability,
+// Claude Code fails tool and skill and is n/a on dropped-image, and OpenCode fails skill with
+// two invalid requests in its first trial, one in its second, and passes after: Pi fits, and
+// Claude Code and OpenCode drop at their first trial.
 func newFakeConform(k int) *fakeConform {
 	claude := conformReport("claude", map[string]conform.Status{"tool": conform.Fail, "skill": conform.Fail, "dropped-image": conform.NA})
 	f := &fakeConform{trials: map[string][]passk.Trial{}}
@@ -285,10 +287,18 @@ func (f *fakeConform) Run(_ context.Context, plan passk.Plan) (passk.Result, err
 	if f.err != nil {
 		return passk.Result{}, f.err
 	}
-	res := passk.Result{Trials: map[string][]passk.Trial{}}
-	for _, name := range plan.Consumers {
-		res.Trials[name] = f.trials[name]
-		res.Rows = append(res.Rows, passk.Tally(name, f.trials[name]))
+	res := passk.Result{Trials: map[string][]passk.Trial{}, Wall: map[string]time.Duration{}}
+	for _, h := range plan.Harnesses {
+		ts := f.trials[h.Name]
+		if plan.Drop {
+			if fit := passk.Judge(h.Name, ts, plan.K); fit.Failed() {
+				ts = ts[:fit.Trial]
+			}
+		}
+		res.Trials[h.Name] = ts
+		res.Wall[h.Name] = time.Duration(len(ts)) * time.Minute
+		fit := passk.Judge(h.Name, ts, plan.K)
+		res.Rows, res.Fits = append(res.Rows, fit.Row), append(res.Fits, fit)
 	}
 	return res, nil
 }

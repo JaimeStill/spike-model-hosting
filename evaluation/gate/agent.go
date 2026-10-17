@@ -1,11 +1,13 @@
 package gate
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +18,7 @@ import (
 )
 
 // AgentTier is one tier of the agent role's quality stage: a BFCL tier agent_quality.py runs, by
-// its --tier name, or conform's pass^k through the consumers.
+// its --tier name, or harness fit, conform's pass^k through the harnesses.
 type AgentTier struct {
 	// Name is agent_quality.py's tier, bfcl-single or bfcl-multi, or conform.
 	Name string
@@ -25,15 +27,20 @@ type AgentTier struct {
 }
 
 // AgentTiers are the agent role's tiers, in the order they run, cheapest first: BFCL's
-// single-turn questions, then its multi-turn conversations, then conform's pass^5 through Pi,
-// Claude Code and OpenCode. A tier that fails ends the stage before the next.
+// single-turn questions, then its multi-turn conversations, then harness fit, conform's pass^5
+// through every pinned harness (passk.Harnesses). A tier that fails ends the stage before the
+// next.
 var AgentTiers = []AgentTier{{"bfcl-single", 1}, {"bfcl-multi", 2}, {ConformTier, 3}}
 
-// ConformTier is the agent tier that runs conform's pass^k through the consumers.
+// ConformTier is the agent tier that runs conform's pass^k through the harnesses: harness fit.
 const ConformTier = "conform"
 
+// ConformK is the trials the conform tier asks of each harness: pass^5.
+const ConformK = 5
+
 // AgentCheck is an agent tier's check name, its list's name in TiersDir and its bar's in the
-// bars: agent-<tier>. The conform tier's checks are one a consumer, agent-conform-<consumer>.
+// bars: agent-<tier>. The conform tier records one check a harness, agent-conform-<harness>,
+// then its verdict, agent-conform.
 func AgentCheck(tierName string) string { return "agent-" + tierName }
 
 // Agent runs one BFCL tier on a router's agent model, the tier list at list, and leaves Inspect
@@ -55,19 +62,19 @@ func (u UV) Agent(ctx context.Context, router, model, tierName, list, out string
 	return nil
 }
 
-// Conform runs a plan of conform trials through the consumers: passk.Runner.
+// Conform runs a plan of conform trials through the harnesses: passk.Runner.
 type Conform interface {
 	Run(ctx context.Context, plan passk.Plan) (passk.Result, error)
 }
 
 // agentTiers runs the agent role's tiers on t's model in order, and stops at the first that
 // fails.
-func (r *Runner) agentTiers(ctx context.Context, t target) []Check {
+func (r *Runner) agentTiers(ctx context.Context, rep *Report, t target) []Check {
 	var checks []Check
 	for _, at := range AgentTiers {
 		var tierChecks []Check
 		if at.Name == ConformTier {
-			tierChecks = r.conformTier(ctx, at)
+			tierChecks = r.conformTier(ctx, rep, at)
 		} else {
 			tierChecks = []Check{r.bfclTier(ctx, t, at)}
 		}
@@ -158,22 +165,23 @@ func (r *Runner) bfclTier(ctx context.Context, tg target, t AgentTier) Check {
 	return ch
 }
 
-// ConformReport is the conform tier's table in its run directory's conform/: the build, the
-// comparison row, the consumers' cells and every trial that didn't pass.
+// ConformReport is the conform tier's table in its run directory's conform/: the model, the
+// build, each harness's cells and fit, and every trial that didn't pass.
 const ConformReport = "report.md"
 
-// conformTier runs conform's pass^k through Pi, Claude Code and OpenCode on the set's roles, the
-// chat model at its consumer reasoning setting, each trial's recording kept in the run
-// directory's conform/wire and the table in conform/report.md, and judges each consumer against
-// the comparison row (r.Comparison): a gated consumer must reach each of the row's cells and stay
-// at or under its invalid requests; one not gated is recorded. Every consumer runs its first
-// trial, the screening fifth at k = 5; after that the tier stops once a gated consumer can no
-// longer meet its row (passk.Comparison.Stop). Every model of the set must be loaded, since the
-// capabilities send images and audio to the set's other models.
-func (r *Runner) conformTier(ctx context.Context, t AgentTier) []Check {
+// conformTier runs harness fit: conform's pass^5 through every pinned harness (passk.Harnesses)
+// on the set's roles, the chat model at its consumer reasoning setting, each trial's recording
+// kept in the run directory's conform/wire and the table in conform/report.md. Every harness is
+// held to one absolute bar (passk.Judge): each applicable capability 5/5 and 0 invalid
+// requests, a capability it reports n/a excluded and noted. A harness drops at its first failed
+// trial, and the tier ends once every harness has dropped or run all five. Each harness's fit is
+// recorded, never failing on its own; the tier's verdict, agent-conform, fails only when no
+// harness fits. Every model of the set must be loaded, since the capabilities send images and
+// audio to the set's other models.
+func (r *Runner) conformTier(ctx context.Context, rep *Report, t AgentTier) []Check {
 	name := AgentCheck(ConformTier)
-	if r.Conform == nil || r.Comparison == nil || r.Dir == "" {
-		return []Check{broken(name, RoleAgent, errors.New("the runner has no conform runner, comparison row or run directory"))}
+	if r.Conform == nil || r.Dir == "" {
+		return []Check{broken(name, RoleAgent, errors.New("the runner has no conform runner or run directory"))}
 	}
 	if err := router.CheckLoaded(ctx, r.HTTP, r.Router, r.Set.Models...); err != nil {
 		return []Check{broken(name, RoleAgent, err)}
@@ -184,10 +192,9 @@ func (r *Runner) conformTier(ctx context.Context, t AgentTier) []Check {
 	if err := os.RemoveAll(dir); err != nil {
 		return []Check{broken(name, RoleAgent, err)}
 	}
-	cmp := r.Comparison
 	plan := passk.Plan{
-		Router: r.Router, Roles: r.Set.Roles, K: cmp.K, Consumers: passk.ConsumerNames,
-		Wire: filepath.Join(dir, "wire"), Stop: cmp.Stop,
+		Router: r.Router, Roles: r.Set.Roles, K: ConformK, Harnesses: passk.Harnesses,
+		Wire: filepath.Join(dir, "wire"), Drop: true,
 	}
 	if m := r.model(); m != nil {
 		plan.Reasoning = m.Consumers
@@ -196,7 +203,7 @@ func (r *Runner) conformTier(ctx context.Context, t AgentTier) []Check {
 	res, err := r.Conform.Run(ctx, plan)
 	wall := time.Since(began).Seconds()
 	if err == nil {
-		err = writeConform(filepath.Join(dir, ConformReport), res, cmp)
+		err = writeConform(filepath.Join(dir, ConformReport), res, rep)
 	}
 	if err != nil {
 		ch := broken(name, RoleAgent, err)
@@ -205,61 +212,62 @@ func (r *Runner) conformTier(ctx context.Context, t AgentTier) []Check {
 	}
 
 	var checks []Check
-	for _, row := range res.Rows {
-		checks = append(checks, judgeConsumer(row, res, cmp, t.Tier, wall))
+	var fit, unfit []string
+	for _, f := range res.Fits {
+		checks = append(checks, harnessFit(f, res.Wall[f.Row.Consumer], t.Tier))
+		if f.Fits {
+			fit = append(fit, f.Row.Consumer)
+		} else {
+			unfit = append(unfit, f.Row.Consumer)
+		}
 	}
-	return checks
+	verdict := measure(name, RoleAgent, float64(len(fit)), "harnesses fit", AtLeast, 1)
+	verdict.Values = map[string]float64{"wall_s": wall, "tier": float64(t.Tier), "harnesses": float64(len(res.Fits))}
+	verdict.Detail = fmt.Sprintf("tier %d; harness fit at pass^%d, model %s on %s; fit: %s; does not fit: %s",
+		t.Tier, ConformK, rep.Model, rep.Build, orNone(fit), orNone(unfit))
+	return append(checks, verdict)
 }
 
-// judgeConsumer is a consumer's conform check: its capabilities passed at k against the row's,
-// judged cell by cell for a gated consumer, recorded for one not gated. A gated consumer whose
-// trials the tier stopped short of k fails, whether it was the one out of reach or not: its
-// evidence is incomplete.
-func judgeConsumer(row passk.Row, res passk.Result, cmp *passk.Comparison, tierN int, wall float64) Check {
-	name := AgentCheck(ConformTier + "-" + row.Consumer)
-	want := cmp.Consumers[row.Consumer]
-	rowPassed := 0
-	for _, n := range want.Cells {
-		if n == cmp.K {
-			rowPassed++
-		}
+// harnessFit is a harness's record in the conform tier: whether it fits, the trials it ran, each
+// cell's passes over them, its invalid requests, the capabilities it excluded, why its first
+// failed trial failed, and its wall time. It is recorded, passed, whether or not the harness
+// fits: the tier's verdict judges the harnesses together.
+func harnessFit(f passk.Fit, wall time.Duration, tierN int) Check {
+	applicable := float64(f.Applicable())
+	ch := Check{
+		Name: AgentCheck(ConformTier + "-" + f.Row.Consumer), Role: RoleAgent,
+		Measured: &applicable, Unit: fmt.Sprintf("applicable capabilities at pass^%d", f.K), Passed: true,
 	}
-	unit := fmt.Sprintf("capabilities at pass^%d", cmp.K)
-	notes := []string{fmt.Sprintf("tier %d", tierN), fmt.Sprintf("%d trials of %d, %d invalid", row.K, cmp.K, row.Invalid)}
-	var ch Check
-	if want.Gated {
-		ch = measure(name, RoleAgent, float64(row.Passed()), unit, AtLeast, float64(rowPassed))
-		short := cmp.Judge(row)
-		ch.Passed = len(short) == 0
-		switch {
-		case res.Stopped != "" && row.K < cmp.K:
-			ch.Passed = false
-			notes = append(notes, "stopped early: "+res.Stopped)
-		case len(short) > 0:
-			notes = append(notes, "under the row: "+strings.Join(short, ", "))
-		default:
-			notes = append(notes, "each cell at or above the row's")
-		}
-	} else {
-		passed := float64(row.Passed())
-		ch = Check{Name: name, Role: RoleAgent, Measured: &passed, Unit: unit, Passed: true}
-		notes = append(notes, fmt.Sprintf("measured, not gated: the row's %d at pass^%d with %d invalid beside it", rowPassed, cmp.K, want.Invalid))
+	fits := 0.0
+	if f.Fits {
+		fits = 1
+	}
+	ch.Values = map[string]float64{
+		"fit": fits, "trials": float64(f.Row.K), "invalid": float64(f.Row.Invalid),
+		"wall_s": wall.Seconds(), "tier": float64(tierN),
 	}
 	var cells []string
-	ch.Values = map[string]float64{"wall_s": wall, "trials": float64(row.K), "invalid": float64(row.Invalid), "tier": float64(tierN)}
-	for _, c := range row.Cells {
+	for _, c := range f.Row.Cells {
 		ch.Values["cell_"+c.Capability] = float64(c.Pass)
-		cells = append(cells, fmt.Sprintf("%s %d/%d (row %d/%d)", c.Capability, c.Pass, row.K, want.Cells[c.Capability], cmp.K))
+		cell := fmt.Sprintf("%s %d/%d", c.Capability, c.Pass, f.Row.K)
+		if slices.Contains(f.Excluded, c.Capability) {
+			cell += " n/a"
+		}
+		cells = append(cells, cell)
 	}
-	notes = append(notes, strings.Join(cells, ", "),
-		fmt.Sprintf("comparison row %s on %s, %s", cmp.Model, cmp.Build, cmp.Date), "version "+row.Version)
-	ch.Detail = strings.Join(notes, "; ")
+	ch.Detail = strings.Join([]string{
+		fmt.Sprintf("tier %d", tierN), f.Verdict(),
+		fmt.Sprintf("%d trials of %d, %d invalid", f.Row.K, f.K, f.Row.Invalid),
+		strings.Join(cells, ", "), "version " + cmp.Or(f.Row.Version, "-"),
+		"recorded: the tier fails only when no harness fits",
+	}, "; ")
 	return ch
 }
 
-// writeConform writes the conform tier's table to path: the comparison row it was judged by,
-// whether it stopped early, the consumers' cells, and why each trial that didn't pass didn't.
-func writeConform(path string, res passk.Result, cmp *passk.Comparison) error {
+// writeConform writes the conform tier's table to path: the model and build it ran on, each
+// harness's cells and fit, each harness's verdict and wall time, and why each trial that didn't
+// pass didn't.
+func writeConform(path string, res passk.Result, rep *Report) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
@@ -267,18 +275,31 @@ func writeConform(path string, res passk.Result, cmp *passk.Comparison) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(f, "conform pass^%d, %s, judged against %s's row on %s (%s)\n", cmp.K, res.Elapsed.Round(time.Second), cmp.Model, cmp.Build, cmp.Source)
-	if err == nil && res.Stopped != "" {
-		_, err = fmt.Fprintf(f, "stopped early: %s\n", res.Stopped)
+	var walls []string
+	for _, fit := range res.Fits {
+		walls = append(walls, fmt.Sprintf("%s %s", fit.Row.Consumer, res.Wall[fit.Row.Consumer].Round(time.Second)))
+	}
+	_, err = fmt.Fprintf(f, "harness fit, conform pass^%d: model %s, build %s, set %s; %s (%s)\n\n",
+		ConformK, rep.Model, rep.Build, rep.Set, res.Elapsed.Round(time.Second), strings.Join(walls, ", "))
+	if err == nil {
+		err = passk.WriteTable(f, res.Fits)
 	}
 	if err == nil {
 		_, err = fmt.Fprintln(f)
 	}
 	if err == nil {
-		err = passk.WriteTable(f, res.Rows)
+		err = passk.WriteFits(f, res.Fits)
 	}
 	if err == nil {
 		err = passk.WriteReasons(f, res.Rows, res.Trials)
 	}
 	return errors.Join(err, f.Close())
+}
+
+// orNone joins names, or says none.
+func orNone(names []string) string {
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, ", ")
 }

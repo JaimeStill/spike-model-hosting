@@ -19,9 +19,6 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/hosting/profile"
 )
 
-// ConsumerNames are the consumers a run can take, in the order it runs and reports them.
-var ConsumerNames = []string{"pi", "claude", "opencode"}
-
 // Runner runs consumers' cells over the router: the executables, where their state lives, and
 // how long one capability may take.
 type Runner struct {
@@ -35,42 +32,49 @@ type Runner struct {
 	Timeout time.Duration
 	// Log takes a line as each trial and capability starts; nil discards it.
 	Log io.Writer
+
+	// runCell runs one cell once; nil is clutch's conform.Run. Tests replace it to script
+	// trials without a harness (export_test.go).
+	runCell func(context.Context, conform.Cell, conform.Options) conform.Report
 }
 
 // Plan is one run of k trials: the router, the set's roles, the chat model's consumer reasoning,
-// the consumers, where each trial's recording goes, and when to stop early.
+// the harnesses, where each trial's recording goes, and whether a harness drops at its first
+// failed trial.
 type Plan struct {
 	// Router is the router's root URL.
 	Router    string
 	Roles     profile.SetRoles
 	Reasoning profile.ConsumerReasoning
-	// K is the trials each consumer runs; Consumers, the consumers, in the order they run.
+	// K is the trials each harness runs; Harnesses, the harnesses, in the order they run.
 	K         int
-	Consumers []string
-	// Wire is the directory each consumer's trial's recording is saved in, as
-	// <consumer>-<trial>-<time>.jsonl.
+	Harnesses []Harness
+	// Wire is the directory each harness's trial's recording is saved in, as
+	// <harness>-<trial>-<time>.jsonl.
 	Wire string
-	// Stop, when set, is asked after each consumer's trial, once every consumer has run its
-	// first, whether the run can end: a non-empty reason ends it there.
-	Stop func(trials map[string][]Trial) string
+	// Drop, when set, drops a harness at its first trial that fails the fit bar (Judge): it
+	// runs no more trials, since none could bring it back. Unset, every harness runs all K.
+	Drop bool
 }
 
-// Result is a run's trials, by consumer, each consumer's Row, and why it stopped early, if it
-// did.
+// Result is a run's trials, by harness, each harness's Row and Fit, in the plan's order, its
+// wall time, and each harness's share of it.
 type Result struct {
 	Rows    []Row
+	Fits    []Fit
 	Trials  map[string][]Trial
-	Stopped string
 	Elapsed time.Duration
+	// Wall is each harness's time in its trials, by name.
+	Wall map[string]time.Duration
 }
 
-// Run runs plan: within each trial every consumer's cell once, consumer after consumer, each
+// Run runs plan: within each trial every harness's cell once, harness after harness, each
 // through a wire.Recorder of its own in front of the router, its recording saved under
-// plan.Wire. Every consumer runs its first trial, the run's screening fifth at k = 5; after that
-// plan.Stop may end it after any consumer's trial. It fails when a cell can't be built or a
-// recording can't be saved, or when ctx ends.
+// plan.Wire. With plan.Drop, a harness that fails the fit bar in a trial runs no more, and the
+// run ends once every harness has dropped or run all k. It fails when a cell can't be built or
+// a recording can't be saved, or when ctx ends.
 func (r Runner) Run(ctx context.Context, plan Plan) (Result, error) {
-	res := Result{Trials: map[string][]Trial{}}
+	res := Result{Trials: map[string][]Trial{}, Wall: map[string]time.Duration{}}
 	if err := os.MkdirAll(plan.Wire, 0o700); err != nil {
 		return res, err
 	}
@@ -84,29 +88,36 @@ func (r Runner) Run(ctx context.Context, plan Plan) (Result, error) {
 		},
 	}
 	start := time.Now()
-trials:
-	for k := 1; k <= plan.K; k++ {
-		for i, name := range plan.Consumers {
-			r.logf("== trial %d/%d: %s\n", k, plan.K, name)
-			t, err := r.trial(ctx, plan, name, k, opts)
+	dropped := map[string]bool{}
+	for k := 1; k <= plan.K && len(dropped) < len(plan.Harnesses); k++ {
+		for _, h := range plan.Harnesses {
+			if dropped[h.Name] {
+				continue
+			}
+			r.logf("== trial %d/%d: %s\n", k, plan.K, h.Name)
+			began := time.Now()
+			t, err := r.trial(ctx, plan, h, k, opts)
+			res.Wall[h.Name] += time.Since(began)
 			if err != nil {
 				return res, err
 			}
-			res.Trials[name] = append(res.Trials[name], t)
+			res.Trials[h.Name] = append(res.Trials[h.Name], t)
 			if err := ctx.Err(); err != nil {
 				return res, err
 			}
-			first := k == 1 && i < len(plan.Consumers)-1
-			if plan.Stop != nil && !first {
-				if res.Stopped = plan.Stop(res.Trials); res.Stopped != "" {
-					break trials
+			if plan.Drop {
+				if f := Judge(h.Name, res.Trials[h.Name], plan.K); f.Failed() {
+					dropped[h.Name] = true
+					r.logf("== %s %s\n", h.Name, f.Verdict())
 				}
 			}
 		}
 	}
 	res.Elapsed = time.Since(start)
-	for _, name := range plan.Consumers {
-		res.Rows = append(res.Rows, Tally(name, res.Trials[name]))
+	for _, h := range plan.Harnesses {
+		f := Judge(h.Name, res.Trials[h.Name], plan.K)
+		res.Rows = append(res.Rows, f.Row)
+		res.Fits = append(res.Fits, f)
 	}
 	return res, nil
 }
@@ -117,8 +128,8 @@ func (r Runner) logf(format string, args ...any) {
 	}
 }
 
-// trial runs one consumer's cell once, through a Recorder of its own, and saves the recording.
-func (r Runner) trial(ctx context.Context, plan Plan, name string, k int, opts conform.Options) (Trial, error) {
+// trial runs one harness's cell once, through a Recorder of its own, and saves the recording.
+func (r Runner) trial(ctx context.Context, plan Plan, h Harness, k int, opts conform.Options) (Trial, error) {
 	target, err := url.Parse(plan.Router)
 	if err != nil {
 		return Trial{}, err
@@ -133,7 +144,7 @@ func (r Runner) trial(ctx context.Context, plan Plan, name string, k int, opts c
 	defer func() { _ = srv.Close() }()
 
 	cfg := Config{
-		Command:      r.Commands[name],
+		Command:      r.Commands[h.Name],
 		Router:       "http://" + ln.Addr().String(),
 		Direct:       plan.Router,
 		State:        r.State,
@@ -141,22 +152,17 @@ func (r Runner) trial(ctx context.Context, plan Plan, name string, k int, opts c
 		Roles:        plan.Roles,
 		Reasoning:    plan.Reasoning,
 	}
-	var cell conform.Cell
-	switch name {
-	case "pi":
-		cell, err = Pi(cfg)
-	case "claude":
-		cell = Claude(cfg)
-	case "opencode":
-		cell, err = OpenCode(cfg)
-	default:
-		err = fmt.Errorf("no consumer %q; the consumers are %q", name, ConsumerNames)
-	}
+	cell, err := h.Cell(cfg)
 	if err != nil {
 		return Trial{}, err
 	}
-	rep := conform.Run(ctx, []conform.Cell{cell}, opts)[0]
-	path := filepath.Join(plan.Wire, fmt.Sprintf("%s-%d-%s.jsonl", name, k, time.Now().Format("20060102T150405")))
+	var rep conform.Report
+	if r.runCell != nil {
+		rep = r.runCell(ctx, cell, opts)
+	} else {
+		rep = conform.Run(ctx, []conform.Cell{cell}, opts)[0]
+	}
+	path := filepath.Join(plan.Wire, fmt.Sprintf("%s-%d-%s.jsonl", h.Name, k, time.Now().Format("20060102T150405")))
 	if err := save(rec, path); err != nil {
 		return Trial{}, err
 	}

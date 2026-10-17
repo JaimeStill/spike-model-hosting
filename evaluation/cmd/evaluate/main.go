@@ -15,7 +15,7 @@
 //
 // A step is one instrument, named as the first argument; the flags after it are the step's own:
 //
-//   - conform runs clutch's conformance suite k times per consumer and judges each by pass^k
+//   - conform runs clutch's conformance suite k times per harness and judges each harness's fit
 //     (package conformstep).
 //   - concurrent runs Pi, Claude Code and the model client against the router at once and checks
 //     every answer reached its own request (package concurrentstep).
@@ -54,7 +54,7 @@ type step struct {
 
 // steps are the instruments, in the order the usage lists them.
 var steps = []step{
-	{"conform", "run clutch's conformance suite k times per consumer, judged by pass^k", conformstep.Run},
+	{"conform", "run clutch's conformance suite k times per harness, judged by fit", conformstep.Run},
 	{"concurrent", "run Pi, Claude Code and the model client at once, each answer checked against its request", concurrentstep.Run},
 	{"prefix", "measure prefix-cache reuse for each generative model of a set", prefixstep.Run},
 	{"coldload", "time a router restart until every model of a set is loaded again", coldloadstep.Run},

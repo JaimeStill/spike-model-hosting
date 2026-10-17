@@ -1,7 +1,6 @@
 package passk_test
 
 import (
-	"math"
 	"net/http"
 	"testing"
 
@@ -38,50 +37,36 @@ func trials(k int, override map[int]conform.Report) []passk.Trial {
 	return ts
 }
 
-// TestTallyBar shows pass^k over the nine tasks and the bar at its boundary: nine of nine at 5
-// of 5 meets it, and one trial lost in one task leaves eight of nine, 88.9%, which fails it, as
-// does a single invalid request with nine of nine.
-func TestTallyBar(t *testing.T) {
-	if n := len(conform.Capabilities); n != 9 {
-		t.Fatalf("the suite has %d capabilities; this test's arithmetic is for 9", n)
+// TestTally counts each capability's passes and failures over k trials, with the reasons of
+// those that didn't pass, and the invalid requests over every trial.
+func TestTally(t *testing.T) {
+	ts := trials(5, map[int]conform.Report{3: report(map[string]conform.Status{"skill": conform.Fail})})
+	ts[2].Invalid = []wire.Exchange{{Path: "/v1/chat/completions", Status: http.StatusInternalServerError}}
+	r := passk.Tally("opencode", ts)
+	if r.K != 5 || r.Invalid != 1 || r.Version != "1.3.0" {
+		t.Errorf("row %+v; want 5 trials, 1 invalid, version 1.3.0", r)
 	}
-	all := passk.Tally("pi", trials(5, nil))
-	if all.K != 5 || all.Passed() != 9 || all.PassK() != 1 || !all.MeetsBar() {
-		t.Errorf("all passing: K %d, passed %d, pass^k %v, meets %v; want 5, 9, 1, true", all.K, all.Passed(), all.PassK(), all.MeetsBar())
-	}
-
-	oneLost := passk.Tally("opencode", trials(5, map[int]conform.Report{3: report(map[string]conform.Status{"skill": conform.Fail})}))
-	if oneLost.Passed() != 8 || math.Abs(oneLost.PassK()-8.0/9) > 1e-9 || oneLost.MeetsBar() {
-		t.Errorf("one trial lost: passed %d, pass^k %v, meets %v; want 8, 0.889, false", oneLost.Passed(), oneLost.PassK(), oneLost.MeetsBar())
-	}
-	skill := oneLost.Cells[4]
-	if skill.Capability != "skill" || skill.Pass != 4 || skill.Fail != 1 || skill.Passed(5) || len(skill.Reasons) != 1 {
+	skill := r.Cells[4]
+	if skill.Capability != "skill" || skill.Pass != 4 || skill.Fail != 1 || len(skill.Reasons) != 1 {
 		t.Errorf("skill = %+v; want 4 passes, 1 failure with its reason", skill)
 	}
-
-	ts := trials(5, nil)
-	ts[2].Invalid = []wire.Exchange{{Path: "/v1/chat/completions", Status: http.StatusInternalServerError}}
-	invalid := passk.Tally("pi", ts)
-	if invalid.Invalid != 1 || invalid.PassK() != 1 || invalid.MeetsBar() {
-		t.Errorf("one invalid request: invalid %d, pass^k %v, meets %v; want 1, 1, false", invalid.Invalid, invalid.PassK(), invalid.MeetsBar())
+	if tool := r.Cells[3]; tool.Capability != "tool" || tool.Pass != 5 || len(tool.Reasons) != 0 {
+		t.Errorf("tool = %+v; want 5 passes", tool)
 	}
 }
 
-// TestTallyNotPasses shows n/a and a skipped trial count against a task: a capability a consumer
-// can't run is not a pass.
+// TestTallyNotPasses shows n/a and a skipped trial counted apart from passes: a capability a
+// consumer can't run is not a pass, and a skipped trial is a skip in every capability.
 func TestTallyNotPasses(t *testing.T) {
 	na := report(map[string]conform.Status{"dropped-image": conform.NA})
 	r := passk.Tally("claude", trials(5, map[int]conform.Report{0: na, 1: na, 2: na, 3: na, 4: na}))
 	if c := r.Cells[7]; c.Capability != "dropped-image" || c.NA != 5 || c.Pass != 0 {
 		t.Errorf("dropped-image = %+v; want 5 n/a", c)
 	}
-	if r.Passed() != 8 || r.MeetsBar() {
-		t.Errorf("n/a in every trial: passed %d, meets %v; want 8, false", r.Passed(), r.MeetsBar())
-	}
 
 	skipped := passk.Tally("pi", trials(5, map[int]conform.Report{2: {Harness: "pi", Version: "-", Skipped: "need the pi executable: not found"}}))
-	if skipped.Passed() != 0 || len(skipped.Skipped) != 1 {
-		t.Errorf("one skipped trial: passed %d, skipped %q; want 0 and the reason", skipped.Passed(), skipped.Skipped)
+	if len(skipped.Skipped) != 1 {
+		t.Errorf("one skipped trial: skipped %q; want the reason", skipped.Skipped)
 	}
 	for _, c := range skipped.Cells {
 		if c.Pass != 4 || c.Skip != 1 || len(c.Reasons) != 1 || c.Reasons[0] != skipped.Skipped[0] {

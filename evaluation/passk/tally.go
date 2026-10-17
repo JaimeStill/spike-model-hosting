@@ -11,11 +11,6 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/evaluation/wire"
 )
 
-// Bar is the pass^k a consumer must reach, with no invalid request: OpenAI's bar for a gpt-oss
-// implementation is over 90%, which the spike reads as at least 90%. Over nine tasks only
-// nine of nine reach it: eight of nine is 88.9%.
-const Bar = 0.9
-
 // Trial is one run of a consumer's cell: what the suite found, and the consumer's model
 // requests the router answered with an error.
 type Trial struct {
@@ -46,9 +41,6 @@ type Cell struct {
 	// Reasons are the reasons of the trials that didn't pass, in trial order.
 	Reasons []string
 }
-
-// Passed reports whether every one of the k trials passed.
-func (c Cell) Passed(k int) bool { return k > 0 && c.Pass == k }
 
 // Tally counts a consumer's trials into its Row. A skipped trial counts as a skip in every
 // capability.
@@ -88,29 +80,6 @@ func Tally(consumer string, trials []Trial) Row {
 	}
 	return r
 }
-
-// Passed is the number of tasks, capabilities, that passed at k.
-func (r Row) Passed() int {
-	n := 0
-	for _, c := range r.Cells {
-		if c.Passed(r.K) {
-			n++
-		}
-	}
-	return n
-}
-
-// PassK is pass^k: the share of the tasks that passed at k.
-func (r Row) PassK() float64 {
-	if len(r.Cells) == 0 {
-		return 0
-	}
-	return float64(r.Passed()) / float64(len(r.Cells))
-}
-
-// MeetsBar reports whether the consumer meets the bar: no invalid request, and pass^k at
-// least Bar.
-func (r Row) MeetsBar() bool { return r.Invalid == 0 && r.PassK() >= Bar }
 
 // chatRoutes are the routes a consumer's model requests take: OpenAI chat and responses, and
 // Anthropic messages. Anthropic's count_tokens route, beneath messages, generates nothing.

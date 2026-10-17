@@ -30,8 +30,8 @@ var recordedAgent = map[string]struct{ samples, passes, requests int }{
 }
 
 // agentChecks are the checks the agent role's quality stage makes when every tier runs: one a
-// BFCL tier, then one a consumer of the conform tier.
-var agentChecks = []string{"agent-bfcl-single", "agent-bfcl-multi", "agent-conform-pi", "agent-conform-claude", "agent-conform-opencode"}
+// BFCL tier, then one a harness of the conform tier, then that tier's verdict.
+var agentChecks = []string{"agent-bfcl-single", "agent-bfcl-multi", "agent-conform-pi", "agent-conform-claude", "agent-conform-opencode", "agent-conform"}
 
 // checkNames returns the names of a stage's checks, in order.
 func checkNames(s *gate.StageResult) []string {
@@ -44,10 +44,11 @@ func checkNames(s *gate.StageResult) []string {
 
 // TestQualityAgent runs the agent model's quality stage with no bars: BFCL's single-turn tier,
 // then its multi-turn tier, through uv, each scored from Inspect's log and recorded with its
-// samples, passes, requests, data and releases, passing with no bar; then conform's pass^5
-// through the consumers, each consumer judged against the comparison row, which the fake's
-// consumers match. The conform run gets the set's roles, gpt-oss-120b's consumer reasoning, the
-// row's k and the run directory's recordings, and leaves its table there.
+// samples, passes, requests, data and releases, passing with no bar; then harness fit, conform's
+// pass^5 through every pinned harness. Pi completes its five trials and fits, while Claude Code
+// and OpenCode drop at their first: the role passes, any harness fitting. The conform run gets
+// the set's roles, gpt-oss-120b's consumer reasoning, k 5, every harness, the run directory's
+// recordings and Drop, and leaves its table, the fit profile, there.
 func TestQualityAgent(t *testing.T) {
 	h := newHarness(t, gptOSS)
 	rep := h.run(t, "", nil)
@@ -90,28 +91,45 @@ func TestQualityAgent(t *testing.T) {
 		t.Fatalf("conform ran %d times; want once", len(h.conform.plans))
 	}
 	plan := h.conform.plans[0]
-	if plan.Router != h.router.srv.URL || plan.Roles != h.runner.Set.Roles || plan.K != 5 || !equal(plan.Consumers, passk.ConsumerNames) ||
-		plan.Wire != filepath.Join(h.runner.Dir, "conform", "wire") || plan.Stop == nil {
-		t.Errorf("plan %+v; want the set's roles, k 5, every consumer, the run's recordings and the row's stop", plan)
+	if plan.Router != h.router.srv.URL || plan.Roles != h.runner.Set.Roles || plan.K != 5 || len(plan.Harnesses) != len(passk.Harnesses) ||
+		plan.Wire != filepath.Join(h.runner.Dir, "conform", "wire") || !plan.Drop {
+		t.Errorf("plan %+v; want the set's roles, k 5, every harness, the run's recordings and Drop", plan)
 	}
 	if plan.Reasoning.Pi != h.runner.Profile.Model(gptOSS).Consumers.Pi {
 		t.Errorf("reasoning %+v; want gpt-oss-120b's consumer reasoning", plan.Reasoning)
 	}
 	pi := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-pi")
-	if !pi.Passed || *pi.Measured != 9 || *pi.Floor != 9 || pi.Op != gate.AtLeast || pi.Values["cell_audio-tool"] != 5 || pi.Values["tier"] != 3 {
-		t.Errorf("pi %+v; want 9 of 9 against the row's 9, passed", pi)
+	if !pi.Passed || *pi.Measured != 9 || pi.Floor != nil || pi.Values["fit"] != 1 || pi.Values["trials"] != 5 ||
+		pi.Values["cell_audio-tool"] != 5 || pi.Values["wall_s"] != 300 || pi.Values["tier"] != 3 || !strings.Contains(pi.Detail, "fits: 9 applicable capabilities at 5/5") {
+		t.Errorf("pi %+v; want fit over 5 trials, its cells and wall time", pi)
 	}
 	claude := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-claude")
-	if !claude.Passed || *claude.Measured != 6 || *claude.Floor != 6 || !strings.Contains(claude.Detail, "tool 0/5 (row 0/5)") {
-		t.Errorf("claude %+v; want 6 of 9 against the row's 6, passed, its cells beside the row's", claude)
+	if !claude.Passed || *claude.Measured != 8 || claude.Values["fit"] != 0 || claude.Values["trials"] != 1 ||
+		!strings.Contains(claude.Detail, "does not fit: failed trial 1 of 5: tool FAIL: tool FAIL; skill FAIL: skill FAIL") ||
+		!strings.Contains(claude.Detail, "dropped-image 0/1 n/a") || !strings.Contains(claude.Detail, "excluded, n/a: dropped-image") {
+		t.Errorf("claude %+v; want recorded, not fitting after 1 trial, its failed cells and dropped-image excluded", claude)
 	}
 	opencode := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-opencode")
-	if !opencode.Passed || opencode.Floor != nil || *opencode.Measured != 8 || opencode.Values["invalid"] != 3 || !strings.Contains(opencode.Detail, "measured, not gated") {
-		t.Errorf("opencode %+v; want 8 of 9 and 3 invalid recorded, not gated", opencode)
+	if !opencode.Passed || opencode.Values["fit"] != 0 || opencode.Values["trials"] != 1 || opencode.Values["invalid"] != 2 ||
+		!strings.Contains(opencode.Detail, "invalid: POST /v1/chat/completions -> 500") {
+		t.Errorf("opencode %+v; want recorded, dropped at trial 1 with its 2 invalid requests", opencode)
+	}
+	verdict := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform")
+	if !verdict.Passed || *verdict.Measured != 1 || *verdict.Floor != 1 || verdict.Op != gate.AtLeast ||
+		!strings.Contains(verdict.Detail, "fit: pi; does not fit: claude, opencode") || !strings.Contains(verdict.Detail, "model "+gptOSS+" on b") {
+		t.Errorf("agent-conform %+v; want passed, Pi fitting", verdict)
 	}
 	table, err := os.ReadFile(filepath.Join(h.runner.Dir, "conform", gate.ConformReport))
-	if err != nil || !strings.Contains(string(table), "| pi | pi 1.0.0 | 5/5 |") || !strings.Contains(string(table), "b11669-620d2225c") {
-		t.Errorf("conform table %q, %v; want the consumers' cells and the row's build", table, err)
+	for _, want := range []string{
+		"harness fit, conform pass^5: model " + gptOSS, "pi 5m0s, claude 1m0s, opencode 1m0s",
+		"| pi | pi 1.0.0 | 5/5 |", "| 5/5 | 0 | yes |",
+		"| claude | claude 1.0.0 | 1/1 | 1/1 | 1/1 | 0/1 | 0/1 | 1/1 | 1/1 | 0/1 n/a | 1/1 | 1/5 | 0 | no |",
+		"| 1/5 | 2 | no |", "claude: does not fit: failed trial 1 of 5: tool FAIL",
+		"opencode trial 1 invalid: POST /v1/chat/completions -> 500",
+	} {
+		if err != nil || !strings.Contains(string(table), want) {
+			t.Errorf("conform table lacks %q (%v):\n%s", want, err, table)
+		}
 	}
 }
 
@@ -157,39 +175,42 @@ func TestQualityAgentBars(t *testing.T) {
 	}
 }
 
-// TestQualityAgentConform judges each gated consumer cell by cell against the comparison row:
-// Claude Code losing one audio-tool trial, a cell the row holds at 5/5, fails it and the stage,
-// naming the cell; OpenCode doing worse than its row is recorded and never fails.
+// TestQualityAgentConform shows the role's verdict on the harnesses together: with Pi dropping
+// at its first trial too, on a failed vision cell, no harness fits and the tier fails, the stage
+// and run with it, each harness's fit recorded; with OpenCode passing every trial instead of
+// failing, two harnesses fit.
 func TestQualityAgentConform(t *testing.T) {
 	h := newHarness(t, gptOSS)
-	lost := conformReport("claude", map[string]conform.Status{"tool": conform.Fail, "skill": conform.Fail, "dropped-image": conform.NA, "audio-tool": conform.Fail})
-	h.conform.trials["claude"][3] = passk.Trial{Report: lost}
-	for i := range h.conform.trials["opencode"] {
-		h.conform.trials["opencode"][i] = passk.Trial{Report: conformReport("opencode", map[string]conform.Status{"vision": conform.Fail})}
-	}
+	h.conform.trials["pi"][0] = passk.Trial{Report: conformReport("pi", map[string]conform.Status{"vision": conform.Fail})}
 	rep := h.run(t, "", nil)
 	q := rep.Stage(gate.StageQuality)
-	if q.Status != gate.StatusFail || !equal(checkNames(q), agentChecks) {
+	if q.Status != gate.StatusFail || !equal(checkNames(q), agentChecks) || rep.Passed {
 		t.Fatalf("quality %+v; want failed, every check made", q)
 	}
-	claude := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-claude")
-	if claude.Passed || *claude.Measured != 5 || !strings.Contains(claude.Detail, "under the row: audio-tool 4/5 under the row's 5/5") {
-		t.Errorf("claude %+v; want failed on audio-tool", claude)
+	pi := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-pi")
+	if !pi.Passed || pi.Values["fit"] != 0 || pi.Values["trials"] != 1 || !strings.Contains(pi.Detail, "failed trial 1 of 5: vision FAIL: vision FAIL") {
+		t.Errorf("pi %+v; want recorded, dropped at trial 1 on vision", pi)
 	}
-	if c := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-opencode"); !c.Passed || *c.Measured != 8 {
-		t.Errorf("opencode %+v; want recorded, 8 of 9, passed", c)
+	verdict := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform")
+	if verdict.Passed || *verdict.Measured != 0 || !strings.Contains(verdict.Detail, "fit: none; does not fit: pi, claude, opencode") {
+		t.Errorf("agent-conform %+v; want failed, no harness fitting", verdict)
 	}
-	if c := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-pi"); !c.Passed {
-		t.Errorf("pi %+v; want passed", c)
+
+	h = newHarness(t, gptOSS)
+	for i := range h.conform.trials["opencode"] {
+		h.conform.trials["opencode"][i] = passk.Trial{Report: conformReport("opencode", nil)}
+	}
+	rep = h.run(t, "", nil)
+	if c := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform"); !c.Passed || *c.Measured != 2 || !strings.Contains(c.Detail, "fit: pi, opencode; does not fit: claude") {
+		t.Errorf("agent-conform %+v; want Pi and OpenCode fitting", c)
 	}
 }
 
-// TestQualityAgentConformStops runs the conform tier on passk's own runner with consumers whose
+// TestQualityAgentConformDrops runs the conform tier on passk's own runner with harnesses whose
 // executables don't exist, as evaluate conform's tests do: every trial is skipped and sends
-// nothing, so after the first trial, the screening fifth, Pi can't reach its row and the tier
-// stops. Pi fails, out of reach; Claude Code fails too, its evidence cut short; OpenCode is
-// recorded.
-func TestQualityAgentConformStops(t *testing.T) {
+// nothing, so each harness drops at its first trial, none fits, and the tier fails, naming the
+// skips in the table.
+func TestQualityAgentConformDrops(t *testing.T) {
 	h := newHarness(t, gptOSS)
 	state := t.TempDir()
 	h.runner.Conform = passk.Runner{
@@ -199,21 +220,20 @@ func TestQualityAgentConformStops(t *testing.T) {
 	rep := h.run(t, "", nil)
 	q := rep.Stage(gate.StageQuality)
 	if q.Status != gate.StatusFail || !equal(checkNames(q), agentChecks) {
-		t.Fatalf("quality %+v; want failed, a check a consumer", q)
+		t.Fatalf("quality %+v; want failed, a check a harness and the verdict", q)
 	}
-	pi := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-pi")
-	if pi.Passed || pi.Values["trials"] != 1 || !strings.Contains(pi.Detail, "stopped early: pi's exchange can reach at most 4/5 after 1 trials") {
-		t.Errorf("pi %+v; want failed, stopped after its first trial", pi)
+	for _, name := range passk.ConsumerNames {
+		c := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-"+name)
+		if c.Values["trials"] != 1 || c.Values["fit"] != 0 || !strings.Contains(c.Detail, "failed trial 1 of 5: skipped: need the "+name+" executable") {
+			t.Errorf("%s %+v; want dropped after its skipped first trial", name, c)
+		}
 	}
-	if c := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-claude"); c.Passed || !strings.Contains(c.Detail, "stopped early") {
-		t.Errorf("claude %+v; want failed, stopped early", c)
-	}
-	if c := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform-opencode"); !c.Passed {
-		t.Errorf("opencode %+v; want recorded", c)
+	if c := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-conform"); c.Passed {
+		t.Errorf("agent-conform %+v; want failed", c)
 	}
 	table, err := os.ReadFile(filepath.Join(h.runner.Dir, "conform", gate.ConformReport))
-	if err != nil || !strings.Contains(string(table), "stopped early: pi's exchange") || !strings.Contains(string(table), "pi skipped a trial") {
-		t.Errorf("conform table %q, %v; want the stop and the skips", table, err)
+	if err != nil || !strings.Contains(string(table), "pi: does not fit: failed trial 1 of 5: skipped") || !strings.Contains(string(table), "pi skipped a trial") {
+		t.Errorf("conform table %q, %v; want the drops and the skips", table, err)
 	}
 }
 
@@ -234,7 +254,7 @@ func TestQualityAgentBroken(t *testing.T) {
 			"agent-bfcl-single", "its bar belongs under [bars]"},
 		"conform errs":       {func(h *harness) { h.conform.err = errors.New("no cell") }, "agent-conform", "no cell"},
 		"set model unloaded": {func(h *harness) { h.router.status[gemmaE4B] = "unloaded" }, "agent-conform", gemmaE4B},
-		"no comparison":      {func(h *harness) { h.runner.Comparison = nil }, "agent-conform", "no conform runner, comparison row"},
+		"no conform runner":  {func(h *harness) { h.runner.Conform = nil }, "agent-conform", "no conform runner"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
