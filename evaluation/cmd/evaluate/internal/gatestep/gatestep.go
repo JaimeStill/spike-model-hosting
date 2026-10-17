@@ -10,8 +10,8 @@
 // chat role; chat is accepted), vision, audio or embedding. The set is -set, or SPIKE_SET, or
 // else the profile's startup set; with -model and no set named, it is the startup set when that
 // assigns the model a role, or else the first set that does. The run judges each role the set
-// assigns the model; its set stage runs every role's tier 1, its own on it beside the set's other
-// role models.
+// assigns the model; its set stage runs the model's own tier 1 under load from the set's other
+// role models, taking the alone figure from its quality stage.
 //
 // A set run names -set on the command line and neither -role nor -model: it takes the set stage
 // alone, every role's tier 1 on the model the set assigns it, alone and then at once, and needs
@@ -22,6 +22,8 @@
 // results of the stages before it from an earlier run of the same model: the run directory -run
 // names, or else the model's newest under the state directory. Each stage before -from must
 // have passed there, and the resumed run's report replaces that run's, in the same directory.
+// -from set also needs that run's quality records of the model's tier 1, which the set stage
+// reuses as its alone figure.
 //
 // The report is <state>/evaluate/<UTC time>-<model>/report.json, the state directory being
 // -state, or SPIKE_STATE_DIR, or else the module root's untracked .state/. A summary of it goes
@@ -37,7 +39,7 @@
 // in the run directory's mteb/<task>, Inspect's JSON log for each ASR set in its asr/<set>, each
 // vision tier's logs in its vision/<tier>/logs and each BFCL tier's in its agent/<tier>/logs; the
 // datasets download into the state directory's cache/. The set stage runs the same suites on
-// every role's tier 1, its output under the run directory's set/alone/ and set/concurrent/,
+// tier 1s, its output under the run directory's set/alone/ (a set run's) and set/concurrent/,
 // laid out as the quality stage's. The agent role's conform tier, harness fit, runs every pinned
 // harness (Pi, Claude Code and OpenCode), each -pi, -claude and -opencode, or SPIKE_PI,
 // SPIKE_CLAUDE and SPIKE_OPENCODE, or else the consumers mise environment's pin, their state

@@ -5,7 +5,9 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/gate"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/tier"
@@ -117,15 +119,77 @@ func TestSetRun(t *testing.T) {
 	}
 }
 
-// TestSetModelRun shows a model's run takes the set stage after quality, every role of the set
-// running its tier 1 beside the model's own, and resumes from it.
+// TestSetModelRun shows a model's run takes the set stage after quality: the model's tier 1
+// runs once, under load from the set's other role models, beside its quality tier 1 as the alone
+// figure, which it never reruns; the other roles run no tier, and their load stops with the
+// model's tiers. It resumes from the set stage.
 func TestSetModelRun(t *testing.T) {
 	h := newHarness(t, gemma26B)
 	first := h.run(t, "", nil)
-	if s := first.Stage(gate.StageSet); s.Status != gate.StatusPass || len(h.uv.setCalls(t)) != 10 {
-		t.Fatalf("set %s with %d uv calls; want pass, 10", s.Status, len(h.uv.setCalls(t)))
+	if s := first.Stage(gate.StageSet); s.Status != gate.StatusPass {
+		t.Fatalf("set %s; want pass\n%+v", s.Status, s.Checks)
 	}
-	check(t, first, gate.StageSet, gate.RoleAgent, "agent-bfcl-single concurrent")
+	// The load stopped when the model's tiers finished: nothing reaches the other models after.
+	after := h.router.count("capacity") + h.router.count("embeddings")
+	time.Sleep(50 * time.Millisecond)
+	if n := h.router.count("capacity") + h.router.count("embeddings"); n != after {
+		t.Errorf("%d requests after the run returned; want the load stopped with the tiers", n-after)
+	}
+
+	// Only the model's own units ran, once, in the concurrent phase, on its model, with no bar.
+	calls := h.uv.setCalls(t)
+	if len(calls) != len(setUnits[gate.RoleVision]) {
+		t.Fatalf("%d set stage uv calls; want the vision tier 1's %d:\n%s", len(calls), len(setUnits[gate.RoleVision]), strings.Join(calls, "\n"))
+	}
+	for _, c := range calls {
+		args, _, _ := strings.Cut(c, "|")
+		if !strings.Contains(args, "/set/concurrent/vision/") || !strings.Contains(args, "--model "+gemma26B+" ") || strings.Contains(args, "--bar") {
+			t.Errorf("set stage call %s; want the vision tier on %s, concurrent, no bar", args, gemma26B)
+		}
+	}
+
+	// Each concurrent unit carries its quality record as the alone figure; no unit runs alone.
+	for _, u := range setUnits[gate.RoleVision] {
+		q := check(t, first, gate.StageQuality, gate.RoleVision, u)
+		c := check(t, first, gate.StageSet, gate.RoleVision, u+" concurrent")
+		if c.Values["alone_score"] != *q.Measured || c.Values["alone_wall_s"] != q.Values["wall_s"] ||
+			c.Values["slowdown"] != c.Values["wall_s"]/q.Values["wall_s"] {
+			t.Errorf("%s concurrent values %v; want quality's score %v and wall %v as the alone figure", u, c.Values, *q.Measured, q.Values["wall_s"])
+		}
+	}
+	for _, c := range first.Stage(gate.StageSet).Checks {
+		if strings.HasSuffix(c.Name, " alone") {
+			t.Errorf("a model run's set stage ran %s", c.Name)
+		}
+	}
+	s := check(t, first, gate.StageSet, gate.RoleVision, "tier 1 slowdown")
+	qWall := check(t, first, gate.StageQuality, gate.RoleVision, "vision-probe").Values["wall_s"] +
+		check(t, first, gate.StageQuality, gate.RoleVision, "vision-vstar").Values["wall_s"]
+	if s.Measured == nil || s.Values["alone_wall_s"] != qWall || !strings.Contains(s.Detail, "its quality tier 1") {
+		t.Errorf("slowdown %+v; want the concurrent wall over quality's tier 1 wall, %v", s, qWall)
+	}
+
+	// The other roles carried load, recorded as load, not as scored tiers.
+	workers := map[string]float64{gate.RoleAgent: 4, gate.RoleAudio: 1, gate.RoleEmbedding: 4}
+	for role, w := range workers {
+		l := check(t, first, gate.StageSet, role, "load")
+		if !l.Passed || l.Measured == nil || l.Values["errors"] != 0 || l.Values["workers"] != w || l.Values["window_s"] <= 0 || l.Floor != nil {
+			t.Errorf("%s load %+v; want answered requests from %v workers over the window, recorded, unjudged", role, l, w)
+		}
+	}
+	// The fake answers a chat in well under a millisecond, and the tiers' uv calls each take longer.
+	if l := check(t, first, gate.StageSet, gate.RoleAgent, "load"); l.Values["requests"] < 1 || *l.Measured <= 0 {
+		t.Errorf("agent load %+v; want answered requests", l)
+	}
+	for _, c := range first.Stage(gate.StageSet).Checks {
+		if c.Role == gate.RoleVision && c.Name == "load" {
+			t.Error("the model's own role carried load")
+		}
+	}
+	check(t, first, gate.StageSet, "", "no crossed answer")
+	if p := check(t, first, gate.StageSet, "", "peak pool free"); !strings.Contains(p.Detail, "under load") {
+		t.Errorf("peak pool free %q; want it over the window the model's tier ran under load", p.Detail)
+	}
 
 	quality := len(h.uv.calls(t))
 	rep := h.run(t, gate.StageSet, first)
@@ -133,8 +197,12 @@ func TestSetModelRun(t *testing.T) {
 	if got := statuses(rep); !equal(got, want) || !rep.Stage(gate.StageQuality).Reused || rep.Stage(gate.StageSet).Reused {
 		t.Fatalf("resumed %q; want %q, quality reused, set run", got, want)
 	}
-	if len(h.uv.calls(t)) != quality || len(h.uv.setCalls(t)) != 20 {
+	if len(h.uv.calls(t)) != quality || len(h.uv.setCalls(t)) != 2*len(calls) {
 		t.Errorf("the resumed run reran quality, or not the set stage")
+	}
+	if c := check(t, rep, gate.StageSet, gate.RoleVision, "vision-vstar concurrent"); c.Values["alone_wall_s"] !=
+		check(t, first, gate.StageQuality, gate.RoleVision, "vision-vstar").Values["wall_s"] {
+		t.Errorf("resumed V*Bench %v; want the resumed run's quality record as the alone figure", c.Values)
 	}
 
 	// A run whose quality failed can't be resumed past it.
@@ -144,6 +212,62 @@ func TestSetModelRun(t *testing.T) {
 	if _, err := h.runner.Run(t.Context(), gate.StageSet, &failed); err == nil || !strings.Contains(err.Error(), "quality fail") {
 		t.Errorf("resuming past a failed quality: %v; want an error naming it", err)
 	}
+
+	// Nor one whose quality holds no record of a tier 1 unit: there is no alone figure to reuse.
+	missing := *first
+	missing.Stages = slices.Clone(first.Stages[:4])
+	q := missing.Stages[3]
+	q.Checks = slices.DeleteFunc(slices.Clone(q.Checks), func(c gate.Check) bool { return c.Name == "vision-vstar" })
+	missing.Stages[3] = q
+	before := len(h.uv.setCalls(t))
+	if _, err := h.runner.Run(t.Context(), gate.StageSet, &missing); err == nil ||
+		!strings.Contains(err.Error(), "can't resume from set") || !strings.Contains(err.Error(), "vision-vstar") {
+		t.Errorf("resuming without a quality tier 1 record: %v; want a refusal naming the unit", err)
+	}
+	if len(h.uv.setCalls(t)) != before {
+		t.Error("the refused run ran the set stage")
+	}
+}
+
+// TestSetModelRunGates shows a model run's set stage fails on the pool under its floor while
+// its tiers run under load, and on a background role whose load is never answered.
+func TestSetModelRunGates(t *testing.T) {
+	t.Run("pool", func(t *testing.T) {
+		h := newHarness(t, gemma26B)
+		var mu sync.Mutex
+		inSet := false
+		h.runner.Footprint = footprintFunc(func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			// The set stage's load and crossing send nonce requests to the other roles' models;
+			// capacity sends them only to the model's.
+			if inSet || h.router.count("capacity true "+gptOSS)+h.router.count("capacity false "+gptOSS) > 0 {
+				inSet = true
+				return 3000
+			}
+			return 3333
+		})
+		rep := h.run(t, "", nil)
+		if s := rep.Stage(gate.StageSet).Status; s != gate.StatusFail || rep.Passed {
+			t.Errorf("set %s, passed %v; want failed", s, rep.Passed)
+		}
+		if p := check(t, rep, gate.StageSet, "", "peak pool free"); p.Passed || *p.Measured != 3000 {
+			t.Errorf("peak pool free %+v; want a failure at 3000", p)
+		}
+	})
+	t.Run("load refused", func(t *testing.T) {
+		h := newHarness(t, gemma26B)
+		first := h.run(t, "", nil)
+		h.router.refuse = gemmaE4B
+		rep := h.run(t, gate.StageSet, first)
+		l := check(t, rep, gate.StageSet, gate.RoleAudio, "load")
+		if l.Passed || l.Values["requests"] != 0 || l.Values["errors"] < 1 || !strings.Contains(l.Detail, "none of "+gemmaE4B) {
+			t.Errorf("audio load %+v; want a failure, none answered", l)
+		}
+		if rep.Stage(gate.StageSet).Status != gate.StatusFail {
+			t.Error("the set stage passed a load that was never answered")
+		}
+	})
 }
 
 // TestSetGates shows the set stage fails on the pool under its floor while every tier runs at

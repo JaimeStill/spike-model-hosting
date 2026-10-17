@@ -72,19 +72,27 @@
 //     it too). Each check records the samples run and passed, the request and wall time, the
 //     dataset's revision, the tasks' inspect_evals versions and Inspect's release, and, for a
 //     tier the model's card reports, the card's figure beside ours.
-//   - Set runs each role's tier 1 (TierOne) on the model the set assigns the role: the agent's
-//     BFCL single-turn, the vision probe and V*Bench, the audio role's LibriSpeech test-clean and
-//     the embedding role's STSBenchmark, the cheapest of its MTEB tasks. Each runs alone, role
-//     after role, then every role's at once, all of the set's models loaded, through the quality
-//     stage's suites, whole and without their bars; each unit's score and wall time are recorded
-//     in both phases, the concurrent one beside the alone one's with its change and slowdown, and
-//     each role's tier 1 slowdown, never judged. The stage gates the concurrent phase: the pool's
-//     least free memory, read as capacity reads it, against the pool's floor, and no crossed
-//     answer, from rounds of capacity's nonce requests sent to every role's model at once, every
-//     Runner.CrossEvery, while the tiers run, each answer carrying its own nonce and no other and
-//     each embedding vector its own input's; a request that errored or came back empty is
-//     recorded unanswered, not crossed, so long as each role had one checked. Its output is in the run's set/alone and
-//     set/concurrent.
+//   - Set runs tier 1s (TierOne) on the set's role models, all of them loaded: the agent's BFCL
+//     single-turn, the vision probe and V*Bench, the audio role's LibriSpeech test-clean and the
+//     embedding role's STSBenchmark, the cheapest of its MTEB tasks, through the quality stage's
+//     suites, whole and without their bars. A set run runs each role's alone, role after role,
+//     then every role's at once. A model run takes each of its roles' alone figure, score and
+//     wall time, from its quality stage's tier 1 records, the same lists at the same settings,
+//     and runs only its own roles' tier 1s, at once, while each of the set's other role models
+//     carries load for exactly that window: capacity's request for the role, sent one after
+//     another by as many workers as its tier 1 keeps in flight (four, or one for audio), started
+//     with the model's tiers and stopped when they finish, and recorded as load (requests
+//     answered and errored, requests and tokens a second), never as a scored tier. Each unit's
+//     score and wall time are recorded, the concurrent one beside the alone one's with its
+//     change and slowdown, and each role's tier 1 slowdown, never judged. The stage gates the
+//     concurrent phase: the pool's least free memory, read as capacity reads it, against the
+//     pool's floor, and no crossed answer, from rounds of capacity's nonce requests sent to every
+//     role's model at once, every Runner.CrossEvery, while the tiers run, each answer carrying
+//     its own nonce and no other and each embedding vector its own input's; a request that
+//     errored or came back empty is recorded unanswered, not crossed, so long as each role had
+//     one checked. A load whose every finished request errored fails it too. Its output is in the
+//     run's set/alone and set/concurrent. A run resumed at the set stage needs the quality
+//     records it reuses, and is refused without them.
 //
 // Every request carries autoload=false; a run refuses a model the router doesn't list loaded
 // before any stage, and never loads one.

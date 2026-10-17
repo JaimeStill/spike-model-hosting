@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"maps"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/concurrent"
@@ -113,18 +115,25 @@ const (
 	phaseConcurrent = "concurrent"
 )
 
-// set runs the set stage: each role of the set runs its tier 1 (TierOne) on the model the set
-// assigns it, first alone, one role after another, then every role's at once, against the set's
-// loaded models. A model run evaluates its model in its own roles beside the set's other role
-// models; a set run, every role's assigned model. The units run whole, without their bars, and
-// their scores are recorded, never judged: a tier's bar judges a model alone, in its quality
-// stage, and the set stage holds the set to its memory and crossing. The stage gates two things, both over the
-// concurrent phase: the pool's least free memory, read as capacity reads it, against the pool's
-// floor; and no crossed answer, from rounds of nonce requests sent to every role's model at once
-// while the tiers run (crossing). A unit that can't run fails the stage too, as a measurement
-// that couldn't be taken. Each unit's output is kept in the run directory's set/alone and
+// set runs the set stage against the set's loaded models, in one of two forms.
+//
+// A set run (no Model) runs each role's tier 1 (TierOne) on the model the set assigns it, first
+// alone, one role after another, then every role's at once (setRun).
+//
+// A model run takes the alone figure for each of its roles from the run's quality stage, whose
+// tier 1 runs the same list at the same settings (qualityTierOne), and runs only its own roles'
+// tier 1s, all at once, while the set's other role models carry load for exactly that window
+// (setModelRun).
+//
+// Either way the units run whole, without their bars, and their scores are recorded, never
+// judged: a tier's bar judges a model alone, in its quality stage, and the set stage holds the
+// set to its memory and crossing. The stage gates two things over the concurrent phase
+// (window): the pool's least free memory, read as capacity reads it, against the pool's floor;
+// and no crossed answer, from rounds of nonce requests sent to every role's model at once while
+// the tiers run (crossing). A unit that can't run fails the stage too, as a measurement that
+// couldn't be taken. Each unit's output is kept in the run directory's set/alone and
 // set/concurrent.
-func (r *Runner) set(ctx context.Context, _ *Report) []Check {
+func (r *Runner) set(ctx context.Context, rep *Report) []Check {
 	roles := r.assignments()
 	models := make([]string, len(roles))
 	for i, a := range roles {
@@ -136,15 +145,25 @@ func (r *Runner) set(ctx context.Context, _ *Report) []Check {
 	if r.Dir == "" {
 		return []Check{broken("set loaded", "", errors.New("the runner has no run directory"))}
 	}
-	targetOf := func(a assignment, phase string) target {
-		return target{model: a.model, dir: filepath.Join(r.Dir, "set", phase)}
+	if r.Model == "" {
+		return r.setRun(ctx, roles)
 	}
+	return r.setModelRun(ctx, rep, roles)
+}
 
+// targetOf is where a's tier 1 runs in the set stage's phase: on a's model, its output under
+// the run directory's set/<phase>.
+func (r *Runner) targetOf(a assignment, phase string) target {
+	return target{model: a.model, dir: filepath.Join(r.Dir, "set", phase)}
+}
+
+// setRun is a set run's set stage: every role's tier 1 alone, role after role, then all at once.
+func (r *Runner) setRun(ctx context.Context, roles []assignment) []Check {
 	alone := map[string][]Check{}
 	aloneFree := map[string]Pool{}
 	for _, a := range roles {
 		r.logf("evaluate: set: %s tier 1 alone on %s\n", a.role, a.model)
-		low, readings, _ := r.during(ctx, func() { alone[a.role] = r.tierOne(ctx, targetOf(a, phaseAlone), a.role) })
+		low, readings, _ := r.during(ctx, func() { alone[a.role] = r.tierOne(ctx, r.targetOf(a, phaseAlone), a.role) })
 		if readings > 0 {
 			aloneFree[a.role] = low
 		}
@@ -158,49 +177,275 @@ func (r *Runner) set(ctx context.Context, _ *Report) []Check {
 	}
 
 	r.logf("evaluate: set: every role's tier 1 at once\n")
-	c := &client{base: r.Router, hc: r.HTTP}
 	together := map[string][]Check{}
 	var mu sync.Mutex
-	var cross crossing
-	began := time.Now()
-	low, readings, readErr := r.during(ctx, func() {
-		done := make(chan struct{})
-		var probe sync.WaitGroup
-		probe.Go(func() { cross = r.cross(ctx, c, roles, done) })
+	w := r.window(ctx, roles, func() {
 		var tiers sync.WaitGroup
 		for _, a := range roles {
 			tiers.Go(func() {
-				checks := r.tierOne(ctx, targetOf(a, phaseConcurrent), a.role)
+				checks := r.tierOne(ctx, r.targetOf(a, phaseConcurrent), a.role)
 				mu.Lock()
 				together[a.role] = checks
 				mu.Unlock()
 			})
 		}
 		tiers.Wait()
-		close(done)
-		probe.Wait()
 	})
-	phase := time.Since(began).Seconds()
 
 	var checks []Check
 	for _, a := range roles {
 		checks = append(checks, phased(alone[a.role], phaseAlone, nil)...)
 		checks = append(checks, phased(together[a.role], phaseConcurrent, alone[a.role])...)
-		ch := slowdown(a.role, alone[a.role], together[a.role])
+		ch := slowdown(a.role, alone[a.role], together[a.role], "")
 		if p, ok := aloneFree[a.role]; ok {
 			ch.Values["alone_pool_free_min_mib"] = float64(p.FreeMiB())
 		}
 		checks = append(checks, ch)
 	}
-	checks = append(checks, cross.check())
-	if readings == 0 {
-		return append(checks, broken("peak pool free", "", readErr))
+	return append(checks, w.gates(r.Floors.Pool.FreeMiB, "every role's tier 1 ran at once")...)
+}
+
+// setModelRun is a model run's set stage. Its alone figures are the quality stage's tier 1
+// records, the same units on the same lists at the same settings, so it doesn't run them alone
+// again. Its own roles' tier 1s run at once while every other role of the set carries load
+// (load): the load starts with the tiers and stops when they finish, so the other models load
+// the pool for exactly the window the model's tiers run, and run no tier of their own.
+func (r *Runner) setModelRun(ctx context.Context, rep *Report, roles []assignment) []Check {
+	alone, err := qualityTierOne(rep.Stage(StageQuality), rep.Roles)
+	if err != nil {
+		return []Check{broken("quality tier 1 record", "", err)}
 	}
-	peak := measure("peak pool free", "", float64(low.FreeMiB()), "MiB", AtLeast, r.Floors.Pool.FreeMiB)
-	peak.Values = map[string]float64{"readings": float64(readings), "phase_wall_s": phase}
-	peak.Detail = fmt.Sprintf("%d of %d MiB used at the least free of %d readings over the %.0fs every role's tier 1 ran at once",
-		low.UsedMiB, low.TotalMiB, readings, phase)
+	var own, others []assignment
+	for _, a := range roles {
+		if a.model == r.Model {
+			own = append(own, a)
+		} else {
+			others = append(others, a)
+		}
+	}
+
+	r.logf("evaluate: set: %s's tier 1 with the set's other roles under load\n", r.Model)
+	c := &client{base: r.Router, hc: r.HTTP}
+	loads := make([]*load, len(others))
+	for i, a := range others {
+		loads[i] = r.newLoad(c, a)
+	}
+	together := map[string][]Check{}
+	var mu sync.Mutex
+	w := r.window(ctx, roles, func() {
+		loadCtx, stop := context.WithCancel(ctx)
+		var bg sync.WaitGroup
+		for _, l := range loads {
+			bg.Go(func() { l.run(loadCtx) })
+		}
+		var tiers sync.WaitGroup
+		for _, a := range own {
+			tiers.Go(func() {
+				checks := r.tierOne(ctx, r.targetOf(a, phaseConcurrent), a.role)
+				mu.Lock()
+				together[a.role] = checks
+				mu.Unlock()
+			})
+		}
+		tiers.Wait()
+		stop()
+		bg.Wait()
+	})
+
+	var checks []Check
+	for _, a := range own {
+		checks = append(checks, phased(together[a.role], phaseConcurrent, alone[a.role])...)
+		checks = append(checks, slowdown(a.role, alone[a.role], together[a.role], "its quality tier 1"))
+	}
+	for _, l := range loads {
+		checks = append(checks, l.check())
+	}
+	return append(checks, w.gates(r.Floors.Pool.FreeMiB, "the model's tier 1 ran with the set's other roles under load")...)
+}
+
+// qualityTierOne returns, by role, the quality stage's records of each of roles' tier 1 units
+// (TierOne), in TierOne's order: the alone figures a model run's set stage reuses. It fails,
+// naming the unit, when quality is missing or holds no passed record of a unit with a score and
+// a wall time.
+func qualityTierOne(quality *StageResult, roles []string) (map[string][]Check, error) {
+	if quality == nil {
+		return nil, errors.New("the run has no quality stage")
+	}
+	out := map[string][]Check{}
+	for _, role := range roles {
+		for _, unit := range TierOne(role) {
+			i := slices.IndexFunc(quality.Checks, func(c Check) bool { return c.Role == role && c.Name == unit })
+			if i < 0 {
+				return nil, fmt.Errorf("the quality stage has no record of %s's %s", role, unit)
+			}
+			c := quality.Checks[i]
+			if !c.Passed || c.Measured == nil || c.Values["wall_s"] <= 0 {
+				return nil, fmt.Errorf("the quality stage's record of %s's %s has no passed score with a wall time", role, unit)
+			}
+			out[role] = append(out[role], c)
+		}
+	}
+	return out, nil
+}
+
+// concurrentWindow is what the set stage's concurrent phase measured around its tiers: the
+// pool's least free reading and the number of readings, the last reading's error, the crossing
+// probe's rounds, and the phase's wall time.
+type concurrentWindow struct {
+	low      Pool
+	readings int
+	readErr  error
+	cross    crossing
+	wallS    float64
+}
+
+// window runs fn, the concurrent phase's tiers, while the footprint reads the pool and the
+// crossing probe sends its rounds to every one of roles' models, and returns what they measured.
+func (r *Runner) window(ctx context.Context, roles []assignment, fn func()) concurrentWindow {
+	c := &client{base: r.Router, hc: r.HTTP}
+	var w concurrentWindow
+	began := time.Now()
+	w.low, w.readings, w.readErr = r.during(ctx, func() {
+		done := make(chan struct{})
+		var probe sync.WaitGroup
+		probe.Go(func() { w.cross = r.cross(ctx, c, roles, done) })
+		fn()
+		close(done)
+		probe.Wait()
+	})
+	w.wallS = time.Since(began).Seconds()
+	return w
+}
+
+// gates are the concurrent phase's two gates: no crossed answer, and the pool's least free
+// memory against floor. what says what ran over the phase, for the pool's detail.
+func (w concurrentWindow) gates(floor float64, what string) []Check {
+	checks := []Check{w.cross.check()}
+	if w.readings == 0 {
+		return append(checks, broken("peak pool free", "", w.readErr))
+	}
+	peak := measure("peak pool free", "", float64(w.low.FreeMiB()), "MiB", AtLeast, floor)
+	peak.Values = map[string]float64{"readings": float64(w.readings), "phase_wall_s": w.wallS}
+	peak.Detail = fmt.Sprintf("%d of %d MiB used at the least free of %d readings over the %.0fs %s",
+		w.low.UsedMiB, w.low.TotalMiB, w.readings, w.wallS, what)
 	return append(checks, peak)
+}
+
+// loadInputs are an embedding load request's inputs: 64, the batch the MTEB encoder sends
+// (mteb_quality.py's BATCH), capacity's sentences over and over.
+var loadInputs = slices.Repeat(capacityInputs, 64/len(capacityInputs))
+
+// load is one background role's work in a model run's set stage: workers, each sending the
+// role's capacity request (recorder's for a generative role, an embedding batch of loadInputs
+// for the embedding role) to the role's model, one after another, until stopped. It counts the
+// requests answered and errored and the tokens they carried; a request cut off by the stop
+// counts as neither.
+type load struct {
+	role, model string
+	workers     int
+	// send sends the n-th request and returns the tokens it carried: the predicted tokens of a
+	// chat completion, the input tokens of an embedding batch.
+	send func(ctx context.Context, n uint64) (int, error)
+
+	mu                        sync.Mutex
+	answered, errored, tokens int
+	errs                      []string
+	wall                      time.Duration
+}
+
+// newLoad returns a's load. Its workers are the requests its tier 1 keeps in flight: the
+// profile's slots for the agent's and vision's Inspect tiers (agent_quality.py's and
+// vision_quality.py's SLOTS) and the embedding encoder (mteb_quality.py's IN_FLIGHT), and one for
+// the audio role's ASR task, which sends one clip at a time.
+func (r *Runner) newLoad(c *client, a assignment) *load {
+	l := &load{role: a.role, model: a.model, workers: r.Profile.Slots}
+	switch a.role {
+	case RoleEmbedding:
+		l.send = func(ctx context.Context, _ uint64) (int, error) {
+			got, err := c.embed(ctx, a.model, loadInputs)
+			return got.PromptTokens, err
+		}
+		return l
+	case RoleAudio:
+		l.workers = 1
+	}
+	rec := &recorder{c: c, model: a.model, role: a.role, media: r.Media}
+	l.send = func(ctx context.Context, n uint64) (int, error) {
+		comp, err := c.complete(ctx, rec.body(concurrent.Prompt(fmt.Sprintf("nonce-%016x", n))))
+		return comp.Timings.PredictedN, err
+	}
+	return l
+}
+
+// loadPause is how long a load worker waits after an errored request before its next, so a
+// model that refuses requests isn't sent them in a tight loop.
+const loadPause = time.Second
+
+// run runs the load's workers until ctx is done.
+func (l *load) run(ctx context.Context) {
+	began := time.Now()
+	var n atomic.Uint64
+	var wg sync.WaitGroup
+	for range l.workers {
+		wg.Go(func() {
+			for ctx.Err() == nil {
+				tokens, err := l.send(ctx, n.Add(1))
+				l.mu.Lock()
+				switch {
+				case ctx.Err() != nil:
+				case err != nil:
+					l.errored++
+					l.errs = append(l.errs, err.Error())
+				default:
+					l.answered++
+					l.tokens += tokens
+				}
+				l.mu.Unlock()
+				if err != nil {
+					select {
+					case <-ctx.Done():
+					case <-time.After(loadPause):
+					}
+				}
+			}
+		})
+	}
+	wg.Wait()
+	l.wall = time.Since(began)
+}
+
+// check records the load: its requests answered a second over the window, beside the requests
+// answered and errored, the workers, the window and the tokens a second. It is recorded, never
+// judged; but a load whose every finished request errored put nothing on its model, and fails
+// the stage as a measurement that couldn't be taken. (A window shorter than one request ends with
+// none finished and none errored: its requests were in flight throughout.)
+func (l *load) check() Check {
+	window := l.wall.Seconds()
+	tokens := "predicted_tok_s"
+	if l.role == RoleEmbedding {
+		tokens = "input_tok_s"
+	}
+	values := map[string]float64{
+		"requests": float64(l.answered), "errors": float64(l.errored), "workers": float64(l.workers), "window_s": window,
+	}
+	if l.answered == 0 && l.errored > 0 {
+		ch := broken("load", l.role, fmt.Errorf("none of %s's load requests was answered, %d errored: %s", l.model, l.errored, listed(l.errs)))
+		ch.Values = values
+		return ch
+	}
+	rate, perS := 0.0, 0.0
+	if window > 0 {
+		rate, perS = float64(l.answered)/window, float64(l.tokens)/window
+	}
+	values[tokens] = perS
+	ch := Check{Name: "load", Role: l.role, Measured: &rate, Unit: "req/s", Passed: true, Values: values}
+	notes := []string{fmt.Sprintf("%d workers sending capacity's %s request to %s one after another over the %.0fs the model's tier 1 ran: %d answered, %d errored",
+		l.workers, l.role, l.model, window, l.answered, l.errored)}
+	if len(l.errs) > 0 {
+		notes = append(notes, "errors: "+listed(l.errs))
+	}
+	ch.Detail = strings.Join(append(notes, "background load, recorded, never judged"), "; ")
+	return ch
 }
 
 // phased returns checks renamed for the phase, "<unit> <phase>". A concurrent unit also records
@@ -232,8 +477,8 @@ func phased(checks []Check, phase string, alone []Check) []Check {
 }
 
 // slowdown is a role's tier 1 wall time at once over its wall time alone, each the sum of its
-// units', recorded, never judged.
-func slowdown(role string, alone, together []Check) Check {
+// units', recorded, never judged. source, when set, names where the alone figure came from.
+func slowdown(role string, alone, together []Check, source string) Check {
 	wall := func(checks []Check) float64 {
 		s := 0.0
 		for _, c := range checks {
@@ -248,7 +493,10 @@ func slowdown(role string, alone, together []Check) Check {
 		v := t / a
 		ch.Measured = &v
 	}
-	ch.Detail = fmt.Sprintf("%s: %.0fs at once against %.0fs alone; recorded, never judged", strings.Join(TierOne(role), " + "), t, a)
+	if source != "" {
+		source = ", " + source
+	}
+	ch.Detail = fmt.Sprintf("%s: %.0fs at once against %.0fs alone%s; recorded, never judged", strings.Join(TierOne(role), " + "), t, a, source)
 	return ch
 }
 

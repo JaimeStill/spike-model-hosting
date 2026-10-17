@@ -35,6 +35,8 @@ type fakeRouter struct {
 	crossed string
 	// empty is a model whose nonce answers come back empty.
 	empty string
+	// refuse is a model whose chat completions and embeddings fail with a server error.
+	refuse string
 
 	mu       sync.Mutex
 	requests []string
@@ -89,6 +91,10 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		if m, _ := body["model"].(string); f.status[m] != "loaded" {
 			http.Error(w, "model not loaded: "+m, http.StatusBadRequest)
+			return
+		} else if m != "" && m == f.refuse {
+			f.record("refused " + m)
+			http.Error(w, "refused: "+m, http.StatusInternalServerError)
 			return
 		}
 	}

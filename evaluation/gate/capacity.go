@@ -172,19 +172,7 @@ type recorder struct {
 // answer that did the work; an audio request is fitness's timed transcription
 // (transcriptionBody), the same request to repeat the nonce after the clip.
 func (rc *recorder) Chat(ctx context.Context, prompt string) (string, error) {
-	nonce := nonceRE.FindString(prompt)
-	repeat := "Then, on a line of its own, repeat this request ID exactly: " + nonce
-	var body map[string]any
-	switch rc.role {
-	case RoleVision:
-		body = chatBody(rc.model, []map[string]any{imagePart(rc.media.PNG), textPart("Describe this image in one sentence. " + repeat)}, 512, false)
-	case RoleAudio:
-		body = transcriptionBody(rc.model, rc.media.WAV, repeat)
-	default:
-		// Room for a reasoning model's reasoning before its answer.
-		body = chatBody(rc.model, prompt, 4096, false)
-	}
-	comp, err := rc.c.complete(ctx, body)
+	comp, err := rc.c.complete(ctx, rc.body(prompt))
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	if err != nil {
@@ -196,6 +184,21 @@ func (rc *recorder) Chat(ctx context.Context, prompt string) (string, error) {
 		return "", errors.New("the answer's text is empty")
 	}
 	return comp.Text, nil
+}
+
+// body is the role's request for prompt, which carries a nonce (Chat).
+func (rc *recorder) body(prompt string) map[string]any {
+	nonce := nonceRE.FindString(prompt)
+	repeat := "Then, on a line of its own, repeat this request ID exactly: " + nonce
+	switch rc.role {
+	case RoleVision:
+		return chatBody(rc.model, []map[string]any{imagePart(rc.media.PNG), textPart("Describe this image in one sentence. " + repeat)}, 512, false)
+	case RoleAudio:
+		return transcriptionBody(rc.model, rc.media.WAV, repeat)
+	default:
+		// Room for a reasoning model's reasoning before its answer.
+		return chatBody(rc.model, prompt, 4096, false)
+	}
 }
 
 // floor judges the slowest of the run's answers by value against floor; every request must

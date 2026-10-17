@@ -51,10 +51,10 @@ type Runner struct {
 	Footprint Footprint
 	Media     Media
 	// SampleEvery spaces the footprint's readings while capacity's requests are in flight, and
-	// the set stage's tiers; zero is two seconds.
+	// while the set stage's tiers run; zero is two seconds.
 	SampleEvery time.Duration
-	// CrossEvery spaces the set stage's rounds of nonce requests while every role's tier 1 runs
-	// at once; zero is 15 seconds.
+	// CrossEvery spaces the set stage's rounds of nonce requests over its concurrent phase; zero
+	// is 15 seconds.
 	CrossEvery time.Duration
 	// Log takes a line as each stage starts, for a reader watching a long run; nil discards it.
 	Log io.Writer
@@ -104,7 +104,8 @@ const setRunReason = "a set run: each role's model takes it in its own run"
 //
 // from names the stage to start at; empty starts at admission. A run from a later stage reuses
 // prior's results for every stage before it: prior must be a run of the same model and set in
-// which each of them passed.
+// which each of them passed. A run from set also needs prior's quality records of the model's
+// tier 1 units, which its set stage reuses as the alone figure.
 //
 // A set run (no Model) starts at the set stage, from empty or naming it, and needs no prior: it
 // reports every stage before it not run, since each is a model's, and refuses the run unless the
@@ -152,6 +153,13 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 		rep.From = from
 		if err := reuse(rep, prior, start); err != nil {
 			return nil, err
+		}
+		// A model run's set stage takes its alone figures from the quality stage, so a run resumed
+		// at it needs them in the run it resumes.
+		if Stages[start] == StageSet {
+			if _, err := qualityTierOne(rep.Stage(StageQuality), roles); err != nil {
+				return nil, fmt.Errorf("can't resume from set: %w, which its set stage reuses as the alone figure; resume from quality", err)
+			}
 		}
 	}
 	stages := map[string]func(context.Context, *Report) []Check{
