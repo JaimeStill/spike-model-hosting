@@ -414,8 +414,8 @@ Their footprints and the swap timings are in
 
 ### The move
 
-The root commands, in the order the architect runs them, are in
-[`build-move.md`](build-move.md). The architect ran its steps a to d on 2026-10-17.
+The root commands, in the order the architect runs them, are the runbook's "Moving to a new
+build" ([`README.md`](README.md)). The architect ran its steps a to d on 2026-10-17.
 
 - **The install.** b11715 is installed at `/opt/llama.cpp/b11715` (`llama-server --version`:
   `version: 0.7.0-dev (build 11715, commit 9d1878a43)`). The rendered `models.ini` is installed;
@@ -434,7 +434,8 @@ The root commands, in the order the architect runs them, are in
 - **Cold load.** `evaluate coldload -set a` timed each restart from the laptop, in one sitting,
   from the restart seen to each model listed loaded. The router's load mode is its default,
   `auto` (mmap). A cold restart dropped the page cache first (`sync` and `drop_caches`); a warm
-  one didn't. The logs are in `.state/coldload/`. These are the baseline's cold-load figures:
+  one didn't. The logs were kept under `.state/coldload/` and removed once the findings were
+  committed (the architect's decision, slice 11). These are the baseline's cold-load figures:
 
   | Restart | Router up | EmbeddingGemma 2 | gemma-4-E4B | 26B-A4B | gpt-oss-120b, all loaded |
   |---|---|---|---|---|---|

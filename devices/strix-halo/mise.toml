@@ -1,8 +1,9 @@
-# The Strix Halo host class: its profile (profile.toml), the log of the llama.cpp builds it
-# serves (llama-cpp-builds.md), and the root commands of a build move (build-move.md). The render
-# tasks write the router's serving configuration from the profile to standard output, through the
-# hosting area's profile command; the unit's host values come from SPIKE_SERVICE_USER,
-# SPIKE_HF_HOME and SPIKE_MODELS_DIR in the environment.
+# The Strix Halo host class: its profile (profile.toml), its runbook (README.md: the host, the
+# llama.cpp install, the rendered files and the root commands of a build move), and the log of
+# the llama.cpp builds it serves (llama-cpp-builds.md). The render tasks write the router's
+# serving configuration from the profile to standard output, through the hosting area's profile
+# command; the unit's host values come from SPIKE_SERVICE_USER, SPIKE_HF_HOME and
+# SPIKE_MODELS_DIR in the environment.
 
 [tasks."render:presets"]
 description = "Render the Strix Halo profile's router presets (INI) to standard output"
