@@ -395,6 +395,51 @@ These are where a slow model's run would be cut short, found before conform star
   values, not flags or environment variables, so they stayed at their defaults. At 361 tok/s of
   prefill and a token every 0.3 s, neither consumer's idle bound would be reached by a turn.
 
+## Harness fit on b11715: set A's baseline
+
+Harness fit is the agent role's tier 3 in `evaluate`'s quality stage: conform pass^5 through
+every pinned harness, each held to one absolute bar, every applicable capability 5/5 and 0
+invalid requests, a harness dropping at its first failed trial. It ran in both of set A's
+baseline agent runs ([`baseline.md`](baseline.md), "Set A's baseline on b11715"), on gpt-oss-120b
+(ggml-org `MXFP4`) at `b11715-9d1878a43`, from the laptop, with Pi 1.3.0, Claude Code 2.1.301 and
+OpenCode 1.19.3, the versions `evaluation/mise.consumers.toml` pins. OpenCode was measured at
+1.19.3, the pin, against 1.19.1 in the comparison row above. The runs were 2026-10-17 23:51 UTC
+(5m42s) and 2026-10-18 17:59 UTC (5m57s), the second after a fresh reload of set A.
+
+| Run | Harness | exchange | cancel | resume | tool | skill | structured | vision | dropped-image | audio-tool | trials | invalid | fits |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Pi 1.3.0 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5 of 5 | 0 | yes |
+| 1 | Claude Code 2.1.301 | 1/1 | 1/1 | 1/1 | 0/1 | 0/1 | 1/1 | 1/1 | n/a | 1/1 | 1 of 5 | 0 | no |
+| 1 | OpenCode 1.19.3 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 0/1 | 1 of 5 | 0 | no |
+| 2 | Pi 1.3.0 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 | 5 of 5 | 0 | yes |
+| 2 | Claude Code 2.1.301 | 1/1 | 1/1 | 1/1 | 0/1 | 0/1 | 1/1 | 1/1 | n/a | 0/1 | 1 of 5 | 0 | no |
+| 2 | OpenCode 1.19.3 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1 of 5 | 2 | no |
+
+The fit profile, the same in both runs: **Pi fits; Claude Code and OpenCode don't.** The agent
+role passes, since one harness fits. Each failed cell and its reason, as the run recorded it:
+
+- **Claude Code, `tool`, both runs:** "the exchange ended without a structured response", the same
+  outcome as the b11669 row's text-for-a-call failure, where gpt-oss answered the code in text
+  instead of calling `respond`.
+- **Claude Code, `skill`, both runs:** a motto the model made up without loading the skill,
+  "Play the clutch, win the game" (run 1) and "Deliver under pressure." (run 2), against "Hold
+  the line, shift the load."
+- **Claude Code, `audio-tool`, run 2 only:** "the exchange ended without a structured response".
+  It passed in run 1 and 5/5 in the b11669 row.
+- **Claude Code, `dropped-image`:** n/a and excluded, as before: Claude Code sends every image,
+  since clutch's profile marks every model image-capable.
+- **OpenCode, `audio-tool`, run 1:** "the exchange ended without a structured response".
+- **OpenCode, invalid requests, run 2:** every cell passed, but the trial failed on 2 invalid
+  requests, each the parse error, HTTP 200 then "does not match the expected peg-native format"
+  in the stream (18:01:09 and 18:02:04 UTC). The cells still passed; the bar counts the
+  invalid requests regardless.
+
+Against the b11669 comparison row: Pi held every cell again; Claude Code's `tool` and `skill`
+failures are the same text-for-a-call and made-up-motto failures, now on b11715; OpenCode's
+parse errors still reach it on `tool_choice` `auto`. These are the design inputs the native Go
+harness spike takes (the goal record's slice 7 decisions): force the call when offering
+`respond`, round-trip reasoning, no blind resend on a parse error.
+
 ## Which task answers which layer
 
 - `profile`: `devices/strix-halo/profile.toml` sets each model's card sampling and leaves reasoning
