@@ -234,3 +234,69 @@ vision tier 1, for score, time and memory, before they go into the profile.
 (2.75GiB) passes the bounded single-image case with about 120MiB to spare. (c), a reload in the
 procedure, doesn't help. The growth happens within the set stage, on its first V*Bench image,
 so a reload before the stage only resets the figure the stage then grows again.
+
+## The pool over a day of runs, b11715
+
+Set A's free pool fell run after run through baseline 1, because each model keeps the largest
+working memory it has needed until it is reloaded, and the runs follow one another without one.
+The figures are fitness's and the set stage's own readings (`amdgpu_top -p` over ssh) on
+`b11715-9d1878a43`, 2026-10-17 to 2026-10-18; set A was loaded fresh at the move to b11715 and
+not reloaded until the last row. Figures in MiB free, of 98304:
+
+| Reading | When (UTC) | Pool free |
+|---|---|---|
+| set A loaded fresh, after the move ([`llama-cpp-builds.md`](../../devices/strix-halo/llama-cpp-builds.md)) | 10-17 22:53 | 3509 |
+| set run, the least free while every role's tier 1 ran at once | 10-17 23:16-23:33 | 3149 |
+| agent run, fitness idle | 10-17 23:33 | 3132 |
+| vision run, fitness idle | 10-18 14:30 | 3026 |
+| vision run, set stage's least free | 10-18 15:15-15:51 | 3018 |
+| audio run, fitness idle | 10-18 15:57 | 2932 |
+| audio run, set stage's least free | 10-18 16:09-16:15 | 2925 |
+| embedding run, fitness idle: **fails the 2816 floor** | 10-18 16:21 | **2778** |
+| after unloading and reloading set A over the router's API | 10-18 16:55 | 3509 |
+
+Each model's process against its fresh figure in the table at the top, read idle just after the
+failed embedding run (`amdgpu_top -p`, VRAM + GTT, MiB):
+
+| Model | Fresh | After the day's runs | Growth |
+|---|---|---|---|
+| gpt-oss-120b | 65517 | 65606 | +89 |
+| Gemma 4 26B-A4B | 17337 | 17742 | +405 |
+| gemma-4-E4B | 9950 | 10139 | +189 |
+| EmbeddingGemma 2 | 1872 | 1869 | none |
+| pool used, with the desktop | 94795 | 95526 | +731 |
+
+The mechanism is the high-water mark above, not a leak. The 26B-A4B's +405 is past the
+single-image bound of about +300 that the 2816 floor was sized for: on top of its image work, the
+deep stage's 8192-token prompts (the GuideLLM grid's agentic cells, whose four-stream cell fails
+on context after prefilling, and prefix reuse's 8192-token prefix) grow the language model's
+Vulkan scratch buffers on their first full ubatches, as the text-only step above did. The largest
+single fall, 2925 to 2778 between the audio run's set stage and the embedding run, is the audio
+run's deep stage, the same prompts on gemma-4-E4B. The desktop's share (Hyprland, quickshell and
+Xwayland, up since September) didn't change.
+
+So a model's verdict depended on where it ran in the day. The architect's decision (slice 11):
+every model run, and the set run, starts from freshly loaded models. Before each run the four
+models are unloaded and loaded again over the router's API (`POST /models/unload`, then
+`POST /models/load` for gpt-oss-120b, the 26B-A4B, gemma-4-E4B and EmbeddingGemma 2, each polled
+on `GET /models`), the run waits 30 s with every model loaded and idle, and the idle pool is
+recorded. Each of the six reloads took 29-35 s to unload and load (gpt-oss-120b's load was 16-17
+s of it), and every one came back to 94795 MiB used, 3509 MiB free, the fresh figure to the MiB.
+Within one run the growth is bounded by what that run sends, which the set stage's reading
+catches. Read just before each of baseline 2's reloads, one run's growth alone left the pool
+above the floor:
+
+| Before reloading for | After | Pool free |
+|---|---|---|
+| baseline 2's set run | baseline 1's embedding run (itself after a reload) | 3410 |
+| baseline 2's agent run | baseline 2's set run | 3146 |
+| baseline 2's vision run | baseline 2's agent run, its deep stage included | 3287 |
+| baseline 2's audio run | baseline 2's vision run, its deep stage included | 3125 |
+| baseline 2's embedding run | baseline 2's audio run, its deep stage included | 3264 |
+
+Reordering the runs (which moves the failure) and a lower floor (which chases the growth) were
+rejected. This supersedes (c) above for the procedure between runs: a reload
+can't help within the set stage, but it stops one run's growth reaching the next.
+
+Whether a set serving all day, with no evaluation's reloads, needs a scheduled reload or a
+different floor is left to `candidates`.
