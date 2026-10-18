@@ -182,16 +182,10 @@ func (r *Runner) visionTier(ctx context.Context, tg target, t VisionTier) Check 
 		ch = fact(name, RoleVision, "", passes == probeRepeats)
 		ch.Measured, ch.Unit = &score, t.Metric
 		notes = append(notes, fmt.Sprintf("pass^%d: every repeat must name the three shapes and colours, at the router's defaults", probeRepeats))
-	case !hasBar:
-		ch = Check{Name: name, Role: RoleVision, Measured: &score, Unit: t.Metric, Passed: true}
-		notes = append(notes, tg.unjudged("no bar: recorded, never fails; early stop needs a bar"))
-	case len(res.Stopped) > 0:
-		ch = measure(name, RoleVision, score, t.Metric, AtLeast, bar.Value)
-		ch.Passed = false
-		notes = append(notes, fmt.Sprintf("early stop after %d: %s", n, res.StopReason))
 	default:
-		ch = measure(name, RoleVision, score, t.Metric, AtLeast, bar.Value)
-		notes = append(notes, "early stop: ran in full")
+		var judged string
+		ch, judged = judgeTier(tg, name, RoleVision, score, t.Metric, bar, hasBar, len(res.Stopped) > 0, n, res.StopReason)
+		notes = append(notes, judged)
 	}
 	ch.Values = map[string]float64{
 		"wall_s": wall, "request_s": res.RequestS, "samples": float64(n), "passes": float64(passes), "tier": float64(t.Tier),

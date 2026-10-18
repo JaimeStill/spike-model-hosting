@@ -213,19 +213,8 @@ func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
 		fmt.Sprintf("%d of %d utterances", len(res.IDs), len(list.IDs)),
 		fmt.Sprintf("RTFx %.1f: %.0f s of audio over %.1f s of requests, sent one at a time", res.RTFx(), res.AudioS, res.RequestS),
 	}
-	var ch Check
-	switch {
-	case !hasBar:
-		ch = Check{Name: name, Role: RoleAudio, Measured: &wer, Unit: "WER", Passed: true}
-		notes = append(notes, t.unjudged("no bar: recorded, never fails; early stop needs a bar"))
-	case len(res.Stopped) > 0:
-		ch = measure(name, RoleAudio, wer, "WER", AtMost, bar.Value)
-		ch.Passed = false
-		notes = append(notes, fmt.Sprintf("early stop after %d: %s", len(res.IDs), res.StopReason))
-	default:
-		ch = measure(name, RoleAudio, wer, "WER", AtMost, bar.Value)
-		notes = append(notes, "early stop: ran in full")
-	}
+	ch, judged := judgeTier(t, name, RoleAudio, wer, "WER", bar, hasBar, len(res.Stopped) > 0, len(res.IDs), res.StopReason)
+	notes = append(notes, judged)
 	ch.Values = map[string]float64{
 		"wall_s": wall, "rtfx": res.RTFx(), "audio_s": res.AudioS, "request_s": res.RequestS,
 		"utterances": float64(len(res.IDs)), "errors": float64(res.Errors), "words": float64(res.Words),

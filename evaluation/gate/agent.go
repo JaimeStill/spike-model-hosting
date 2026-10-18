@@ -139,19 +139,8 @@ func (r *Runner) bfclTier(ctx context.Context, tg target, t AgentTier) Check {
 
 	score, passes, n := res.Score(), res.Passes(), len(res.IDs)
 	notes := []string{fmt.Sprintf("tier %d", t.Tier), fmt.Sprintf("%d of %d samples, %d passed, %d model requests", n, len(list.IDs), passes, res.Requests)}
-	var ch Check
-	switch {
-	case !hasBar:
-		ch = Check{Name: name, Role: RoleAgent, Measured: &score, Unit: "accuracy", Passed: true}
-		notes = append(notes, tg.unjudged("no bar: recorded, never fails; early stop needs a bar"))
-	case len(res.Stopped) > 0:
-		ch = measure(name, RoleAgent, score, "accuracy", AtLeast, bar.Value)
-		ch.Passed = false
-		notes = append(notes, fmt.Sprintf("early stop after %d: %s", n, res.StopReason))
-	default:
-		ch = measure(name, RoleAgent, score, "accuracy", AtLeast, bar.Value)
-		notes = append(notes, "early stop: ran in full")
-	}
+	ch, judged := judgeTier(tg, name, RoleAgent, score, "accuracy", bar, hasBar, len(res.Stopped) > 0, n, res.StopReason)
+	notes = append(notes, judged)
 	ch.Values = map[string]float64{
 		"wall_s": wall, "working_s": res.WorkingS, "requests": float64(res.Requests),
 		"samples": float64(n), "passes": float64(passes), "tier": float64(t.Tier),

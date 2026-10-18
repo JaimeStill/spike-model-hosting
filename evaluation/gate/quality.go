@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/suites"
+	"github.com/JaimeStill/spike-model-hosting/evaluation/tier"
 )
 
 // EmbeddingTasks are the MTEB tasks the quality stage runs on the embedding role, each in full:
@@ -275,14 +277,31 @@ func promptSet(prompts map[string]string) string {
 	if len(prompts) == 0 {
 		return "none"
 	}
-	keys := make([]string, 0, len(prompts))
-	for k := range prompts {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-	parts := make([]string, len(keys))
-	for i, k := range keys {
-		parts[i] = fmt.Sprintf("%s=%q", k, prompts[k])
+	var parts []string
+	for _, k := range slices.Sorted(maps.Keys(prompts)) {
+		parts = append(parts, fmt.Sprintf("%s=%q", k, prompts[k]))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// judgeTier judges a sampled unit's score (a BFCL or vision tier's, an ASR set's) against its bar
+// and returns the check with a note saying how it was judged: without a bar, recorded and passed;
+// ended by its bar's early stop after ran samples, for stopReason, failed; otherwise run in full
+// and held to the bar, a floor or, AtMost, a ceiling.
+func judgeTier(t target, name, role string, score float64, unit string, bar tier.Bar, hasBar, stopped bool, ran int, stopReason string) (Check, string) {
+	op := AtLeast
+	if bar.AtMost {
+		op = AtMost
+	}
+	switch {
+	case !hasBar:
+		return Check{Name: name, Role: role, Measured: &score, Unit: unit, Passed: true},
+			t.unjudged("no bar: recorded, never fails; early stop needs a bar")
+	case stopped:
+		ch := measure(name, role, score, unit, op, bar.Value)
+		ch.Passed = false
+		return ch, fmt.Sprintf("early stop after %d: %s", ran, stopReason)
+	default:
+		return measure(name, role, score, unit, op, bar.Value), "early stop: ran in full"
+	}
 }
