@@ -18,8 +18,11 @@ import (
 // secret is a bearer token the tests send, which must never reach a record or the router.
 const secret = "sk-ant-oat01-do-not-record"
 
-// serve starts a Recorder in front of upstream and returns it with its URL.
-func serve(t *testing.T, upstream string) (*wire.Recorder, string) {
+// serve starts a Recorder in front of upstream and returns it with the server it runs on. A test
+// reads the recording only once the server has closed, which waits for its handlers: the
+// Recorder records an exchange as the proxy closes the router's body, which can follow the
+// consumer's reading its response.
+func serve(t *testing.T, upstream string) (*wire.Recorder, *httptest.Server) {
 	t.Helper()
 	target, err := url.Parse(upstream)
 	if err != nil {
@@ -28,7 +31,7 @@ func serve(t *testing.T, upstream string) (*wire.Recorder, string) {
 	rec := wire.New(target)
 	srv := httptest.NewServer(rec)
 	t.Cleanup(srv.Close)
-	return rec, srv.URL
+	return rec, srv
 }
 
 // TestRecorder shows the Recorder forwards a request under its own path, returns the router's
@@ -47,9 +50,9 @@ func TestRecorder(t *testing.T) {
 		_, _ = w.Write(append([]byte(`{"echo":`), append(body, '}')...))
 	}))
 	defer up.Close()
-	rec, base := serve(t, up.URL)
+	rec, srv := serve(t, up.URL)
 
-	req, _ := http.NewRequest(http.MethodPost, base+"/v1/messages?beta=true", strings.NewReader(`{"model":"m"}`))
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/v1/messages?beta=true", strings.NewReader(`{"model":"m"}`))
 	req.Header.Set("Authorization", "Bearer "+secret)
 	req.Header.Set("X-Api-Key", secret)
 	req.Header.Set("Anthropic-Version", "2023-06-01")
@@ -71,6 +74,7 @@ func TestRecorder(t *testing.T) {
 		t.Errorf("the router got Anthropic-Version %q, want the consumer's", forwarded.Get("Anthropic-Version"))
 	}
 
+	srv.Close()
 	xs := rec.Exchanges()
 	if len(xs) != 1 {
 		t.Fatalf("%d exchanges, want 1", len(xs))
@@ -108,9 +112,9 @@ func TestRecorderStreams(t *testing.T) {
 		_, _ = io.WriteString(w, "event: two\ndata: {\"n\":2}\n\n")
 	}))
 	defer up.Close()
-	rec, base := serve(t, up.URL)
+	rec, srv := serve(t, up.URL)
 
-	resp, err := http.Post(base+"/v1/messages", "application/json", strings.NewReader(`{}`))
+	resp, err := http.Post(srv.URL+"/v1/messages", "application/json", strings.NewReader(`{}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,13 +126,8 @@ func TestRecorderStreams(t *testing.T) {
 	_, _ = io.Copy(io.Discard, resp.Body)
 	_ = resp.Body.Close()
 
-	// The exchange is recorded once the proxy closes the router's body, just after the
-	// consumer's copy ends.
-	var xs []wire.Exchange
-	for deadline := time.Now().Add(5 * time.Second); len(xs) == 0 && time.Now().Before(deadline); {
-		time.Sleep(10 * time.Millisecond)
-		xs = rec.Exchanges()
-	}
+	srv.Close()
+	xs := rec.Exchanges()
 	if len(xs) != 1 {
 		t.Fatalf("%d exchanges, want 1", len(xs))
 	}
@@ -142,12 +141,13 @@ func TestRecorderStreams(t *testing.T) {
 func TestRecorderUnreachable(t *testing.T) {
 	up := httptest.NewServer(http.NotFoundHandler())
 	up.Close()
-	rec, base := serve(t, up.URL)
-	resp, err := http.Post(base+"/v1/messages", "application/json", strings.NewReader(`{}`))
+	rec, srv := serve(t, up.URL)
+	resp, err := http.Post(srv.URL+"/v1/messages", "application/json", strings.NewReader(`{}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = resp.Body.Close()
+	srv.Close()
 	xs := rec.Exchanges()
 	if resp.StatusCode != http.StatusBadGateway || len(xs) != 1 || xs[0].Status != http.StatusBadGateway {
 		t.Errorf("status %s, exchanges %+v; want one 502", resp.Status, xs)

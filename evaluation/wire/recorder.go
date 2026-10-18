@@ -104,7 +104,10 @@ func (r *Recorder) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 }
 
 // Exchanges returns a copy of the exchanges recorded so far, in the order their responses
-// ended.
+// ended. An exchange is recorded as the proxy closes the router's body, which can follow the
+// consumer's reading its response, so a recording is complete only once every handler has
+// returned: read it after the server serving the Recorder has shut down (http.Server.Shutdown,
+// or httptest.Server.Close), which waits for them.
 func (r *Recorder) Exchanges() []Exchange {
 	r.mu.Lock()
 	defer r.mu.Unlock()

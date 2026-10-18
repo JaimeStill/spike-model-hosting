@@ -1,13 +1,16 @@
 package passk_test
 
 import (
+	"bufio"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JaimeStill/spike-harness-driver/clutch/conform"
 
@@ -142,5 +145,49 @@ func TestRunDropsEach(t *testing.T) {
 	}
 	if s.calls["a"] != 1 || s.calls["b"] != 1 || s.calls["c"] != 1 || slices.ContainsFunc(res.Fits, func(f passk.Fit) bool { return f.Fits }) {
 		t.Errorf("all failing: trials %v, fits %+v; want one trial each, none fitting", s.calls, res.Fits)
+	}
+}
+
+// TestRunRecordsLastExchange shows a trial judges the whole recording: a harness whose last
+// model request the router answers with an error is held to it, though the harness has its
+// answer and its cell returns before the router's response ends. The router streams the error's
+// first event, then holds the stream open past the cell's return; the Recorder records the
+// exchange only once the router's body closes, so a trial that read the recording as its cell
+// returned would find it empty and judge the harness a fit.
+func TestRunRecordsLastExchange(t *testing.T) {
+	const hold = 300 * time.Millisecond
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, "event: error\ndata: {\"error\":\"does not match\"}\n\n")
+		w.(http.Flusher).Flush()
+		time.Sleep(hold)
+	}))
+	t.Cleanup(upstream.Close)
+	s := &scripted{routers: map[string]string{}, calls: map[string]int{}}
+	r := s.runner(t, func(router, _ string, _ int) conform.Report {
+		resp, err := http.Post(router+"/v1/chat/completions", "application/json", strings.NewReader("{}"))
+		if err != nil {
+			t.Errorf("the harness's request: %v", err)
+			return report(nil)
+		}
+		// The harness reads the error's first event and is done; its response stays open.
+		t.Cleanup(func() { _ = resp.Body.Close() })
+		if line, err := bufio.NewReader(resp.Body).ReadString('\n'); err != nil || line != "event: error\n" {
+			t.Errorf("first line %q, %v; want the error event", line, err)
+		}
+		return report(nil)
+	})
+	plan := passk.Plan{Router: upstream.URL, K: 1, Harnesses: s.harnesses("a"), Wire: t.TempDir(), Drop: true}
+	began := time.Now()
+	res, err := r.Run(t.Context(), plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f := res.Fits[0]; f.Fits || f.Row.Invalid != 1 || f.Trial != 1 {
+		t.Errorf("a %+v; want its invalid request recorded, failing trial 1", f)
+	}
+	if took := time.Since(began); took < hold {
+		t.Errorf("the run took %v; want it to wait out the router's %v response", took, hold)
 	}
 }

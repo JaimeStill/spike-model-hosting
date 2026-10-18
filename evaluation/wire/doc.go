@@ -14,6 +14,6 @@
 //     a local listener.
 //   - Exchange is one recorded request and its response, each credential's value Redacted.
 //   - Recorder.Exchanges returns the exchanges so far, and Recorder.WriteJSONL writes them, one
-//     JSON object a line.
+//     JSON object a line; the recording is complete once the Recorder's server has shut down.
 //   - Events splits a recorded server-sent event stream into its events, each an Event.
 package wire

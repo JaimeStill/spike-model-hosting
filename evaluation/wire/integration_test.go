@@ -33,12 +33,26 @@ const state = "../../.state"
 // strixHalo is the profile the router serves.
 const strixHalo = "../../devices/strix-halo/profile.toml"
 
+// live is a Recorder in front of the live router and the local server it is served on.
+type live struct {
+	rec *wire.Recorder
+	srv *httptest.Server
+}
+
+// exchanges stops the server, which waits for its handlers to return, and returns the recording:
+// the Recorder records an exchange as the proxy closes the router's body, which can follow the
+// consumer's reading its response. Call it once the consumer is done.
+func (l live) exchanges() []wire.Exchange {
+	l.srv.Close()
+	return l.rec.Exchanges()
+}
+
 // liveRouter returns a Recorder in front of the router SPIKE_ROUTER_URL names, served on a
 // local listener, that listener's URL, the roles of the profile's set SPIKE_SET names, or else
 // of its startup set, and the consumer reasoning setting of the set's chat model. It skips the
 // test when SPIKE_ROUTER_URL is unset, fails it unless the router has every model of the set
 // loaded, and logs the build and the set it runs on.
-func liveRouter(t *testing.T) (*wire.Recorder, string, profile.SetRoles, profile.ConsumerReasoning) {
+func liveRouter(t *testing.T) (live, string, profile.SetRoles, profile.ConsumerReasoning) {
 	t.Helper()
 	base := strings.TrimSuffix(os.Getenv("SPIKE_ROUTER_URL"), "/")
 	if base == "" {
@@ -69,7 +83,7 @@ func liveRouter(t *testing.T) (*wire.Recorder, string, profile.SetRoles, profile
 	rec := wire.New(target)
 	srv := httptest.NewServer(rec)
 	t.Cleanup(srv.Close)
-	return rec, srv.URL, set.Roles, p.Model(set.Roles.Chat).Consumers
+	return live{rec, srv}, srv.URL, set.Roles, p.Model(set.Roles.Chat).Consumers
 }
 
 // toolTurn writes a file holding a fresh code into a new working directory under state, and
@@ -98,20 +112,21 @@ func toolTurn(t *testing.T, consumer string) (dir, prompt, code string) {
 
 // save writes rec's exchanges to state/wire/<consumer>-<time>.jsonl, credentials redacted, and
 // logs the path.
-func save(t *testing.T, rec *wire.Recorder, consumer string) {
+func save(t *testing.T, rec live, consumer string) {
 	t.Helper()
 	path := filepath.Join(state, "wire", consumer+"-"+time.Now().Format("20060102T150405")+".jsonl")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := rec.WriteJSONL(f); err != nil {
+	xs := rec.exchanges()
+	if err := rec.rec.WriteJSONL(f); err != nil {
 		t.Error(err)
 	}
 	if err := f.Close(); err != nil {
 		t.Error(err)
 	}
-	t.Logf("recorded %d exchanges to %s", len(rec.Exchanges()), path)
+	t.Logf("recorded %d exchanges to %s", len(xs), path)
 }
 
 // send opens a session on d, sends prompt, and returns the exchange's text.
@@ -179,7 +194,7 @@ func TestClaudeThinkingRoundTrip(t *testing.T) {
 	}
 
 	var turns []wire.Exchange
-	for _, x := range rec.Exchanges() {
+	for _, x := range rec.exchanges() {
 		if strings.HasPrefix(x.Path, "/v1/messages") && !strings.Contains(x.Path, "count_tokens") {
 			var req map[string]json.RawMessage
 			if json.Unmarshal(x.Request, &req) == nil && len(req["tools"]) > 2 {
@@ -321,10 +336,10 @@ func TestOpenCodeReasoningRoundTrip(t *testing.T) {
 // logReasoningSentBack logs, for each OpenAI chat request rec holds that carries a tool result,
 // the fields of the assistant message before it and whether reasoning_content went back, and
 // returns how many tool results it found.
-func logReasoningSentBack(t *testing.T, rec *wire.Recorder) int {
+func logReasoningSentBack(t *testing.T, rec live) int {
 	t.Helper()
 	toolTurns := 0
-	for _, x := range rec.Exchanges() {
+	for _, x := range rec.exchanges() {
 		if !strings.HasPrefix(x.Path, "/v1/chat/completions") {
 			continue
 		}

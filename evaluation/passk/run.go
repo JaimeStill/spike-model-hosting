@@ -162,12 +162,27 @@ func (r Runner) trial(ctx context.Context, plan Plan, h Harness, k int, opts con
 	} else {
 		rep = conform.Run(ctx, []conform.Cell{cell}, opts)[0]
 	}
+	// The Recorder records an exchange as the proxy closes the router's body, which can follow
+	// the consumer's reading its response, so a trial's last exchange may still be unrecorded
+	// when its cell returns. Shutdown waits for every handler to return, completing the
+	// recording; a handler still running after recordingWait leaves it incomplete, and the
+	// trial can't be judged.
+	sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordingWait)
+	err = srv.Shutdown(sctx)
+	cancel()
+	if err != nil {
+		return Trial{}, fmt.Errorf("%s trial %d: completing the recording: %w", h.Name, k, err)
+	}
 	path := filepath.Join(plan.Wire, fmt.Sprintf("%s-%d-%s.jsonl", h.Name, k, time.Now().Format("20060102T150405")))
 	if err := save(rec, path); err != nil {
 		return Trial{}, err
 	}
 	return Trial{Report: rep, Invalid: Invalid(rec.Exchanges())}, nil
 }
+
+// recordingWait bounds how long a trial waits, once its cell has returned, for the Recorder's
+// handlers to finish recording.
+const recordingWait = 30 * time.Second
 
 // save writes rec's exchanges to path, credentials redacted.
 func save(rec *wire.Recorder, path string) error {
