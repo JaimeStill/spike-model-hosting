@@ -103,9 +103,12 @@ of the admin tooling.
 
 - **Layout:** one Go module, a mise monorepo of areas, each with its own `mise.toml` of tasks
   (`mise run //<area>:<task>`): `hosting/` (the profile, router, swap, and probe packages and the
-  `profile` and `swap` commands), `evaluation/` (the consumers, instruments, and their scripts),
-  and `devices/<host class>/` (each host class's `profile.toml`, its build notes, and its render
-  tasks). `docs/` holds the model cards and, under `docs/findings/`, the measured results.
+  `profile` and `swap` commands), `evaluation/` (the consumers, instruments, gated stages,
+  Python suites, and their scripts), and `devices/<host class>/` (each host class's
+  `profile.toml`, its runbook, its build log, and its render tasks). `docs/` holds the
+  evaluation approach, the model cards, and, under `docs/findings/`, the measured results.
+  `context/` holds this file and the goals. The root [`README.md`](../README.md) is the front
+  page.
 - **Host-class profile:** the `profile` package loads, validates, and renders a TOML profile to
   llama.cpp's router presets and systemd unit, and the `profile` command
   (`hosting/cmd/profile`) lists, validates, and renders the profiles under `devices/`, and
@@ -130,9 +133,16 @@ of the admin tooling.
 - **Set swap:** the `swap` package and the `swap` command (`hosting/cmd/swap`) swap the router
   from the set it has loaded to another of the profile's sets over its API. They unload before they
   load, and time each model's step and the total.
-- **Instruments:** `go run ./evaluation/cmd/evaluate <step>` is the one entry point for the
-  instruments below; each runs as a step by name (`conform`, `concurrent`, `prefix`, `coldload`),
-  with its own flags, and `-h` lists the steps.
+- **Evaluation:** `go run ./evaluation/cmd/evaluate` takes a model, or a set's role, through
+  gated stages (admission, fitness, capacity, quality, set) and then the deep stage, stopping at
+  the first that fails and resuming from a named stage; absolute speed floors
+  (`evaluation/floors.toml`), per-tier bars from set A's two-run baseline
+  (`evaluation/bars.toml`), seeded tier lists with an early stop, and role pipelines on Inspect
+  AI and MTEB. The method, each tool by kind and stage, and how to run it are in
+  [`evaluation.md`](../docs/evaluation.md).
+- **Instruments:** `go run ./evaluation/cmd/evaluate <step>` also runs each instrument below
+  alone, as a step by name (`conform`, `concurrent`, `prefix`, `coldload`), with its own flags,
+  and `-h` lists the steps.
 - **Concurrent run:** the `concurrent` package and evaluate's `concurrent` step run Pi, Claude
   Code, and the model client's chat and embedding streams against the router at once. The run
   fails when an answer carries another request's nonce, or an embedding differs from its input's
@@ -144,13 +154,13 @@ of the admin tooling.
 - **Tool-call reliability:** the layered convention every platform, profile, consumer, and
   gateway is held to, with pass^k as its measure, in
   [`tool-reliability.md`](../docs/findings/tool-reliability.md). The `passk` package and the
-  `conform` step (`evaluate conform`) run clutch's conformance suite k times per consumer and
-  judge each by pass^k. OpenAI's gpt-oss compatibility test, once the engine row, was retired in
+  `conform` step (`evaluate conform`) run clutch's conformance suite k times per harness and
+  judge each harness's fit by one absolute bar, the agent role's harness-fit tier. OpenAI's gpt-oss compatibility test, once the engine row, was retired in
   `evaluation`: BFCL's tier covers tool calls for every model and engine.
 - **Measurement:** footprint, speed, prefix cache, cold load, and the capability matrix. The
   llama.cpp Vulkan baseline every platform is measured against is in
   [`baseline.md`](../docs/findings/baseline.md): the GuideLLM grid
-  (`mise run //evaluation:baseline`), prefix reuse (evaluate's `prefix` step), and cold load (the
+  (`MISE_ENV=consumers mise run //evaluation:baseline`), prefix reuse (evaluate's `prefix` step), and cold load (the
   `coldload` package and evaluate's `coldload` step). Set A's memory budget on the Framework,
   estimated against measured, the candidate sets' idle footprints, and the swap timings between
   sets (evidence 6's model-swapping cell) are in
@@ -158,11 +168,12 @@ of the admin tooling.
 - **llama.cpp builds:** each build move on the Framework, with its release-note review and
   what was re-verified on the new build, and what the main-model candidates loaded (files,
   handlers, the CPU fallback), in
-  [`llama-cpp-builds.md`](../devices/strix-halo/llama-cpp-builds.md). The Framework runs b11669.
+  [`llama-cpp-builds.md`](../devices/strix-halo/llama-cpp-builds.md). The Framework runs b11715.
 - **Gateways:** none, agentgateway, and LiteLLM.
 - **Admin tool:** a CLI on go-cli-sdk over the profile, with personal-agents' `outpost` as its
   baseline.
-- **Host runbooks:** what each host needs to run every platform kept.
+- **Host runbooks:** what each host needs to run every platform kept. The Framework's, for
+  llama.cpp on Vulkan, is [`devices/strix-halo/README.md`](../devices/strix-halo/README.md).
 
 ## Path
 
@@ -205,4 +216,4 @@ configurations), and `tau-protocol` (per-model capability options).
 
 ## The answer
 
-Pending: the `validate` task writes it.
+In the root [`README.md`](../README.md), "The answer".
