@@ -33,15 +33,20 @@ from inspect_ai.tool import ToolInfo
 
 import claude_code
 
-# The fake: pops the next queued response from FAKE_RESPONSES, logs the call to FAKE_LOG, and
-# prints the response's stdout, exiting with its code.
+# The fake: pops the next queued response from FAKE_RESPONSES and logs the call to FAKE_LOG, each
+# under a lock, and prints the response's stdout, exiting with its code.
 FAKE = textwrap.dedent("""\
     #!{python}
-    import json, os, sys
-    queue = os.environ["FAKE_RESPONSES"]
-    responses = json.load(open(queue))
-    response, rest = responses[0], responses[1:]
-    json.dump(rest, open(queue, "w"))
+    import fcntl, json, os, sys
+    # Calls run at once (test_connections), so each pops the queue under a lock: unlocked, one
+    # call read the file while another had truncated it to rewrite it.
+    with open(os.environ["FAKE_RESPONSES"], "r+") as queue:
+        fcntl.flock(queue, fcntl.LOCK_EX)
+        responses = json.load(queue)
+        response, rest = responses[0], responses[1:]
+        queue.seek(0)
+        queue.truncate()
+        json.dump(rest, queue)
     import select, stat, time
     began = time.time()
     # Claude Code waits 3 seconds for stdin, then gives up; the fake waits 0.2.
@@ -51,6 +56,7 @@ FAKE = textwrap.dedent("""\
     if "sleep" in response:
         time.sleep(response["sleep"])
     with open(os.environ["FAKE_LOG"], "a") as log:
+        fcntl.flock(log, fcntl.LOCK_EX)
         log.write(json.dumps({{
             "args": sys.argv[1:], "stdin_file": stat.S_ISREG(os.fstat(0).st_mode), "stdin": sys.stdin.read(), "cwd": os.getcwd(), "began": began, "ended": time.time(),
             "env": {{k: v for k, v in os.environ.items() if k.startswith(("ANTHROPIC_", "CLAUDE"))}},
