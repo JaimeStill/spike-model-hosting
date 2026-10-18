@@ -94,7 +94,10 @@ type timings struct {
 // completion is one chat completion's answer.
 type completion struct {
 	Text, Reasoning string
-	Timings         timings
+	// Finish is the choice's finish_reason: "stop", or "length" when the answer hit its
+	// max_tokens.
+	Finish  string
+	Timings timings
 	// Wall is the client's time from sending to the last byte; TTFT, to the first streamed token,
 	// reasoning included, for a streamed one.
 	Wall, TTFT time.Duration
@@ -123,6 +126,7 @@ func (c *client) complete(ctx context.Context, body map[string]any) (completion,
 				Content          string `json:"content"`
 				ReasoningContent string `json:"reasoning_content"`
 			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
 		Timings *timings `json:"timings"`
 	}
@@ -138,6 +142,7 @@ func (c *client) complete(ctx context.Context, body map[string]any) (completion,
 		return out, errors.New("the answer carries no timings")
 	}
 	out.Text, out.Reasoning, out.Timings = got.Choices[0].Message.Content, got.Choices[0].Message.ReasoningContent, *got.Timings
+	out.Finish = got.Choices[0].FinishReason
 	return out, nil
 }
 

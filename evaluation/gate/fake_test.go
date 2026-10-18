@@ -37,6 +37,9 @@ type fakeRouter struct {
 	crossed string
 	// empty is a model whose nonce answers come back empty.
 	empty string
+	// cutOff is a model whose nonce answers hit their max_tokens: a few words, then
+	// finish_reason "length", the nonce never reached unless crossed puts a foreign one first.
+	cutOff string
 	// refuse is a model whose chat completions and embeddings fail with a server error.
 	refuse string
 
@@ -252,6 +255,13 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 			answer = ""
 		}
 	}
+	finish := "stop"
+	if kind == "capacity" && body["model"] == f.cutOff {
+		finish, answer = "length", "The image shows"
+		if body["model"] == f.crossed {
+			answer = crossedNonce + " The image shows"
+		}
+	}
 	if audio {
 		f.mu.Lock()
 		f.audio = append(f.audio, body)
@@ -275,7 +285,7 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 	}
 	if !stream {
 		reply(map[string]any{
-			"choices": []map[string]any{{"message": map[string]any{"content": answer}}},
+			"choices": []map[string]any{{"message": map[string]any{"content": answer}, "finish_reason": finish}},
 			"timings": timings,
 		})
 		return

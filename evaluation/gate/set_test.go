@@ -329,6 +329,28 @@ func TestSetGates(t *testing.T) {
 			t.Errorf("crossing %+v; want no crossing, every vision answer unanswered, and a failure for nothing checked", x)
 		}
 	})
+	t.Run("cut off", func(t *testing.T) {
+		// An answer that hit its max_tokens before any nonce carries nothing to cross: recorded
+		// unanswered, naming why, not crossed.
+		h := newHarness(t, "")
+		h.router.cutOff = gemma26B
+		rep := h.run(t, "", nil)
+		x := check(t, rep, gate.StageSet, "", "no crossed answer")
+		if x.Values["crossed"] != 0 || x.Values["unanswered"] != x.Values["rounds"] ||
+			!strings.Contains(x.Detail, "vision/w0/r0: the answer hit its max_tokens after 10 tokens, with no nonce") {
+			t.Errorf("crossing %+v; want no crossing and every vision answer unanswered as cut off", x)
+		}
+	})
+	t.Run("cut off crossed", func(t *testing.T) {
+		// A cut-off answer that carries a nonce not its own is still crossed.
+		h := newHarness(t, "")
+		h.router.cutOff, h.router.crossed = gemma26B, gemma26B
+		rep := h.run(t, "", nil)
+		x := check(t, rep, gate.StageSet, "", "no crossed answer")
+		if x.Passed || x.Values["crossed"] == 0 || !strings.Contains(x.Detail, "crossed: round 1: vision/w0/r0: the answer carries "+crossedNonce) {
+			t.Errorf("crossing %+v; want a failure naming the cut-off vision answer's foreign nonce", x)
+		}
+	})
 	t.Run("unloaded", func(t *testing.T) {
 		h := newHarness(t, gptOSS)
 		first := h.run(t, "", nil)

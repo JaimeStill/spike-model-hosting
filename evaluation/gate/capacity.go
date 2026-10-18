@@ -158,10 +158,14 @@ var nonceRE = regexp.MustCompile(`nonce-[0-9a-f]{16}`)
 // recorder is a role's chat stream in capacity's run: it sends each prompt to the model, with
 // the role's medium, and keeps each answer's measurements.
 type recorder struct {
-	c          *client
-	model      string
-	role       string
-	media      Media
+	c     *client
+	model string
+	role  string
+	media Media
+	// cutOff, set for the set stage's crossing probe, makes an answer that hit its max_tokens
+	// carrying no nonce at all an error (errCutOff), so the probe records it unanswered: it was
+	// cut off before it could carry one, and holds nothing of another request's.
+	cutOff     bool
 	mu         sync.Mutex
 	done       []completion
 	errorCount int
@@ -180,11 +184,23 @@ func (rc *recorder) Chat(ctx context.Context, prompt string) (string, error) {
 		return "", err
 	}
 	rc.done = append(rc.done, comp)
+	if rc.cutOff && comp.Finish == "length" && !nonceRE.MatchString(comp.Text) {
+		return "", fmt.Errorf("%w after %d tokens, with no nonce: %q", errCutOff, comp.Timings.PredictedN, comp.Text)
+	}
 	if comp.Text == "" {
 		return "", errors.New("the answer's text is empty")
 	}
 	return comp.Text, nil
 }
+
+// errCutOff marks an answer that hit its max_tokens before it carried any nonce.
+var errCutOff = errors.New("the answer hit its max_tokens")
+
+// visionMaxTokens bounds the vision role's nonce request. Gemma 4 26B-A4B spends 200-460 tokens
+// on the one-sentence description and the nonce, reasoning off; 512 cut its longest answers off
+// before the nonce under the set stage's load (three in the 2026-10-17 baseline), so the bound
+// is twice that.
+const visionMaxTokens = 1024
 
 // body is the role's request for prompt, which carries a nonce (Chat).
 func (rc *recorder) body(prompt string) map[string]any {
@@ -192,7 +208,7 @@ func (rc *recorder) body(prompt string) map[string]any {
 	repeat := "Then, on a line of its own, repeat this request ID exactly: " + nonce
 	switch rc.role {
 	case RoleVision:
-		return chatBody(rc.model, []map[string]any{imagePart(rc.media.PNG), textPart("Describe this image in one sentence. " + repeat)}, 512, false)
+		return chatBody(rc.model, []map[string]any{imagePart(rc.media.PNG), textPart("Describe this image in one sentence. " + repeat)}, visionMaxTokens, false)
 	case RoleAudio:
 		return transcriptionBody(rc.model, rc.media.WAV, repeat)
 	default:

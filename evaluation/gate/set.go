@@ -521,10 +521,13 @@ type crossing struct {
 // place of its own nonce fails too, as would one that went to another model. The first round
 // starts with the tiers; a round in flight when they finish runs to its end.
 //
-// A request that errored or came back empty carries nothing to cross, so it is recorded
-// unanswered rather than crossed: an empty answer is a reliability fault the stage notes, not
-// another request's content (on set A, Gemma 4 26B-A4B returned one empty answer of 22 under the
-// full load). The check still needs each role checked at least once.
+// A request that errored, came back empty, or hit its max_tokens carrying no nonce at all
+// (finish_reason "length") carries nothing to cross, so it is recorded unanswered rather than
+// crossed: such an answer is a reliability fault the stage notes, not another request's content.
+// Only an answer carrying a nonce not its own is crossed, cut off or not. (On set A, Gemma 4
+// 26B-A4B's three short or empty answers in the 2026-10-17 baseline each generated exactly the
+// vision request's then 512 tokens, by the router's log.) The check still needs each role
+// checked at least once.
 func (r *Runner) cross(ctx context.Context, c *client, roles []assignment, done <-chan struct{}) crossing {
 	every := r.CrossEvery
 	if every == 0 {
@@ -539,7 +542,7 @@ func (r *Runner) cross(ctx context.Context, c *client, roles []assignment, done 
 			continue
 		}
 		cfg.Chat = append(cfg.Chat, concurrent.ChatStream{
-			Name: a.role, Chatter: &recorder{c: c, model: a.model, role: a.role, media: r.Media}, Workers: 1,
+			Name: a.role, Chatter: &recorder{c: c, model: a.model, role: a.role, media: r.Media, cutOff: true}, Workers: 1,
 		})
 	}
 	for {

@@ -89,8 +89,10 @@
 //     pool's floor, and no crossed answer, from rounds of capacity's nonce requests sent to every
 //     role's model at once, every Runner.CrossEvery, while the tiers run, each answer carrying
 //     its own nonce and no other and each embedding vector its own input's; a request that
-//     errored or came back empty is recorded unanswered, not crossed, so long as each role had
-//     one checked. A load whose every finished request errored fails it too. Its output is in the
+//     errored, came back empty, or hit its max_tokens (finish_reason "length") carrying no nonce
+//     at all is recorded unanswered, not crossed, so long as each role had one checked; only an
+//     answer carrying a nonce not its own is crossed. The vision role's nonce request allows 1024
+//     tokens. A load whose every finished request errored fails it too. Its output is in the
 //     run's set/alone and set/concurrent. A run resumed at the set stage needs the quality
 //     records it reuses, and is refused without them.
 //   - Deep records and never judges; a measurement that couldn't be taken fails it, as in every
