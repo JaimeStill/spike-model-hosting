@@ -89,10 +89,9 @@ func (v TierResult) Passes() int {
 const earlyStopFile = "early_stop.json"
 
 // ReadTier reads the Inspect JSON logs vision_quality.py or agent_quality.py left in out, one a
-// task, in their
-// names' order (their start times'), and its early stop account, when there is one. A log of a
-// run that didn't succeed, with a sample that errored or went unscored, or of another tier than
-// the others', fails.
+// task, in their names' order (their start times'), and its early stop account, when there is one.
+// A log of a run that didn't succeed, with a sample that errored or went unscored, or of another
+// tier than the others', fails.
 func ReadTier(out string) (TierResult, error) {
 	var res TierResult
 	entries, err := os.ReadDir(out)

@@ -91,12 +91,13 @@ func (r *Runner) agentTiers(ctx context.Context, rep *Report, t target) []Check 
 	return checks
 }
 
-// bfclTier runs one BFCL tier on t's model into t's agent/<tier>, and, when t is judged, judges
-// it; otherwise it runs whole and is recorded, passed. Its accuracy is judged against its floor, by check name (agent-<tier>), under [bars]; the floor also stops
-// it early (its screening fifth, then a 95% Wilson upper bound on the pass rate under the
-// floor); without one it runs whole and its accuracy is recorded. The check records the samples
-// run and passed, their model requests, their working time, the wall time, the data's commit,
-// the task's inspect_evals version and Inspect's release.
+// bfclTier runs one BFCL tier on t's model into t's agent/<tier>, and, when t is judged, judges it;
+// otherwise it runs whole and is recorded, passed. Its accuracy is judged against its floor, by
+// check name (agent-<tier>), under [bars]; the floor also stops it early (its screening fifth, then
+// a 95% Wilson upper bound on the pass rate under the floor); without one it runs whole and its
+// accuracy is recorded. The check records the samples run and passed, their model requests, their
+// working time, the wall time, the data's commit, the task's inspect_evals version and Inspect's
+// release.
 func (r *Runner) bfclTier(ctx context.Context, tg target, t AgentTier) Check {
 	name := AgentCheck(t.Name)
 	if r.Agent == nil || tg.dir == "" || r.Tiers == "" {

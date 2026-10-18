@@ -101,13 +101,13 @@ func (r *Runner) visionTiers(ctx context.Context, t target) []Check {
 }
 
 // visionTier runs one vision tier on t's model into t's vision/<tier>, and judges it when t is
-// judged; otherwise it runs whole and is recorded, passed. The probe passes on all of its
-// repeats, pass^5, whatever the bars hold. A benchmark's score is
-// judged against its floor, by check name (vision-<tier>), under [bars]; the floor also stops it
-// early (its screening fifth, then a 95% Wilson upper bound on the pass rate under the floor);
-// without one it runs whole and its score is recorded. The check records the samples run and
-// passed, the request time, the wall time, the dataset's revision, the tasks' inspect_evals
-// versions and Inspect's release, and the card's figure beside a tier the card reports.
+// judged; otherwise it runs whole and is recorded, passed. The probe passes on all of its repeats,
+// pass^5, whatever the bars hold. A benchmark's score is judged against its floor, by check name
+// (vision-<tier>), under [bars]; the floor also stops it early (its screening fifth, then a 95%
+// Wilson upper bound on the pass rate under the floor); without one it runs whole and its score is
+// recorded. The check records the samples run and passed, the request time, the wall time, the
+// dataset's revision, the tasks' inspect_evals versions and Inspect's release, and the card's
+// figure beside a tier the card reports.
 func (r *Runner) visionTier(ctx context.Context, tg target, t VisionTier) Check {
 	name := VisionCheck(t.Name)
 	if r.Vision == nil || tg.dir == "" || r.Tiers == "" {

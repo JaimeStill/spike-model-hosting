@@ -15,7 +15,8 @@
 // The API:
 //   - Provider is the provider Pi's and OpenCode's sessions name.
 //   - PiVersion, ClaudeVersion and OpenCodeVersion are the consumers mise environment's pins.
-//   - Executable returns a consumer's executable: the one given, or the pinned one mise finds.
+//   - Executable returns a consumer's executable: the one given, or the pinned one mise finds in
+//     EnvironmentDir, the directory whose mise.consumers.toml pins them.
 //   - Pi, ClaudeCode and OpenCode return a consumer's harness driver on the router, on the chat
 //     model given; Pi at the thinking level given, OpenCode with the options given. PiSettings
 //     is the settings file Pi reads the thinking level from. ClaudeEnv is the environment that

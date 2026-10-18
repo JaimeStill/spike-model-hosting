@@ -37,10 +37,11 @@
 //
 // The layout:
 //   - Each host class's profile is DevicesDir/<host class>/FileName under the module root, which
-//     ModuleRoot finds at or above a directory by its go.mod. Resolve turns a profile argument,
-//     a path or a host-class name, into a path, so a command finds a profile by name from any
-//     directory of the repository; Open resolves and loads one. Paths lists a devices
-//     directory's profiles, and Name gives a profile's host-class name from its path.
+//     ModuleRoot finds at or above a directory by its go.mod. Resolve turns a profile argument, a
+//     path or a host-class name (IsName tells them apart), into a path, so a command finds a
+//     profile by name from any directory of the repository; Open resolves and loads one. Paths
+//     lists a devices directory's profiles, and Name gives a profile's host-class name from its
+//     path.
 //
 // The renders:
 //   - Profile.RenderPresets writes the router's --models-preset INI file, every model's section

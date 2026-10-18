@@ -163,10 +163,10 @@ func ReadASR(out string) (ASRResult, error) {
 	return res, nil
 }
 
-// asrSet runs one ASR set's tier on t's model into t's asr/<set>, and, when t is judged, judges
-// its WER against the tier's bar, which must be a ceiling, [bars_at_most]. A bar also stops the set early (the
-// screening fifth, then a 95% lower bound on the WER, asr_quality.py's WERStop); without one the
-// tier runs whole and its WER is recorded. The check records the RTFx, the counts, the wall
+// asrSet runs one ASR set's tier on t's model into t's asr/<set>, and, when t is judged, judges its
+// WER against the tier's bar, which must be a ceiling, [bars_at_most]. A bar also stops the set
+// early (the screening fifth, then a 95% lower bound on the WER, asr_quality.py's WERStop); without
+// one the tier runs whole and its WER is recorded. The check records the RTFx, the counts, the wall
 // time, the dataset, normalizer and Inspect release, and the card's figure for the set beside the
 // WER where the model's card reports one.
 func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
