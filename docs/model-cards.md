@@ -99,6 +99,27 @@ note shape the profile:
 - **The template is the embedded one.** The profile has no template field; each model runs the
   chat template its GGUF embeds.
 
+## How the evaluation reads the card
+
+The evaluation ([`evaluation.md`](evaluation.md)) reads the card in five places:
+
+- **Admission** checks the profile's context against the card's (`card_context`), and fails a
+  model whose `c` passes it.
+- **The card's prompts** are the requests' own: the embedding encoder adds EmbeddingGemma 2's
+  task prompts (its "Task Instruction Prefixes", by MTEB task type), and every transcription
+  sends gemma-4-E4B's ASR prompt first and the clip after it, the card's order for audio.
+- **The card's tokenizer** cuts the GuideLLM grid's prompts to their token counts: the deep
+  stage takes it from the model's `card_url`.
+- **The card's own scores** are recorded beside ours where the card reports one for a tier, and
+  never judged: gemma-4-E4B's FLEURS 0.08 (a multilingual figure, against our English-only set)
+  and Gemma 4 26B-A4B's MMMU Pro 73.8% (a harder variant than our MMMU validation).
+- **The card's sampling** is what the agent tiers and harness fit run at: the router's
+  defaults, from the presets. The vision benchmarks and the transcriptions run at temperature 0
+  with reasoning off instead, so a score or a speed measures the answer, not a sample of it or
+  the thinking before it: at the card's temperature 1, gemma-4-E4B sometimes reasoned 145-169
+  tokens before transcribing, which cut fitness's RTFx to 1.2-1.5. The vision probe stays at the
+  card's values, since its pass^5 measures the served model as a client sees it.
+
 ## Context catalog
 
 Every model in `devices/strix-halo/profile.toml`, with what a larger context would cost. All figures
