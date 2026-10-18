@@ -42,9 +42,8 @@ as they complete.
 
 Early stop (pass_stop.py's PassStop, with a bar): the tier's screening fifth runs whole, then,
 before each further sample, the tier stops once the one-sided 95% Wilson upper bound on its pass
-rate is below the bar (package evaluation/tier's rule). A BFCL sample scores 1 or 0, so the pass
-rate is the tier's accuracy. The tier's account of its early stop is written beside the log as
-early_stop.json.
+rate is below the bar. A BFCL sample scores 1 or 0, so the pass rate is the tier's accuracy. The
+tier's account of its early stop is written beside the log as early_stop.json.
 """
 
 import argparse

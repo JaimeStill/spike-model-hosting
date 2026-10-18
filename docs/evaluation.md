@@ -10,9 +10,9 @@ The first five stages are gates. The deep stage records and judges nothing; it r
 every gate has passed. Each run writes one report, which names the build, set, model, roles, the
 stage reached, the stages not run and why, and each stage's wall time.
 
-The code is the `gate` package (the stages), the `tier` package (seeded lists, early stop, and
-bars), and `evaluation/cmd/evaluate` (the command); each package's doc lists its API. Set A's
-measured results are in [`findings/baseline.md`](findings/baseline.md), "Set A's baseline on
+The code is the `gate` package (the stages), the `tier` package (seeded lists and bars), the
+uv project `evaluation/suites` (the Inspect AI and MTEB runs, with their early stops), and
+`evaluation/cmd/evaluate` (the command); each package's doc lists its API. Set A's measured results are in [`findings/baseline.md`](findings/baseline.md), "Set A's baseline on
 b11715".
 
 ## The stages

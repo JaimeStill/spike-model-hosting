@@ -49,6 +49,7 @@ from kaldialign import edit_distance
 
 from asr_normalizer import SOURCE as NORMALIZER
 from asr_normalizer import EnglishTextNormalizer
+from pass_stop import Z95, read_list
 
 ESB = ("hf-audio/esb-datasets-test-only-sorted", "de79e57adf9983993bcc72586d7313460825f5eb")
 FLEURS = ("google/fleurs", "70bb2e84b976b7e960aa89f1c648e09c59f894dd")
@@ -136,18 +137,6 @@ def ids(spec: AsrSet) -> list[str]:
     return [r["uid"] for r in rows(spec, [spec.text]) if scored(r[spec.text])]
 
 
-def read_tier(path: str) -> tuple[str, list[str]]:
-    """A tier list's dataset header and IDs (package evaluation/tier's format)."""
-    dataset, uids = "", []
-    for line in Path(path).read_text().splitlines():
-        line = line.strip()
-        if line.startswith("# dataset "):
-            dataset = line.removeprefix("# dataset ")
-        elif line and not line.startswith("#"):
-            uids.append(line)
-    return dataset, uids
-
-
 def clips(name: str, spec: AsrSet, uids: list[str]) -> dict[str, dict]:
     """Each utterance's reference, length and WAV file, kept under ASR_CACHE/<set>@<revision>.
 
@@ -212,10 +201,6 @@ def wer():
     return score
 
 
-# The standard normal quantile of a one-sided 95% bound.
-Z95 = 1.6448536269514722
-
-
 def wer_lower_bound(errors: list[int], words: list[int]) -> float:
     """The one-sided 95% lower bound on a corpus WER from the utterances run so far.
 
@@ -278,7 +263,7 @@ def asr(name: str, tier: str, bar: float | None = None):
     """One tier of the set name's utterances, transcribed and scored by WER; a bar stops it
     early."""
     spec = SETS[name]
-    dataset, uids = read_tier(tier)
+    dataset, uids = read_list(tier)
     if dataset != spec.dataset:
         raise SystemExit(f"{tier} is drawn from {dataset!r}, not the set's {spec.dataset!r}")
     found = clips(name, spec, uids)

@@ -2,10 +2,7 @@ package tier_test
 
 import (
 	"bytes"
-	"context"
-	"errors"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,127 +11,6 @@ import (
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/tier"
 )
-
-// TestUpperBound checks the Wilson bound at known points, computed independently.
-func TestUpperBound(t *testing.T) {
-	for _, tc := range []struct {
-		passes, n int
-		want      float64
-	}{
-		{0, 4, 0.4034786},
-		{5, 10, 0.7307282},
-		{8, 10, 0.9314420},
-		{0, 1, 0.7301341},
-		{0, 0, 1},
-	} {
-		if got := tier.UpperBound(tc.passes, tc.n); math.Abs(got-tc.want) > 1e-6 {
-			t.Errorf("UpperBound(%d, %d) = %.7f, want %.7f", tc.passes, tc.n, got, tc.want)
-		}
-	}
-}
-
-// list returns a list of n IDs, s0 to s<n-1>.
-func list(n int) tier.List {
-	l := tier.List{Tier: "t", Dataset: "d", Seed: 1}
-	for i := range n {
-		l.IDs = append(l.IDs, fmt.Sprintf("s%d", i))
-	}
-	return l
-}
-
-// alternate passes the samples at even positions and fails the rest, counting the samples sent.
-func alternate(sent *int) tier.Judge {
-	return func(_ context.Context, id string) (bool, error) {
-		*sent++
-		var i int
-		_, _ = fmt.Sscanf(id, "s%d", &i)
-		return i%2 == 0, nil
-	}
-}
-
-// TestRunStopsAtKnownPoint runs alternating passes and fails, a 50% rate, against bars the
-// rate can't reach: the bound falls below 0.8 at the 6th sample and below 0.7 at the 16th.
-func TestRunStopsAtKnownPoint(t *testing.T) {
-	for _, tc := range []struct {
-		bar      float64
-		stopAt   int
-		boundFmt string
-	}{
-		{0.8, 6, "0.779"},
-		{0.7, 16, "0.690"},
-	} {
-		t.Run(fmt.Sprint(tc.bar), func(t *testing.T) {
-			sent := 0
-			res, err := tier.Run(t.Context(), list(20), &tc.bar, alternate(&sent))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !res.Stopped || res.Passed || res.Run != tc.stopAt || sent != tc.stopAt {
-				t.Errorf("stopped %v passed %v after %d (sent %d); want a failed stop after %d", res.Stopped, res.Passed, res.Run, sent, tc.stopAt)
-			}
-			if res.Tier != "t" || !strings.Contains(res.Reason, "upper bound "+tc.boundFmt) {
-				t.Errorf("result %+v doesn't name tier t and the bound %s", res, tc.boundFmt)
-			}
-		})
-	}
-}
-
-// TestRunScreensFirst shows the screening fifth runs whole: every sample failing, the bound is
-// under the bar after one, but the tier stops only after its screening fifth, 4 of 20.
-func TestRunScreensFirst(t *testing.T) {
-	bar := 0.8
-	sent := 0
-	res, err := tier.Run(t.Context(), list(20), &bar, func(context.Context, string) (bool, error) { sent++; return false, nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Screening != 4 || res.Run != 4 || sent != 4 || !res.Stopped {
-		t.Errorf("screening %d, run %d, sent %d, stopped %v; want a stop after the screening 4", res.Screening, res.Run, sent, res.Stopped)
-	}
-}
-
-// TestRunWithoutBar shows a tier with no bar runs to its end and passes, recording its rate.
-func TestRunWithoutBar(t *testing.T) {
-	sent := 0
-	res, err := tier.Run(t.Context(), list(10), nil, alternate(&sent))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if res.Run != 10 || !res.Passed || res.Stopped || res.Rate != 0.5 || !strings.HasPrefix(res.Reason, "no bar") {
-		t.Errorf("result %+v; want all 10 run, passed, rate 0.5, no bar", res)
-	}
-}
-
-// TestRunToEnd shows a tier whose bound stays over the bar runs to its end, and is judged by its
-// rate against the bar.
-func TestRunToEnd(t *testing.T) {
-	sent := 0
-	for _, tc := range []struct {
-		bar  float64
-		pass bool
-	}{{0.5, true}, {0.55, false}} {
-		res, err := tier.Run(t.Context(), list(10), &tc.bar, alternate(&sent))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if res.Run != 10 || res.Stopped || res.Passed != tc.pass {
-			t.Errorf("bar %v: result %+v; want all run, passed %v", tc.bar, res, tc.pass)
-		}
-	}
-}
-
-// TestRunJudgeError shows a sample that can't be judged ends the run with an error naming it.
-func TestRunJudgeError(t *testing.T) {
-	_, err := tier.Run(t.Context(), list(3), nil, func(_ context.Context, id string) (bool, error) {
-		if id == "s1" {
-			return false, errors.New("boom")
-		}
-		return true, nil
-	})
-	if err == nil || !strings.Contains(err.Error(), "sample s1") {
-		t.Errorf("err = %v; want one naming sample s1", err)
-	}
-}
 
 // TestGenerateDeterministic shows the same IDs and seed give the same list, in whatever order
 // the dataset lists them, a different seed another, and the list round-trips its format.

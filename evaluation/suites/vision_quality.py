@@ -46,8 +46,7 @@ complete.
 
 Early stop (pass_stop.py's PassStop, shared with agent_quality.py, with a bar): the tier's screening fifth runs whole, then, before each
 further sample, the tier stops once the one-sided 95% Wilson upper bound on its pass rate is
-below the bar (package evaluation/tier's rule). A sample passes at a score of 0.5 or more: a
-correct choice, or an ANLS of 0.5 or more, which ANLS's own threshold makes any ANLS above 0.
+below the bar. A sample passes at a score of 0.5 or more: a correct choice, or an ANLS of 0.5 or more, which ANLS's own threshold makes any ANLS above 0.
 The bar judges the tier's mean score, the accuracy or the mean ANLS; a sample's ANLS is never
 above its pass, so the mean ANLS is never above the pass rate, and a bound that puts the pass
 rate under the bar puts the mean ANLS under it too. The tier's account of its early stop, the

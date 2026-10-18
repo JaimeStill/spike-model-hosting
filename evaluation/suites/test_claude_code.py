@@ -3,7 +3,7 @@ no login: the command line and environment it runs Claude Code with, the prompt 
 reported model it records, and its retries. The Go test in this directory (suites_test.go) runs
 it through the pinned uv and Python, offline:
 
-    uv run --project evaluation/suites --locked --offline python -m unittest test_claude_code
+    uv run --project evaluation/suites --locked --offline python -m unittest discover -p "test_*.py"
 
 The fake answers each call with the next of the responses a test queues, and logs each call's
 arguments, stdin, working directory and the environment's ANTHROPIC_ and CLAUDE variables.
@@ -187,7 +187,7 @@ class ClaudeCodeTest(unittest.TestCase):
     def test_retries_bounded(self):
         """Transient failures stop being retried after max_retries."""
         self.respond(*[failure(529)] * 3)
-        with self.assertRaises(Exception):
+        with self.assertRaises(claude_code.ClaudeCodeError):
             asyncio.run(self.model(max_retries=2).generate([ChatMessageUser(content="Begin.")]))
         self.assertEqual(len(self.calls()), 3)
 
@@ -196,7 +196,7 @@ class ClaudeCodeTest(unittest.TestCase):
         for response in (failure(401), {"code": 1, "stdout": "Invalid API key"}):
             self.log.unlink(missing_ok=True)
             self.respond(response, success("never"))
-            with self.assertRaises(Exception):
+            with self.assertRaises(claude_code.ClaudeCodeError):
                 asyncio.run(self.model().generate([ChatMessageUser(content="Begin.")]))
             self.assertEqual(len(self.calls()), 1)
 
@@ -204,7 +204,7 @@ class ClaudeCodeTest(unittest.TestCase):
         """A generate that offers tools is refused, without running Claude Code."""
         self.respond(success("never"))
         tool = ToolInfo(name="lookup", description="Look up a booking.")
-        with self.assertRaises(Exception):
+        with self.assertRaises(claude_code.ClaudeCodeError):
             asyncio.run(self.model().generate([ChatMessageUser(content="Begin.")], tools=[tool]))
         self.assertEqual(self.calls(), [])
 

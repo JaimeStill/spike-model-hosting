@@ -2,7 +2,6 @@ package tier
 
 import (
 	"bufio"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -15,22 +14,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 )
-
-// Z95 is the standard normal quantile of a one-sided 95% bound.
-const Z95 = 1.6448536269514722
-
-// UpperBound returns the one-sided 95% Wilson score upper bound on the pass rate of passes out
-// of n samples, and 1 for no samples.
-func UpperBound(passes, n int) float64 {
-	if n <= 0 {
-		return 1
-	}
-	p := float64(passes) / float64(n)
-	nf, z2 := float64(n), Z95*Z95
-	centre := p + z2/(2*nf)
-	margin := Z95 * math.Sqrt(p*(1-p)/nf+z2/(4*nf*nf))
-	return min(1, (centre+margin)/(1+z2/nf))
-}
 
 // List is a tier's seeded sample list: the sample IDs, in the order they are sent.
 type List struct {
@@ -157,77 +140,6 @@ func LoadBars(path string) (Bars, error) {
 func (b Bars) Bar(name string) (Bar, bool) {
 	v, ok := b[name]
 	return v, ok
-}
-
-// Judge sends one sample and reports whether it passed. An error ends the run: it is a sample
-// that couldn't be judged, not one that failed.
-type Judge func(ctx context.Context, id string) (bool, error)
-
-// Result is a tier's run.
-type Result struct {
-	Tier string `json:"tier"`
-	// Size is the list's length; Screening, its screening fifth; Run, the samples sent.
-	Size      int `json:"size"`
-	Screening int `json:"screening"`
-	Run       int `json:"run"`
-	Passes    int `json:"passes"`
-	// Rate is Passes over Run; Upper, the one-sided 95% Wilson bound on it when the run ended.
-	Rate  float64 `json:"rate"`
-	Upper float64 `json:"upper_bound"`
-	// Bar is the tier's bar, nil when it has none.
-	Bar *float64 `json:"bar"`
-	// Stopped is whether the bound fell below the bar before the list's end.
-	Stopped bool `json:"stopped"`
-	Passed  bool `json:"passed"`
-	// Reason says how the tier ended, naming the bound that stopped it.
-	Reason string `json:"reason"`
-}
-
-// Screening returns the size of a list of n samples' screening fifth, ceil(n/5).
-func Screening(n int) int { return (n + 4) / 5 }
-
-// Run sends l's samples to judge in order: the screening fifth whole, then one at a time until
-// the upper bound on the pass rate falls below bar or the list ends. A nil bar runs the list to
-// its end and records it, never failing.
-func Run(ctx context.Context, l List, bar *float64, judge Judge) (Result, error) {
-	res := Result{Tier: l.Tier, Size: len(l.IDs), Screening: Screening(len(l.IDs)), Bar: bar}
-	for i, id := range l.IDs {
-		if err := ctx.Err(); err != nil {
-			return res, err
-		}
-		ok, err := judge(ctx, id)
-		if err != nil {
-			return res, fmt.Errorf("tier %s: sample %s: %w", l.Tier, id, err)
-		}
-		res.Run = i + 1
-		if ok {
-			res.Passes++
-		}
-		res.Upper = UpperBound(res.Passes, res.Run)
-		if bar != nil && res.Run >= res.Screening && res.Run < res.Size && res.Upper < *bar {
-			res.Stopped = true
-			break
-		}
-	}
-	if res.Run > 0 {
-		res.Rate = float64(res.Passes) / float64(res.Run)
-	}
-	switch {
-	case bar == nil:
-		res.Passed = true
-		res.Reason = fmt.Sprintf("no bar: ran all %d, pass rate %.3f recorded", res.Run, res.Rate)
-	case res.Stopped:
-		res.Reason = fmt.Sprintf("stopped after %d of %d: the 95%% upper bound %.3f on the pass rate (%d/%d) fell below the bar %.3f",
-			res.Run, res.Size, res.Upper, res.Passes, res.Run, *bar)
-	default:
-		res.Passed = res.Rate >= *bar
-		verdict := "at or above"
-		if !res.Passed {
-			verdict = "below"
-		}
-		res.Reason = fmt.Sprintf("ran all %d: pass rate %.3f, %s the bar %.3f", res.Run, res.Rate, verdict, *bar)
-	}
-	return res, nil
 }
 
 // ReadListFile reads the list at path.

@@ -1,10 +1,12 @@
 """The early stop the pass-rate tiers share, vision_quality.py's and agent_quality.py's, and the tier
-list format they read: package evaluation/tier's rule and format, in Python.
+list format every suite reads (package evaluation/tier's, which writes it).
 
 A tier's screening fifth runs whole, then, before each further sample, the tier stops once the
-one-sided 95% Wilson upper bound on its pass rate is below the bar (PassStop). The tier's account
-of its early stop, the samples it stopped and why, is written beside its Inspect logs as
-EARLY_STOP_FILE, which evaluate reads.
+one-sided 95% Wilson upper bound on its pass rate is below the bar (PassStop). Wilson's interval
+is chosen over Clopper-Pearson because it stays close to its nominal coverage at the small counts
+a screening fifth holds, where Clopper-Pearson is conservative and would stop later; it is also
+closed-form. The tier's account of its early stop, the samples it stopped and why, is written
+beside its Inspect logs as EARLY_STOP_FILE, which evaluate reads. Its test is test_early_stop.py.
 """
 
 import math
@@ -25,8 +27,7 @@ EARLY_STOP_FILE = "early_stop.json"
 
 
 def upper_bound(passes: int, n: int) -> float:
-    """The one-sided 95% Wilson score upper bound on a pass rate, package evaluation/tier's
-    UpperBound, and 1 for no samples."""
+    """The one-sided 95% Wilson score upper bound on a pass rate, and 1 for no samples."""
     if n <= 0:
         return 1.0
     p, z2 = passes / n, Z95 * Z95
