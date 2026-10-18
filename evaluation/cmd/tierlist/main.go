@@ -8,9 +8,12 @@
 // It reads the dataset's IDs from stdin, one a line, after the line "# dataset <name>" that
 // names the dataset; blank lines are skipped. It draws -n of them with -seed through tier's
 // Generate, which sorts and deduplicates them first, so the list depends only on the IDs and
-// the seed, and writes the list to stdout. The audio role's tier lists, evaluation/tiers/asr-*.txt,
-// are drawn from the suites project's `asr_quality.py ids`, which writes its set's dataset line
-// and IDs in this form (mise run //evaluation:asr-tiers, in the consumers environment).
+// the seed, and writes the list to stdout. Every committed list in evaluation/tiers is drawn
+// from the `ids` command of its suite in the suites project, which writes the dataset line and
+// IDs in this form: asr_quality.py's for the audio role's lists, vision_quality.py's for the
+// vision role's, and agent_quality.py's and tau2_quality.py's for the agent role's BFCL and τ2
+// lists (mise run //evaluation:asr-tiers, vision-tiers, agent-tiers and tau2-tiers, in the
+// consumers environment).
 //
 // It exits 0 on a list written, 1 when the IDs can't be read or are fewer than -n, and 2 on a
 // usage error.

@@ -4,7 +4,7 @@ user Sonnet through the laptop's pinned Claude Code (claude_code.py's provider).
 
     uv run --project evaluation/suites python evaluation/suites/tau2_quality.py eval \
         --router http://framework:8080 --model ggml-org/gpt-oss-120b-GGUF:MXFP4 \
-        --domain airline --list evaluation/tiers/deep-tau2-airline.txt --trials 2 \
+        --domain airline --list evaluation/tiers/agent-tau2-airline.txt --trials 2 \
         --claude /path/to/pinned/claude --claude-config .state/claude --output DIR
 
     uv run --project evaluation/suites python evaluation/suites/tau2_quality.py ids --domain retail
@@ -15,9 +15,9 @@ the stock task keeps the domain's whole database in each sample's store and stor
 28 MB of JSON a sample, 3 MB compressed, so a JSON log of 24 samples would run to gigabytes. The
 summary holds what the deep stage needs of it, read back through Inspect one sample at a time:
 the log's status, task, packages and metadata, and each sample's ID, trial, score, working time,
-simulator store and failed model calls, by role. ids prints the domain's dataset, as a tier list's "# dataset" header,
-then every task ID of it the domain draws from: the pool the command evaluation/cmd/tierlist
-draws a list from (mise run //evaluation:deep-tiers).
+simulator store and failed model calls, by role. ids prints the domain's dataset, as a tier
+list's "# dataset" header, then every task ID of it the domain draws from: the pool the command
+evaluation/cmd/tierlist draws a list from (MISE_ENV=consumers mise run //evaluation:tau2-tiers).
 
 The tasks are inspect_evals' own tau2_airline and tau2_retail, unforked, unshuffled, their
 samples picked by Inspect's sample-id filtering from the list. Their data ships inside

@@ -131,29 +131,31 @@
 //     roles, RoleAgent being the profile's chat role (ProfileRole, ParseRole).
 //   - Floors are the per-role floors, data in evaluation/floors.toml, which LoadFloors reads.
 //   - Report, StageResult and Check are a run's record, each check its measured value beside
-//     the floor it was judged against; Ceiling compares the measured decode with the speed the
+//     the floor it was judged against (AtLeast or AtMost), each stage ending StatusPass,
+//     StatusFail or StatusNotRun; Ceiling compares the measured decode with the speed the
 //     host's memory bandwidth allows the model, recorded and never gated. WriteReport,
 //     ReadReport and WriteSummary write and read it; RunDir and LatestRun place it under the
-//     state root, as <state>/evaluate/<UTC time>-<Slug(model)>/report.json.
-//   - Footprint reads the pool; SSH reads it with amdgpu_top over ssh, and ParseAmdgpuTop parses
-//     that reading.
+//     state root, as <state>/evaluate/<UTC time>-<Slug(model)>/ReportFile.
+//   - Footprint reads the pool, a Pool; SSH reads it with amdgpu_top over ssh, and
+//     ParseAmdgpuTop parses that reading.
 //   - MTEB runs one MTEB task, ASR one ASR set's tier, Vision one vision tier and Agent one BFCL
 //     tier; UV runs each through the suites project (SuitesDir) with uv. ReadTier reads a vision
 //     or BFCL tier's Inspect logs into a TierResult, whose Score and Passes are the tier's;
-//     VisionTiers and AgentTiers name the tiers, VisionCheck and AgentCheck a tier's check, list
+//     VisionTiers and AgentTiers name the tiers (each a VisionTier or AgentTier), VisionCheck and
+//     AgentCheck a tier's check, list
 //     and bar name, and InspectEvalsVersion is the inspect_evals the project pins. Conform runs
 //     the conform tier (passk.Runner); ConformTier names the tier, ConformK its trials and
 //     ConformReport its table's file. ReadMTEB reads an MTEB result, MTEB's <task>.json and the
 //     encoder's encoder.json, into an MTEBResult, and ReadASR an Inspect JSON log into an
 //     ASRResult, whose WER and RTFx are the set's. MTEBVersion and InspectVersion are the MTEB
-//     and Inspect AI the project pins (package evaluation/suites). AudioSets name the ASR sets,
-//     ASRTier a set's tier, and TiersDir where the tier lists are.
+//     and Inspect AI the project pins (package evaluation/suites). EmbeddingTasks name the MTEB
+//     tasks, AudioSets the ASR sets, ASRTier a set's tier, and TiersDir where the tier lists are.
 //   - Tau2 runs one τ2 domain, UV through tau2_quality.py, its simulator UV.Claude on the
 //     UV.ClaudeConfig login; ReadTau2 reads its summary (Tau2Summary, beside its compressed
 //     Inspect log) into a Tau2Result, whose PassK is pass^k. Tau2Domains, Tau2Trials,
-//     Tau2Check and Tau2Simulator name the domains, trials, check and list, and simulator. Grid runs one GuideLLM cell, GuideLLM with the pinned
-//     executable; ReadGrid reads its JSON into a GridResult; GridCells and GridCell.Name name
-//     the cells. PrefixTokens is prefix reuse's prefix; ColdLoadWarm and ColdLoadCold are cold
+//     Tau2Check and Tau2Simulator name the domains, trials, check and list, and simulator. Grid
+//     runs one GuideLLM cell, GuideLLM with the pinned executable; ReadGrid reads its JSON into a
+//     GridResult; GridCells and GridCell.Name name the cells. PrefixTokens is prefix reuse's prefix; ColdLoadWarm and ColdLoadCold are cold
 //     load's root commands.
 //   - Media are the image and audio clip the stages send, the probe's (LoadMedia); WAVSeconds
 //     is a clip's length.

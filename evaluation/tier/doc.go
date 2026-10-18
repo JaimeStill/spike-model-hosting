@@ -15,7 +15,8 @@
 // closed-form.
 //
 // The API:
-//   - UpperBound is the Wilson bound on passes of n; Z95 is its z.
+//   - UpperBound is the Wilson bound on passes of n; Z95 is its z. Screening is the size of a
+//     list's screening fifth.
 //   - List is a tier's seeded sample list; Generate draws one from a dataset's IDs with a seed,
 //     the same list for the same IDs and seed in any order. ReadList, ReadListFile and List.Write
 //     read and write its text format: three header lines, "# tier <name>", "# dataset <name>" and

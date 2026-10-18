@@ -36,7 +36,8 @@
 //     its passes, failures, n/a, skips and reasons, and its invalid requests.
 //   - Judge judges a harness's trials against the fit bar at k into a Fit: whether it fits, the
 //     capabilities it excluded, and the first trial that failed with each failed cell's reason
-//     and each invalid request. Fit.Verdict says so in a line.
+//     and each invalid request. Fit.Verdict says so in a line; Fit.Applicable counts the
+//     capabilities its bar holds, and Fit.Failed says whether a trial failed it.
 //   - Invalid picks out of a recording (wire.Recorder) the model requests the router answered
 //     with an error.
 //   - Runner runs a Plan of k trials over the router, every harness's cell once a trial, each

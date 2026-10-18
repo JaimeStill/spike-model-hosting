@@ -2,15 +2,17 @@
 
 A spike for the Standards Lab reference architecture. It compares serving platforms (llama.cpp,
 vLLM, SGLang) and gateway approaches (none, agentgateway, LiteLLM) for locally hosted models
-across the Strix Halo and Dell NVIDIA host classes, behind one host-class profile schema. The
-repository is managed with the marathon workflow; start from `context/README.md`.
+across the Strix Halo and Dell NVIDIA host classes, behind one host-class profile schema.
+`README.md` is the front page; the repository is managed with the marathon workflow, so start
+from `context/README.md`.
 
 - **Standards:** `STANDARDS.md`, with pointers into the architecture repository.
 - **Layout:** one Go module in a mise monorepo. `hosting/` holds the profile, router, swap, and
-  probe packages and their commands; `evaluation/` the consumers and instruments; `devices/<host
-  class>/` each host class's `profile.toml` and notes; `docs/` the model cards and, under
-  `docs/findings/`, the measured results. Each area's `mise.toml` holds its tasks, run from the
-  root as `mise run //<area>:<task>`.
+  probe packages and their commands; `evaluation/` the consumers, instruments, gated stages, and
+  Python suites; `devices/<host class>/` each host class's `profile.toml`, runbook (`README.md`),
+  and build log; `docs/` the evaluation approach, the model cards, and, under `docs/findings/`,
+  the measured results; `context/` marathon's files only. Each area's `mise.toml` holds its
+  tasks, run from the root as `mise run //<area>:<task>`.
 - **Check:** `mise run check` (hermetic). The HTTP probes (the `probe` package) run against
   the router `SPIKE_ROUTER_URL` names, as `mise run integration`.
 - **Profiles:** `devices/*/profile.toml` are the host-class profiles; `go run ./hosting/cmd/profile`
@@ -33,7 +35,17 @@ repository is managed with the marathon workflow; start from `context/README.md`
   nothing is served.
 - **Consumers and instruments:** `evaluation/mise.consumers.toml` pins them, run from the root as
   `MISE_ENV=consumers mise -C evaluation exec -- <tool>` (mise loads that file only in
-  `evaluation/`); their untracked state is under the root's `.state/`. The instruments run as
-  steps of one command, `go run ./evaluation/cmd/evaluate <step>` (conform, concurrent, prefix,
-  coldload; `-h` lists them); each package's `doc.go` lists its API. Their results are in
-  `docs/findings/baseline.md` and `docs/findings/tool-reliability.md`.
+  `evaluation/`); their untracked state is under the root's `.state/`.
+- **Evaluation:** `go run ./evaluation/cmd/evaluate -set a -role <role>` takes a model through
+  the stages admission, fitness, capacity, quality, set, and deep, judged by
+  `evaluation/floors.toml` and `evaluation/bars.toml` (set A's two-run baseline); `-set a` alone
+  is a set run, `-from <stage>` resumes. The agent's tier 3 is harness fit: conform pass^5
+  through every pinned harness, one absolute bar. The instruments also run alone as steps
+  (`conform`, `concurrent`, `prefix`, `coldload`; `-h` lists them). Before each run, reload the
+  set over the router's API and set `TMPDIR` to `.state/tmp` (τ2 leaves a database copy per
+  sample). Reports go to `.state/evaluate/`; once findings are committed, run outputs are
+  removed. `docs/evaluation.md` is the method; each package's `doc.go` lists its API.
+- **Findings:** `docs/findings/baseline.md` (speed, prefix, cold load, set A's scores and bars),
+  `docs/findings/tool-reliability.md` (pass^5 and harness fit), and
+  `docs/findings/memory-budget.md` (the pool); the Framework's builds are in
+  `devices/strix-halo/llama-cpp-builds.md`.
