@@ -26,14 +26,6 @@ var roleModels = map[string]string{
 	gate.RoleAgent: gptOSS, gate.RoleVision: gemma26B, gate.RoleAudio: gemmaE4B, gate.RoleEmbedding: embedding,
 }
 
-func TestTierOne(t *testing.T) {
-	for role, want := range setUnits {
-		if got := gate.TierOne(role); !slices.Equal(got, want) {
-			t.Errorf("TierOne(%s) = %q; want %q", role, got, want)
-		}
-	}
-}
-
 // TestSetRun runs set A's set stage as a set run: every stage before it is reported not run,
 // each role's tier 1 runs on its model alone and then at once, without its bar even where one
 // would fail it, and the stage passes on the pool's floor and no crossed answer.

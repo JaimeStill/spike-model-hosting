@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +38,7 @@ type harness struct {
 }
 
 // newHarness returns a runner for model in set A against a fake router with set A loaded, the
-// committed floors, a pool with 3333MiB free, as set A left it idle on b11669, no bars, a fake uv
+// test floors (testdata/floors.toml), a pool with 3333MiB free, as set A left it idle on b11669, no bars, a fake uv
 // that answers each MTEB task, ASR set, vision tier, BFCL tier and τ2 domain with its recorded
 // result, a fake conform run in which Pi fits and Claude Code and OpenCode drop at their first
 // trial, and a fake GuideLLM that answers every cell with a recorded one; the architect isn't at
@@ -52,7 +53,7 @@ func newHarness(t *testing.T, model string) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	floors, err := gate.LoadFloors("../floors.toml")
+	floors, err := gate.LoadFloors("testdata/floors.toml")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +130,6 @@ func TestRunAgentPasses(t *testing.T) {
 	if c := check(t, rep, gate.StageCapacity, gate.RoleAgent, "no crossed nonce"); !strings.HasPrefix(c.Detail, "4 answers in flight") {
 		t.Errorf("capacity's nonce check %q; want 4 answers in flight", c.Detail)
 	}
-	check(t, rep, gate.StageCapacity, gate.RoleAgent, "no crossed nonce")
 	check(t, rep, gate.StageCapacity, gate.RoleAgent, "embedding tolerance")
 }
 
@@ -425,20 +425,29 @@ func TestReport(t *testing.T) {
 	}
 }
 
+// TestLoadFloors reads a floors file into each role's floors by its TOML key, loads the committed
+// evaluation/floors.toml, and refuses a key the schema doesn't define or a floor missing.
 func TestLoadFloors(t *testing.T) {
-	f, err := gate.LoadFloors("../floors.toml")
-	if err != nil {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "floors.toml")
+	text := "[pool]\nfree_mib = 1\n[agent]\ndecode_tok_s = 2\nprefill_tok_s = 3\nttft_8k_s = 4\nstream4_decode_tok_s = 5\n" +
+		"[vision]\nimage_answer_s = 6\n[audio]\nrtfx = 7\nstream4_rtfx = 8\n[embedding]\nthroughput_tok_s = 9\nquery32_ms = 10\n"
+	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if f.Agent.DecodeTokS != 20 || f.Pool.FreeMiB != 2816 || f.Embedding.ThroughputTokS != 4300 || f.Audio.Stream4RTFx != 1 {
-		t.Errorf("floors %+v", f)
+	f, err := gate.LoadFloors(p)
+	got := []float64{f.Pool.FreeMiB, f.Agent.DecodeTokS, f.Agent.PrefillTokS, f.Agent.TTFT8kS, f.Agent.Stream4DecodeTokS,
+		f.Vision.ImageAnswerS, f.Audio.RTFx, f.Audio.Stream4RTFx, f.Embedding.ThroughputTokS, f.Embedding.Query32MS}
+	if err != nil || !slices.Equal(got, []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}) {
+		t.Errorf("LoadFloors = %v, %v; want 1 to 10, each floor by its key", got, err)
 	}
-	dir := t.TempDir()
+	if _, err := gate.LoadFloors("../floors.toml"); err != nil {
+		t.Errorf("the committed floors: %v", err)
+	}
 	for name, text := range map[string]string{
 		"unknown key": "[agent]\ncolour = 1\n",
 		"missing":     "[pool]\nfree_mib = 3072\n",
 	} {
-		p := filepath.Join(dir, "floors.toml")
 		if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
 			t.Fatal(err)
 		}
