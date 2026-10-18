@@ -65,8 +65,9 @@ streams the TTFT is mostly waiting: the server prefills the four prompts togethe
 request's first token waits for the others' prefill, and on the agentic profile a request that
 arrives while three are generating waits for its own 8192-token prefill beside them.
 
-GuideLLM's JSON for every cell and the `/metrics` snapshots are kept under the gitignored
-`.state/baseline/`. The grid is `MISE_ENV=consumers mise run //evaluation:baseline` with
+GuideLLM's JSON for every cell and the `/metrics` snapshots were kept under the untracked
+`.state/baseline/`, and removed once the findings were committed (the architect's decision,
+`evaluation` slice 11). The grid is `MISE_ENV=consumers mise run //evaluation:baseline` with
 `SPIKE_ROUTER_URL` set (`evaluation/scripts/baseline.sh`).
 
 ## Prefix reuse
@@ -161,10 +162,11 @@ tokens) when a request has none.
   48.8 on the same cell. At 4 streams the cell's aggregate output rose to 10.6 tok/s, while each
   request ran at 2.8.
 - **The agentic cell at 4 streams ran twice.** The first run stalled overnight, and the row is
-  its bounded rerun, `.state/baseline/20261016T113037Z-agentic-c4`. The rerun used the grid's own
+  its bounded rerun, run `20261016T113037Z-agentic-c4`. The rerun used the grid's own
   request count, 16, with a `max_duration` of 3600 s and a 600 s HTTP read timeout. It finished
   all 16 in 1321 s, so neither bound applied. The other three cells are from the first run,
-  `.state/baseline/20261016T002154Z`, 00:21 to 00:57 UTC.
+  run `20261016T002154Z`, 00:21 to 00:57 UTC. Both runs' raw files were removed once the
+  findings were committed.
 - **Why the first agentic c4 run stalled.** The laptop suspended. `systemd-logind` put it to
   sleep at 01:08:51 UTC, nine seconds after the cell's 8th request completed, while the third
   wave of four requests was streaming. It woke for five minutes at 01:27 and then slept until
@@ -489,7 +491,6 @@ Prefix reuse, an 8192-token prefix then four warm requests, as above:
 | Gemma 4 26B-A4B | 2 | 8220 | 5218 | 8204 | 18 | 205 |
 | gemma-4-E4B | 1 | 8220 | 4153 | 8204 | 18 | 194 |
 | gemma-4-E4B | 2 | 8220 | 4102 | 8204 | 18 | 187 |
-
 
 Cold load wasn't rerun in the deep stage: it needs the architect's restart, so each deep stage
 records it not run. The baseline's cold-load figures are the move to b11715's, taken on

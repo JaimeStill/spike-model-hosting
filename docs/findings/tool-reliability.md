@@ -99,7 +99,7 @@ scratch directory and then answer with the code the file held. The runs used lla
 Framework's router, on 2026-10-12. Each consumer's requests passed through a `wire.Recorder`,
 which drops credentials before forwarding and records them only as `[redacted]`. The `wire`
 package's `RoundTrip` integration tests run these turns and save the recordings under
-`.state/wire/`.
+`.state/wire/`; this run's were removed once the findings were committed.
 
 | Consumer | Sends reasoning back after a tool call | As |
 |---|---|---|
@@ -250,8 +250,10 @@ case's tool with arguments the tool's schema accepts:
 
 ## The comparison row: pass^5 on b11669
 
-The `candidates` task judges each candidate main model against gpt-oss-120b on the same build and
-pins, so gpt-oss-120b's pass^5 ran again after the move to b11669. It ran as
+This row was run as the bar `candidates` would judge each candidate main model against:
+gpt-oss-120b on the same build and pins, so its pass^5 ran again after the move to b11669. Since
+`evaluation` slice 7, harness fit judges every harness by one absolute bar instead
+([Harness fit on b11715](#harness-fit-on-b11715-set-as-baseline)), and the row stays as context. It ran as
 `go run ./evaluation/cmd/evaluate conform -set a -k 5` with `SPIKE_ROUTER_URL=http://framework:8080`,
 from the laptop (host `terminal`) against the Framework's router, on 2026-10-15. The router
 reported `b11669-620d2225c` in `/props` `build_info`, with set A's four models loaded. The model was
@@ -348,7 +350,7 @@ at the consumers environment's pins: Pi 1.3.0, Claude Code 2.1.301 and OpenCode 
 run's `CLAUDE_*` variables were unset. Claude Code ran from `.state/claude` on the subscription
 login, with its own timeouts raised (`API_TIMEOUT_MS=3600000`,
 `CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS=1800000`, `CLAUDE_STREAM_IDLE_TIMEOUT_MS=1800000`). The
-recordings are under `.state/wire/`.
+recordings were kept under `.state/wire/`, and removed once the findings were committed.
 
 | Consumer | Reasoning request sent | Reasoning back after a tool call | Turn |
 |---|---|---|---|
@@ -448,6 +450,8 @@ harness spike takes (the goal record's slice 7 decisions): force the call when o
 - `consumers`: pass^k per model, engine, and consumer against 0 invalid and 90%, and each
   consumer's reasoning round-trip on tool turns (Pi, Claude Code and OpenCode all send it
   back, seen on the wire).
+- `evaluation`: harness fit, conform pass^5 through every pinned harness against one absolute
+  bar, and the fit profile, each failed cell with its reason ([`../evaluation.md`](../evaluation.md)).
 - `gateway`: the bounded resample and fallback on a parse 5xx, per gateway.
 - `validate`: the convention per platform: whether each engine constrains `required`, named
   calls, and strict `json_schema`, and parses its models' native tool format.
