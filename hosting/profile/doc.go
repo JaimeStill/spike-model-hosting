@@ -19,7 +19,9 @@
 //     role. Chat and embedding are required, and vision and audio optional; SetRoles.Models lists
 //     the assigned models once each. Profile.Set looks a set up by name, or returns the startup
 //     set for an empty name; the probe and every instrument share this one lookup.
-//   - Each Model declares its roles and its licence beside its origin, its card's context
+//   - Each Model declares its roles and its licence beside its origin; a Model of OriginChina,
+//     the origin STANDARDS restricts (Model.OriginRestricted), records why it was chosen in
+//     OriginReason, which no other Model sets. Each declares its card's context
 //     (CardContext, which C may not pass), optionally its active parameters and bits per weight
 //     (ActiveParamsB, BitsPerWeight: the bytes a decoded token reads), and an embedding model
 //     its output width, Dims; Profile.Model looks one up by router ID. A vision Model may cap

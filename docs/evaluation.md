@@ -19,7 +19,7 @@ b11715".
 
 | Stage | Gates on | Fails when |
 |---|---|---|
-| Admission | Paper: the profile and the router's build. Licence and origin recorded, the set's roles declared, the profile's context within the card's, the set's memory budget leaving the pool floor free, the router's build at or above the profile's minimum. | Any check fails. Licence and origin fail only when missing; origin is judged by `STANDARDS.md`. |
+| Admission | Paper: the profile and the router's build. Licence and origin recorded, origin judged by `STANDARDS.md`, the set's roles declared, the profile's context within the card's, the set's memory budget leaving the pool floor free, the router's build at or above the profile's minimum. | Any check fails. Licence fails only when missing. Origin fails when missing, and for a model of Chinese origin (`origin = "China"`) whose profile entry records no `origin_reason`, why no alternative serves; `STANDARDS.md` chooses such a model only then. Validation refuses an `origin_reason` on any other origin. |
 | Fitness | Under ~3 minutes: a smoke per declared role (the probe's tool call, image, audio clip, or embedding), the role's single-stream floors, and the idle pool. | A smoke fails, a single-stream floor is missed, or the idle pool is under the floor. |
 | Capacity | The profile's slots (4) of requests in flight on the model per role, through the `concurrent` package's run. | A nonce crosses, an embedding leaves its tolerance, the pool at the peak is under the floor, or a 4-stream floor is missed. |
 | Quality | Each role's tiers, cheapest first, each against its bar (below). | A tier misses its bar; the stage stops at that tier. |

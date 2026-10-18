@@ -3,10 +3,12 @@
 // fails, so the deep stage runs only once every gate passed. A set run, with no model, takes the
 // set stage alone for the set.
 //
-//   - Admission judges the model on paper, from the profile and the router's build: licence and
-//     origin recorded (failing only when missing), the set's roles declared, the profile's
-//     context within the card's, the set's memory budget leaving the pool's floor free, and the
-//     router's build at or above the profile's minimum.
+//   - Admission judges the model on paper, from the profile and the router's build: licence
+//     recorded (failing only when missing), origin recorded and judged by STANDARDS (a model of
+//     Chinese origin, profile.OriginChina, fails unless its entry records why it was chosen,
+//     its origin_reason), the set's roles declared, the profile's context within the card's,
+//     the set's memory budget leaving the pool's floor free, and the router's build at or above
+//     the profile's minimum.
 //   - Fitness smokes each role the set assigns the model with the probe's request for it (a
 //     tool call, an image, an audio clip, an embedding), measures the role's single-stream
 //     floors from llama.cpp's timings or the client's clock, and reads the pool idle. The audio

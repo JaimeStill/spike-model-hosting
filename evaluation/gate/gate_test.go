@@ -370,6 +370,55 @@ func TestAdmissionBuild(t *testing.T) {
 	}
 }
 
+// TestAdmissionOrigin shows admission judges origin by STANDARDS: a model of Chinese origin
+// passes only when its entry records why it was chosen, and an unrestricted origin passes, set
+// A's four models among them. Each run's router is below the minimum build, so admission fails
+// on that and the run sends nothing past it.
+func TestAdmissionOrigin(t *testing.T) {
+	originCheck := func(t *testing.T, model string, edit func(*profile.Model)) gate.Check {
+		t.Helper()
+		h := newHarness(t, model)
+		h.router.build = "b11000-abc"
+		if edit != nil {
+			edit(h.runner.Profile.Model(model))
+		}
+		return check(t, h.run(t, "", nil), gate.StageAdmission, "", "origin")
+	}
+	for _, model := range []string{gptOSS, gemma26B, gemmaE4B, embedding} {
+		t.Run("set A "+model, func(t *testing.T) {
+			if c := originCheck(t, model, nil); !c.Passed || !strings.HasPrefix(c.Detail, "United States") {
+				t.Errorf("origin %+v; want a pass, United States", c)
+			}
+		})
+	}
+	t.Run("unrestricted", func(t *testing.T) {
+		c := originCheck(t, gptOSS, func(m *profile.Model) { m.Origin = "France" })
+		if !c.Passed || !strings.Contains(c.Detail, "unrestricted") {
+			t.Errorf("origin %+v; want a pass, unrestricted", c)
+		}
+	})
+	t.Run("restricted without a reason", func(t *testing.T) {
+		c := originCheck(t, gptOSS, func(m *profile.Model) { m.Origin = profile.OriginChina })
+		if c.Passed || !strings.Contains(c.Detail, "no origin_reason") {
+			t.Errorf("origin %+v; want a failure naming the missing origin_reason", c)
+		}
+	})
+	t.Run("restricted with a reason", func(t *testing.T) {
+		c := originCheck(t, gptOSS, func(m *profile.Model) {
+			m.Origin = profile.OriginChina
+			m.OriginReason = "No model of another origin\nserves the role.\n"
+		})
+		if !c.Passed || !strings.HasSuffix(c.Detail, "No model of another origin serves the role.") {
+			t.Errorf("origin %+v; want a pass recording the reason", c)
+		}
+	})
+	t.Run("missing", func(t *testing.T) {
+		if c := originCheck(t, gptOSS, func(m *profile.Model) { m.Origin = "" }); c.Passed {
+			t.Errorf("origin %+v; want a failure", c)
+		}
+	})
+}
+
 // TestReport writes a run's report and reads it back with every field the report promises, and
 // summarizes it.
 func TestReport(t *testing.T) {

@@ -565,6 +565,36 @@ card_url = "https://huggingface.co/google/gemma-4-26B-A4B-it"`),
 	}
 }
 
+// TestLoadNamesMisplacedOriginReason shows only a model of the origin STANDARDS restricts records
+// why it was chosen, and that such a model loads with or without the reason: admission judges
+// its absence, not validation.
+func TestLoadNamesMisplacedOriginReason(t *testing.T) {
+	base, err := os.ReadFile(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const us = "origin = \"United States\"\n"
+	text := string(base)
+	reason := strings.Replace(text, us, us+"origin_reason = \"No alternative serves.\"\n", 1)
+	assertFails(t, writeProfile(t, reason),
+		`models[0].origin_reason: only a model whose origin is China records why it was chosen, not one of "United States"`)
+
+	for name, text := range map[string]string{
+		"with a reason":    strings.Replace(reason, us, "origin = \"China\"\n", 1),
+		"without a reason": strings.Replace(text, us, "origin = \"China\"\n", 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, err := profile.Load(writeProfile(t, text))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !p.Models[0].OriginRestricted() {
+				t.Errorf("origin %q not restricted", p.Models[0].Origin)
+			}
+		})
+	}
+}
+
 // TestRenderPresetsRejectsInvalid shows a profile that fails validation does not render.
 func TestRenderPresetsRejectsInvalid(t *testing.T) {
 	p, err := profile.Load(skeleton)

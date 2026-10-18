@@ -273,8 +273,14 @@ type Model struct {
 	ID string `toml:"id"`
 	// Publisher is the organization that trained and released the model.
 	Publisher string `toml:"publisher"`
-	// Origin is the publisher's country of origin. Validation records it and never judges it.
+	// Origin is the publisher's country of origin, by its short English name, such as United
+	// States or China. Validation requires it and never judges it; evaluate's admission does, by
+	// STANDARDS: a model of OriginChina is chosen only when no alternative serves.
 	Origin string `toml:"origin"`
+	// OriginReason says why a model whose origin STANDARDS restricts (Model.OriginRestricted)
+	// was chosen: the alternatives that don't serve. Only such a model sets it, and admission
+	// fails one without it.
+	OriginReason string `toml:"origin_reason"`
 	// Licence is the licence the model's weights are released under, as its card states it,
 	// such as Apache-2.0. Like Origin, validation requires it and never judges it.
 	Licence string `toml:"licence"`
@@ -529,6 +535,10 @@ func (p *Profile) Validate() error {
 		}
 		required(field("publisher"), m.Publisher)
 		required(field("origin"), m.Origin)
+		if m.OriginReason != "" && !m.OriginRestricted() {
+			errs = append(errs, fmt.Errorf("%s: only a model whose origin is %s records why it was chosen, not one of %q",
+				field("origin_reason"), OriginChina, m.Origin))
+		}
 		required(field("licence"), m.Licence)
 		errs = append(errs, m.validateRoles(field("roles"))...)
 		required(field("card_url"), m.CardURL)
@@ -708,6 +718,14 @@ func (m Model) validateRoles(prefix string) []error {
 	}
 	return errs
 }
+
+// OriginChina is the origin STANDARDS restricts: a model of Chinese origin is chosen only when no
+// alternative serves, and its entry records why (OriginReason).
+const OriginChina = "China"
+
+// OriginRestricted reports whether the model's origin is one STANDARDS restricts, matched
+// exactly as the profile writes origins: OriginChina.
+func (m Model) OriginRestricted() bool { return m.Origin == OriginChina }
 
 // validateImageBatch reports an image batch cap that isn't positive, one on a model that
 // declares no vision role, and a cap or a reason without the other, under the key path field.

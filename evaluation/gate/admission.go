@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/JaimeStill/spike-model-hosting/hosting/profile"
 )
 
 // admission judges the model on paper, from the profile and the router's build alone: it sends
-// no request to a model. The model's licence and origin are recorded, failing only when the
-// profile lacks them (STANDARDS judges them, not this stage); it declares every role the set
+// no request to a model. The model's licence is recorded, failing only when the profile lacks
+// it; its origin is judged by STANDARDS (origin); it declares every role the set
 // assigns it; its context is within its card's; the set's memory budget leaves the pool's floor
 // free; and the router's build is at or above the profile's minimum.
 func (r *Runner) admission(_ context.Context, rep *Report) []Check {
@@ -19,7 +21,7 @@ func (r *Runner) admission(_ context.Context, rep *Report) []Check {
 	}
 	checks := []Check{
 		fact("licence", "", orMissing(m.Licence), m.Licence != ""),
-		fact("origin", "", orMissing(m.Origin)+", publisher "+orMissing(m.Publisher)+"; recorded, STANDARDS judges it", m.Origin != ""),
+		origin(m),
 	}
 
 	var declared []string
@@ -60,6 +62,23 @@ func (r *Runner) admission(_ context.Context, rep *Report) []Check {
 	bc := measure("router build", "", float64(have), "", AtLeast, float64(floor))
 	bc.Detail = rep.Build + " against the profile's min_build " + r.Profile.Engine.MinBuild
 	return append(checks, bc)
+}
+
+// origin judges the model's origin by STANDARDS: a model of Chinese origin is chosen only when no
+// alternative serves, and its entry records why. The check fails a missing origin, and a
+// restricted one (profile.Model.OriginRestricted) whose entry records no origin_reason.
+func origin(m *profile.Model) Check {
+	detail := orMissing(m.Origin) + ", publisher " + orMissing(m.Publisher)
+	switch {
+	case m.Origin == "":
+		return fact("origin", "", detail, false)
+	case !m.OriginRestricted():
+		return fact("origin", "", detail+"; unrestricted by STANDARDS", true)
+	case m.OriginReason == "":
+		return fact("origin", "", detail+"; STANDARDS chooses a model whose origin is "+profile.OriginChina+
+			" only when no alternative serves, and the profile records no origin_reason", false)
+	}
+	return fact("origin", "", detail+"; chosen as no alternative serves: "+strings.Join(strings.Fields(m.OriginReason), " "), true)
 }
 
 func orMissing(s string) string {
