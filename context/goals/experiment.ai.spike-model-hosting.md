@@ -1,8 +1,8 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** idle
-- **Task:** none
-- **Branch:** none
+- **State:** building
+- **Task:** screen
+- **Branch:** screen
 
 ## Tasks
 
@@ -11,169 +11,215 @@
 3. [x] consumers
 4. [x] main-model
 5. [x] evaluation
-6. [ ] candidates
-7. [ ] rocm
-8. [ ] engines-strix
-9. [ ] gateway
-10. [ ] admin (needs: go-cli-sdk v0.1.0)
-11. [ ] cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
-12. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
-13. [ ] validate
+6. [ ] screen
+7. [ ] candidates
+8. [ ] rocm
+9. [ ] engines-strix
+10. [ ] gateway
+11. [ ] admin (needs: go-cli-sdk v0.1.0)
+12. [ ] cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
+13. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
+14. [ ] validate
 
-## Task brief · evaluation
+## Task brief · screen
 
 ```
-Problem       The spike can't yet judge a model by what it does in each role.
-              The probe checks one image, one audio clip and one tool call;
-              conform judges only the agent model, through consumers; and the
-              staged evaluation main-model began was never built. Speed is
-              judged by one 24 tok/s floor taken from gpt-oss-120b. The
-              repository mixes hosting tooling, instruments, host
-              configuration and findings at its root and in context/, with no
-              front page. `candidates` needs, per role, graded pipelines that
-              fail a model early and cheaply, absolute speed floors, and set
-              A's scores as the bar, all on the Framework's newest build.
-Behaviors     1. The repository has five areas: hosting (the Go tooling for
-                 profiles and models: profile, router, swap, probe, and their
-                 commands); evaluation (the instruments, the pipelines and
-                 the evaluate command); devices (one area per host class:
-                 its profile, runbook, build log and host scripts); docs
-                 (methods and findings); context (marathon's files only).
-                 One Go module. Each area's commands live in it and find a
-                 profile from the module root, by host-class name, from any
-                 working directory. mise runs in monorepo mode: every area
-                 task runs as //area:task; the root check runs every area's
-                 check plus the module-wide steps, and stays hermetic. The
-                 consumer and instrument pins load only under
-                 MISE_ENV=consumers, in the evaluation area. Currency covers
-                 the root, every area and the evaluation Python lock, and
-                 reports only the Python hold.
-              2. OpenAI's gpt-oss compatibility test is gone (its task,
-                 script, suite state, and the node pin if nothing else needs
-                 it). conform, concurrent, prefix and coldload run only as
-                 evaluate's stages or steps, by name; their packages stay.
-              3. evaluate takes a model, or a set's role, through the stages
-                 admission, fitness, capacity, quality, set and deep. It
-                 stops at the first failed gate and resumes from a named
-                 stage. One report per run names the build, set, model,
-                 roles, stage reached, the stages not run and why, and each
-                 stage's wall time. It refuses a model that isn't loaded.
-              4. Admission is on paper: licence, origin (judged by
-                 STANDARDS), roles, card context, a budget estimate at least
-                 2.75 GiB under the pool, the minimum build. Fitness takes
-                 under ~3 min: a probe smoke per declared role, the
-                 single-stream floors, an idle pool at least 2.75 GiB free.
-                 Capacity: 4 in flight with at least 2.75 GiB free, no crossed
-                 nonce, the embedding tolerance held, the 4-stream floors.
-              5. Each role's floors are absolute and task-based, held as
-                 data with initial values a later decision may change:
-                 agent decode ≥ 20 tok/s, prefill ≥ 500 tok/s, an 8k
-                 prompt's TTFT ≤ 20 s, each of 4 streams ≥ 10 tok/s;
-                 vision one image question ≤ 10 s; audio RTFx ≥ 5, each of
-                 4 streams ≥ 1; embedding ≥ 4,300 tok/s, a 32-token query
-                 ≤ 250 ms. Ceiling efficiency (rate over 256 GB/s ÷ bytes
-                 per token) is recorded, never gated.
-              6. Each quality tier runs a committed, seeded list of sample
-                 IDs, the same for every model, its screening fifth first,
-                 and stops once the one-sided 95% upper bound falls below
-                 the bar; the record names the tier and the bound. A tier's
-                 bar is set A's score less set A's two-run spread.
-              7. Embedding (MTEB 2.26.3): STSBenchmark, Banking77, SciFact
-                 and NFCorpus in full, through an encoder that adds the
-                 card's task prompts and calls the router's embeddings API.
-              8. Audio (an Inspect task): 150 seeded utterances each from
-                 LibriSpeech clean and other, VoxPopuli, AMI, Earnings22 and
-                 FLEURS English, WER after the Open ASR Leaderboard's
-                 normalizer, with RTFx.
-              9. Vision (inspect_evals): the probe image x5, V*Bench 100,
-                 DocVQA 150, MMMU 200.
-              10. Agent, in cost order: BFCL single-turn 100 and multi-turn
-                 20 (inspect_evals; the model, through the API), then
-                 harness fit: conform pass^5 through every pinned harness
-                 (Pi, Claude Code, OpenCode), each held to one absolute bar
-                 (every applicable capability 5/5, 0 invalid; a capability
-                 a harness can't exercise is excluded and noted). A harness
-                 drops at its first failed trial. The report gives the fit
-                 profile: which harnesses fit, and each failed cell with its
-                 reason. The role fails only if no harness fits.
-              11. The set stage runs each role's tier 1 alone, then every
-                 role's at once, with at least 2.75 GiB of the pool free at
-                 the peak and no crossed answer.
-              12. One model's run, admission through the set stage, fits in
-                 ~85 min for a chat-and-vision model that passes every gate
-                 at set A's rates; a failing model stops at its first failed
-                 gate. Sample counts hold; in a model's run the set stage
-                 reuses its quality tier 1 as the alone figure, and the set's
-                 other roles load the pool only while its tiers run.
-              13. The deep stage runs only after every gate passes: τ2
-                 airline and retail, 12 tasks each x 2 trials, whose user
-                 simulator and airline grader are Sonnet through the
-                 laptop's pinned Claude Code on the subscription login
-                 (tools off, own system prompt, no session persistence, the
-                 reported model ID recorded); and characterization (the
-                 GuideLLM grid, prefix reuse, cold load — the cold load
-                 needs the architect's restart).
-              14. The Framework runs the newest b-tag at the start of BUILD,
-                 with its release-note review since b11669 recorded, and the
-                 probe passes on it.
-              15. Set A's baseline runs every stage twice, each role on its
-                 assigned model. The findings record each tier's scores, bar
-                 and spread, the measured rates against the initial floors,
-                 the build, dates, harness versions and seeds. Then .state
-                 keeps only the logins and caches.
-              16. A root README gives the question, a map of the areas, and
-                 links to the docs and the planned answer. The docs cover
-                 the evaluation approach (each tool, its kind — load
-                 generator, conformance test, benchmark, harness — and which
-                 stage uses it and why), the models' card method, and the
-                 findings (baseline, tool reliability, memory budget). The
-                 Strix Halo area holds its runbook (OS, Tailscale, the
-                 versioned llama.cpp install, the rendered unit and presets,
-                 the root commands) and its build log. context/ keeps its
-                 vision, capability map and goals. CLAUDE.md, STANDARDS.md
-                 and the package docs are current.
+Problem       The candidates task can't start yet. evaluate gives every model
+              the full run that set A's baseline took most of a day for. It
+              holds every model to a fixed 4 slots and a hand-chosen c, and
+              reads the pool only after a fresh load, where set A's day of
+              runs fell to 2778 MiB, under its own floor. The embedding and
+              ASR prompts are set A's, hard-coded. No pool of admissible
+              models, and no rule for their licences or for fine-tunes of a
+              Chinese-origin base, says what candidates should screen.
+              screen builds the screen, measures each model's slots and c,
+              and surveys the pool on paper. It proves all of this on set
+              A's own models, on the Framework's newest build.
+Behaviors     1. The Framework runs the newest b-tag at the start of BUILD.
+                 Its release-note review since b11715 is recorded, and set A
+                 passes the probe and every role's fitness on it. The
+                 repository's currency reports only the held pins
+                 (claude-code, python, inspect-evals, mteb, openai).
+              2. Slots and c belong to each model in the profile, each with
+                 its reason. The host-wide slots value is gone, and KV stays
+                 unified. Each model's section renders its own parallel.
+                 Validation refuses a c beyond the card's context, and slots
+                 under 1.
+              3. A model's card prompts are profile fields with a source:
+                 embedding task prompts by prompt type, and an ASR
+                 instruction. The MTEB encoder, the ASR task, fitness and
+                 capacity read them from the profile. Validation refuses a
+                 prompt field on a role the model doesn't declare.
+              4. evaluate reloads the set over the router's API before every
+                 model run and set run. A run resumed with -from on the same
+                 run directory doesn't reload. After the reload it records
+                 the idle pool, then drives each loaded model to its
+                 high-water mark: its largest image, an 8192-token prompt at
+                 a full ubatch, its longest clip. Every pool floor is judged
+                 at that warmed peak. Each pool reading carries system RAM
+                 beside it (used and available on the host, each model
+                 process's resident memory).
+              5. A model run is a screen by default. Each tier runs its
+                 screening fifth. It stops failed once the one-sided 95%
+                 bound falls on the wrong side of the bar, and stops passed
+                 once the bound clears it: for a pass rate, the Wilson lower
+                 bound at or over the bar; for an ASR WER, the upper bound at
+                 or under the ceiling. A tier whose bound still straddles the
+                 bar runs on until it is decided or its list ends. MTEB tasks
+                 run whole. The record names the tier, the bound and the
+                 side it stopped on.
+              6. A screen runs its roles' quality tiers at once. The speed
+                 floors are measured alone, at fitness and capacity. The
+                 concurrent pass also records the pool's least free memory
+                 at the warmed peak and the crossing rounds, and stands in
+                 for the set stage's concurrent phase. Alone figures and
+                 slowdowns belong to the full run.
+              7. A screen that passes every gate makes the model a finalist.
+                 Its full run reuses the screen's records and adds the rest
+                 of each tier, the set stage's alone figures and slowdowns,
+                 and the deep stage.
+              8. evaluate keeps an index of its results, keyed by model,
+                 build, and the SHA-256 of the model's rendered preset
+                 section. A stage whose key matches a passed result is
+                 reused, and the report says so. A changed profile reruns
+                 only the roles whose models' sections changed, plus the set
+                 stage. The suites' own caches stay off.
+              9. Floors at N in flight: each agent stream ≥ 10 tok/s; each
+                 audio stream RTFx ≥ 1; each image question ≤ 10 s; each
+                 32-token query ≤ 250 ms. Capacity runs each role model at
+                 its own profile slots against these floors, with the pool
+                 floor at the warmed peak, and no request may run out of
+                 context.
+              10. A sweep step chooses a model's slots and c. The model is
+                 swept with the rest of its set loaded and idle at their own
+                 settings. N runs 1, 2, 4, 8, 16, then one bisection between
+                 the last pass and the first fail. c is N times the role's
+                 per-session target, capped at the card's context: the
+                 role's largest tier request (agent 8192 in and 512 out);
+                 a model in several roles takes the largest target. Each
+                 step is rendered from the profile with the override,
+                 written to the router's preset file and applied through
+                 its reload. Each step records:
+                 - every stream's rate against the floors at N
+                 - TTFT median and p95, and total throughput
+                 - the pool at the warmed peak, and system RAM
+                 - any request that ran out of context
+                 The chosen N is the smaller of two values: the largest N
+                 that holds every floor, the pool floor and every session's
+                 context; and the knee, past which total throughput gains
+                 under 10% a step. The report gives both, and which bound.
+                 The sweep ends by restoring the committed render, checked
+                 by its SHA-256, and reloading.
+              11. A set's verdict states the concurrent sessions it supports
+                 on its host: its agent model's chosen N, confirmed by the
+                 set stage with every model at its own chosen N.
+              12. Set A is swept on the new build, and its chosen slots and c
+                 are committed and installed, with the pool floor unchanged
+                 and no scheduled reload. Set A's models then pass their
+                 screens against their own bars. The set stage holds every
+                 model at its chosen N. Each role's screen time is recorded
+                 against the 15-25 min estimate, and set A's agent and
+                 vision screens run as one run, whose wall time is the
+                 chat-and-vision figure against the ~85 min budget. One
+                 role's finalist continuation runs as the demonstration.
+              13. The Framework keeps only models that passed on it. Mistral
+                 Small 4's cached files and align's retired-model directory
+                 are deleted: through the router's API where it can, by the
+                 architect's exact command where root owns the files.
+              14. A pool document, on paper, gives per role (agent, vision,
+                 audio, embedding) the open-weight models that run on Strix
+                 Halo under the origin rule. For each model:
+                 - publisher, origin, licence, architecture and active
+                   parameters
+                 - its GGUF, quant and size, from the publisher, ggml-org,
+                   or a community converter, named
+                 - an estimated budget, and whether the router serves it on
+                   the build in use
+                 - its decode ceiling against the role's floors
+                 - admitted, or excluded and why
+                 It states the rules it judged by, the estimate method, the
+                 model shapes evaluate supports (one model in several roles,
+                 per-model prompts, a context under 8192, system RAM that
+                 grows with slots, speculative-decoding sidecars, noted not
+                 used). It sketches profiles from "max quality near the
+                 pool" to "small models, large headroom", including the
+                 omni profile, each with its budget and headroom. Every
+                 figure is marked estimated or measured, with its build.
+              15. STANDARDS states that any open model licence is accepted:
+                 Apache-2.0, MIT, OpenMDW-1.1, the NVIDIA Open Model
+                 licences, the LFM Open License 1.0, the Llama 3.1 and 4
+                 Community licences, and the Gemma Terms of Use. It also
+                 states that a model fine-tuned from a Chinese-origin base
+                 takes its base's origin.
+              16. The evaluation docs, the Strix Halo runbook (the preset
+                 file's write access, the build move, the deletions), the
+                 findings (set A's sweep, the warmed peak, system RAM, the
+                 screen timings), the build log, the package docs, CLAUDE.md,
+                 the README and the goal record are current.
 Test seams    evaluate's stage runner against a fake router and recorded
-              harness results (Inspect logs, MTEB JSON): gates, early stop,
-              resume, report. The claude -p Inspect provider against a fake
-              claude executable. The profile, swap and router packages,
-              moved without change. The integration probe at
-              SPIKE_ROUTER_URL. Measured evidence (12-15).
-Slices        1. Layout (1): the pure move; check green; currency reports
-                 only the Python hold; the probe passes on b11669.
-              2. Cleanup (2): the compatibility test removed; evaluate
-                 dispatches the existing instruments by stage or step name.
-              3. Gated skeleton (3-6): admission, fitness, capacity with the
-                 floors, the early stop, reports and resume; fakes in the
-                 check; gpt-oss-120b passes fitness and capacity live.
-              4. Embedding (7): the uv project and the MTEB encoder;
-                 EmbeddingGemma 2 through quality.
-              5. Audio (8): the ASR Inspect task; gemma-4-E4B through
-                 quality.
-              6. Vision (9): Gemma 4 26B-A4B through quality.
-              7. Agent (10): BFCL and conform; gpt-oss-120b through quality.
-              8. Set stage (11, 12): set A under load; one model's hour
-                 timed.
-              9. Deep stage (13): the claude -p provider; τ2 airline and
-                 retail; characterization on gpt-oss-120b.
-              10. Build move (14): the architect's root commands; the
-                 release-note review; the probe on the new build.
-              11. Baseline (15): set A run twice; findings committed; .state
-                 cleaned.
-              12. Docs and records (16): the README, the docs, the Strix
-                 Halo runbook, Decisions and pending edits.
-Out of scope  Candidates, Nemotron, any model beyond set A's four role
-              models; secondary roles. τ2 telecom and BFCL V4. Cloud model
-              APIs and API keys. ROCm, vLLM, SGLang, gateways, the
-              workstations, the admin tool. Splitting the Go module. Changes
-              to clutch, spike-harness-driver or personal-agents. Changing
-              the startup set. Forcing tool_choice, the parse-5xx resample.
-Door          two-way, except the cleaned .state run outputs. The repository
-              reverts by PR; moves and removals return from history. On the
-              Framework the earlier b-tag stays in its versioned directory
-              and `current` points back. One-way: deleted untracked raw logs
-              (removed only after the findings are committed), and Claude
-              Code subscription usage spent.
+              suite results:
+              - the screen and its early stop on either side
+              - the straddle continuation
+              - concurrent role tiers and the folded set phase
+              - the finalist continuation
+              - index reuse and the rerun of changed roles
+              - the reload and the warmed peak
+              - the floors at N
+              The sweep against a fake router with a reloadable preset file:
+              steps, the bisection, the stop rule, the knee, the restore and
+              its SHA-256. The profile package: per-model slots and c,
+              prompt fields, render, validation. The suites' early-stop
+              tests, both sides. The integration probe at SPIKE_ROUTER_URL.
+              Measured evidence (1, 12, 13).
+Slices        1. Build move and host session (1, 13): the release-note review;
+                 the architect's root commands in one sitting (the new
+                 b-tag, the preset file made writable by the session's user,
+                 the retired directory removed); Mistral Small 4 deleted
+                 through the router; the probe and every role's fitness on
+                 the new build.
+              2. Profile (2, 3): per-model slots and c, the prompt fields;
+                 set A's render keeps its values (each model at 4 slots),
+                 and its SHA-256 matches the installed file.
+              3. Reload, warmed peak, system RAM (4): live on set A.
+              4. Screen (5, 6, 7): early stop on either side, concurrent
+                 tiers, the folded set phase, the finalist continuation;
+                 fakes in the check.
+              5. Results index (8): reuse, and a changed section reruns its
+                 role plus the set stage.
+              6. Floors at N and capacity per model (9, 11): live on set A
+                 at 4.
+              7. Sweep (10): fakes in the check; one live model swept, then
+                 restored.
+              8. Set A swept (12): slots and c committed and installed;
+                 sessions supported stated.
+              9. Set A screened (12): every role passes its own bars;
+                 timings; the chat-and-vision figure; one finalist
+                 continuation.
+              10. Pool document and STANDARDS (14, 15).
+              11. Docs and records (16): Decisions and pending edits.
+Out of scope  Screening any model beyond set A's four; choosing candidates,
+              their profile entries, downloads or admission runs; the
+              verdict, and any startup-set change beyond set A's swept slots
+              and c. Speculative decoding. Bumping the held pins. ROCm,
+              vLLM, SGLang, gateways, the workstations, the admin tool.
+              Evaluation as its own system. Changes to clutch,
+              spike-harness-driver or personal-agents.
+Door          two-way, except:
+              - the deleted Mistral Small 4 files and retired-model
+                directory (one-way on the host; the Hugging Face files can
+                be downloaded again, Mistral's in ~35 min)
+              - the cleaned .state run outputs
+              - Claude Code subscription usage spent
+              The repository reverts by PR. On the Framework the earlier
+              b-tag stays in its versioned directory and `current` points
+              back. The preset file's write access reverts by one root
+              command, and the committed render is restored and checked by
+              its SHA-256.
 ```
+
+## Progress
+
+slices 0/11 committed · standards — · spec — · editor —
 
 ## Decisions
 
@@ -583,6 +629,28 @@ Door          two-way, except the cleaned .state run outputs. The repository
 - evaluation (spec review, architect): the consumer and suite pins hold while set A's bars stand (claude-code 2.1.301, python 3.14.8, inspect-evals 0.24.0, mteb 2.26.4, openai 3.31.0, against newer releases); bumping a pin rebaselines the roles it affects.
 - evaluation (spec review, architect): the standards reviewer's four test questions are fixed in this task: the check fails when the Python env is missing, the ASR prompt has one source, the gate tests read a testdata profile, and testpackage's allow-packages narrow.
 - evaluation (architect, for intake): once the experiment completes and the method is proven across hosts, engines and the gateway, evaluation becomes its own system with a management interface: a results store keyed by model, build, preset and host; a per-host run queue; and a run ledger with comparison views (a model against set A across builds and hosts, with its fit profile). Until then it stays the spike's `evaluate` command, and candidates moves the runbook's steps into it (the reload, results by model, build and preset, the supported-sessions count). Rejected building an interface now: candidates is about to change the workflow it would encode.
+- screen (r1, architect): candidates splits in two: `screen` builds evaluate's screen and is proven on set A's models; `candidates` runs the screens, the finalists, the lighter profiles, the verdict and the startup set. Rejected one task (~15 slices, screens blocked on the build).
+- screen (r1): the Framework moves to the newest b-tag at the start of BUILD (b11734 at PLAN), with the release-note review since b11715, and set A re-checked by the probe and every role's fitness; rejected holding b11715, where set A's bars were measured.
+- screen (r1): an agent session is the agentic shape, an 8192-token prompt and 512 out; rejected the short shape and the concurrent run's harness sessions, whose requests vary too much to count by.
+- screen (r1, architect): slots are measured per model in a profile, not fixed at 4: performance degradation and memory starvation mark the limit of the hardware and model pairing, and finding each model's best slots is part of the performance evaluation. Supersedes evaluation's "a fixed 4 in flight" and round 1's rec of a count bounded by the profile's slots.
+- screen (r1): the all-day pool question is answered by a warmed-peak reading: after the reload, each model is driven to its high-water mark and the pool floor is judged there; rejected a multi-hour soak and a scheduled reload.
+- screen (r1): in a screen, the set stage's concurrent phase folds into the quality stage's concurrent role tiers; alone figures and slowdowns are kept for finalists' full runs.
+- screen (r1): every candidate whose screen passes every gate is a finalist and gets the full run; rejected the best per role and finalists the architect names.
+- screen (r1): results are kept in evaluate's own index, keyed by model, build and the SHA-256 of the model's rendered preset section, standard library only; rejected Inspect's eval_set reuse and MTEB's result cache, which see no preset and no non-suite stage.
+- screen (r1): a model's card prompts (embedding task prompts, an ASR instruction) are typed profile fields with a source; rejected a per-model table in the suites.
+- screen (r1): the keep-only-passed rule applies now: Mistral Small 4's cached files and align's retired-model directory are deleted, through the router's API or by the architect's exact command.
+- screen (r2): a sweep step is applied through the router's preset reload (GET /models?reload=1, no restart), after one root command makes the preset file writable by the session's user; each step is rendered from the profile with an override, and the sweep ends by restoring the committed render, checked by SHA-256. Rejected a root install per step, and a second user-level llama-server outside the router.
+- screen (r2): c scales with slots, N times the role's per-session target, capped at the card's context, so memory, not context, is what runs out; rejected holding c.
+- screen (r2): each role's per-session target is its largest tier request, measured from the committed lists; a model in several roles takes the largest; rejected 8192 for every role.
+- screen (r2): a model's best slots is the smaller of the largest N that holds every floor, the pool floor at the warmed peak and every session's context, and the knee past which total throughput gains under 10% a step; the report gives both and which one bound.
+- screen (r2): the 4-stream floors become per-stream floors at N (agent 10 tok/s, audio RTFx 1), and vision (10 s an image question) and embedding (250 ms a 32-token query) are judged per request at N; rejected new N-stream values.
+- screen (r2): the sweep steps N = 1, 2, 4, 8, 16, capped by the card's context, then one bisection; rejected every N.
+- screen (r2): each model is swept with the rest of its set loaded and idle at their own settings, and the set stage confirms every model at its chosen N; rejected sweeping alone.
+- screen (r2): a set's sessions supported is its agent model's chosen N, confirmed by the set stage; rejected the smallest N across the set.
+- screen (r2): set A's slots and c are chosen by the sweep at the warmed peak, the pool floor unchanged and no scheduled reload; rejected lowering the floor and a reload schedule.
+- screen (r2): the pool survey and the profile sketches land in screen as a paper document, with the model shapes evaluate must support; profile entries, downloads and admission runs wait for candidates.
+- screen (r2, architect): any open model licence is accepted: Apache-2.0, MIT, OpenMDW-1.1, the NVIDIA Open Model licences, the LFM Open License 1.0, the Llama 3.1 and 4 Community licences, and the Gemma Terms of Use; the pool's seven licence-pending models are admissible, and the omni profile (Nemotron 3 Nano Omni with EmbeddingGemma 2) is a real option. Supersedes round 2's rec of no more licences beyond Apache-2.0, MIT and OpenMDW-1.1.
+- screen (r2): a model fine-tuned from a Chinese-origin base takes its base's origin, so voyage-4-nano, harrier-oss-v1-0.6b and jina-embeddings-v5 are excluded; STANDARDS gains the line.
 
 ## Pending edits
 
@@ -640,3 +708,19 @@ Door          two-way, except the cleaned .state run outputs. The repository
 - coordinator · roadmap, the spike's candidates summary: each set's verdict states the concurrent sessions it supports on its host (even one), and candidates looks for a lighter grouping that scores near set A's bars with less of the pool and bandwidth.
 - coordinator · roadmap, the workstation re-plan and the gateway task: weigh role placement across hosts behind a session-sticky gateway against a full set on each host; a host-wide check runs the role mix through the gateway under load.
 - coordinator · roadmap and ai-hosting.md, "Experiment: spike-model-hosting": at the experiment's intake, propose evaluation as its own goal: a system that keeps results by model, build, preset and host, queues runs per host, and has a management interface (run ledger, comparison views), starting from the `admin` task's go-cli-sdk tool; built only after every spike task has proven the method.
+- coordinator · roadmap: add task `screen` after `evaluation`, before `candidates` (evaluate's
+  screen with early stop on either side, concurrent role tiers and finalists; the results
+  index; the reload and warmed-peak pool reading; per-model slots and c by a sweep with the
+  sessions-supported count; card prompts in the profile; the pool document; proven on set A's
+  models on the newest build).
+- coordinator · roadmap, candidates summary: replace "candidates are screened, not
+  baselined: …" with: screens models from screen's pool document with screen's evaluate, gives
+  each kept profile its swept slots and c, builds profiles from the pool's sketches (omni
+  included), and each verdict states the sessions its set supports.
+- coordinator · roadmap, candidates summary: drop "each set's verdict states the concurrent
+  sessions … lighter grouping" (screen builds the count, the pool document sketches the
+  lighter profiles; candidates judges them).
+- coordinator · ai-strategy.md, "Constraint: model origin": a fine-tune of a Chinese-origin
+  base takes its base's origin.
+- coordinator · ai-hosting.md, "Experiment: spike-model-hosting": slots and c are measured per
+  model and host by a sweep; the spike accepts any open model licence (listed).
