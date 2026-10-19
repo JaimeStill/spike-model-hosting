@@ -280,3 +280,41 @@ func TestSwapWaitsForLoading(t *testing.T) {
 		t.Errorf("loads %q, want a then b, each a step", names(rep.Loads))
 	}
 }
+
+// TestReload shows a reload unloads each of the set's models and loads it again, every unload
+// before the first load, leaves a model outside the set alone, times each step, and refuses a
+// set the router doesn't list wholly loaded before it sends any command.
+func TestReload(t *testing.T) {
+	f := newFake([]string{"a", "b", "other"}, []string{"d"})
+	rep, err := swap.Reload(t.Context(), config(f.start(t), "a", "b"))
+	if err != nil {
+		t.Fatalf("Reload: %v", err)
+	}
+	if want := []string{"unload a", "unload b", "load a", "load b"}; !slices.Equal(f.commands, want) {
+		t.Errorf("commands %q, want %q", f.commands, want)
+	}
+	if len(f.early) > 0 {
+		t.Errorf("loads asked for while an unload was unfinished: %q", f.early)
+	}
+	if !slices.Equal(names(rep.Unloads), []string{"a", "b"}) || !slices.Equal(names(rep.Loads), []string{"a", "b"}) || len(rep.Kept) != 0 {
+		t.Errorf("report kept %q, unloaded %q, loaded %q; want none, a b, a b", rep.Kept, names(rep.Unloads), names(rep.Loads))
+	}
+	for _, s := range slices.Concat(rep.Unloads, rep.Loads) {
+		if s.Took <= 0 || s.Err != nil {
+			t.Errorf("step %s: took %s, err %v; want a time and no error", s.Model, s.Took, s.Err)
+		}
+	}
+	for id, want := range map[string]string{"a": "loaded", "b": "loaded", "other": "loaded", "d": "unloaded"} {
+		if f.status[id] != want {
+			t.Errorf("%s ends %q, want %q", id, f.status[id], want)
+		}
+	}
+
+	g := newFake([]string{"a"}, []string{"d"})
+	if _, err := swap.Reload(t.Context(), config(g.start(t), "a", "d")); err == nil || !strings.Contains(err.Error(), "d") {
+		t.Errorf("Reload of a set not wholly loaded = %v; want an error naming d", err)
+	}
+	if len(g.commands) != 0 {
+		t.Errorf("commands %q, want none", g.commands)
+	}
+}

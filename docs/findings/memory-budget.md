@@ -311,3 +311,19 @@ stops one run's growth reaching the next.
 
 Whether a set serving all day, with no evaluation's reloads, needs a scheduled reload or a
 different floor is left to `candidates`.
+
+## Set A at its warmed peak, b11734
+
+evaluate now reloads the set itself and judges the pool's floor at the warmed peak
+([`evaluation.md`](../evaluation.md), "Before each run"). On `b11734-f3fb2fcdb`, 2026-10-19
+(20:06 UTC), set A's agent run reloaded the four models in 26 s and, after 30 s idle, read
+94798 of 98304 MiB used: **3506 MiB free**, system RAM 104448 MiB used and 23627 available.
+The warm-up then sent each generative model an 8192-token prompt (8220-8271 prompt tokens),
+the 26B-A4B the tier lists' largest image (V\*Bench 62, 5759x1440), gemma-4-E4B the longest clip
+(Earnings-22 4483338/281.wav, 36.4 s) and EmbeddingGemma 2 an 8184-token input. At that warmed
+peak the pool read 95236 MiB used: **3068 MiB free**, 438 MiB less than idle and 252 MiB over the
+2816 MiB floor, so set A is under its budget at the warmed peak. System RAM read 106139 MiB used
+and 21936 available; the model processes' RSS went from 190-217 MiB each to 204 (gpt-oss-120b),
+1205 (the 26B-A4B), 486 (gemma-4-E4B) and 210 MiB (EmbeddingGemma 2). Capacity's peak, four
+streams on gpt-oss-120b beside an embedding stream, read 3050 MiB free, 18 MiB under the
+warmed peak, with gpt-oss-120b's RSS at 874 MiB. The run was interrupted once quality began.

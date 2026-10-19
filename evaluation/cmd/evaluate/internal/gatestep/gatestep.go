@@ -59,9 +59,17 @@
 // recorded not run, naming the commands. -from deep runs the deep stage alone again on a run
 // whose gates all passed.
 //
-// The router comes from -router or SPIKE_ROUTER_URL. The model must be loaded already: the run
-// checks GET /models first, and refuses an unloaded model before any stage; every request
-// carries autoload=false, so it never loads one.
+// The router comes from -router or SPIKE_ROUTER_URL. The model must be loaded already, and, for a
+// run that resumes nothing, every model of the set: the run checks GET /models first, and refuses
+// an unloaded model before any stage; every request carries autoload=false, so it never loads
+// one. A run that resumes nothing starts from freshly loaded models: once admission passes (for a
+// set run, before the set stage) it unloads and loads the set's models over the router's API,
+// waits 30 s, reads the idle pool, sends each model its high-water requests (an 8192-token
+// prompt to each generative model, the vision role's largest image and the audio role's longest
+// clip in the tier lists, found through the suites project into the run directory's warm/, the
+// embedding role's largest input), and reads the pool at that warmed peak, which the pool's floor
+// is judged at. Each reading carries the host's system RAM: used and available, and each model
+// process's RSS. A run resumed with -from on the same run directory reloads nothing.
 //
 // It exits 0 when every stage that ran passed, 1 when one failed or the run can't start, and 2
 // on a usage error.
@@ -290,7 +298,7 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 				return false, err
 			}
 		}
-		r.MTEB, r.ASR, r.Vision, r.Agent, r.Tau2, r.Tiers = suites, suites, suites, suites, suites, filepath.Join(root, gate.TiersDir)
+		r.MTEB, r.ASR, r.Vision, r.Agent, r.Tau2, r.Peaks, r.Tiers = suites, suites, suites, suites, suites, suites, filepath.Join(root, gate.TiersDir)
 	}
 	if !setRun && slices.Contains(roles, gate.RoleAgent) {
 		if r.Conform, err = conformRunner(ctx, o, state, stderr); err != nil {

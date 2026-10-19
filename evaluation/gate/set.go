@@ -146,7 +146,8 @@ func (r *Runner) set(ctx context.Context, rep *Report) []Check {
 		return []Check{broken("set loaded", "", errors.New("the runner has no run directory"))}
 	}
 	if r.Model == "" {
-		return r.setRun(ctx, roles)
+		// A set run has no fitness stage, so its set stage judges the warmed peak.
+		return append([]Check{r.warmedCheck(rep.Warm)}, r.setRun(ctx, roles)...)
 	}
 	return r.setModelRun(ctx, rep, roles)
 }
@@ -325,9 +326,10 @@ func (w concurrentWindow) gates(floor float64, what string) []Check {
 		return append(checks, broken("peak pool free", "", w.readErr))
 	}
 	peak := measure("peak pool free", "", float64(w.low.FreeMiB()), "MiB", AtLeast, floor)
-	peak.Values = map[string]float64{"readings": float64(w.readings), "phase_wall_s": w.wallS}
-	peak.Detail = fmt.Sprintf("%d of %d MiB used at the least free of %d readings over the %.0fs %s",
-		w.low.UsedMiB, w.low.TotalMiB, w.readings, w.wallS, what)
+	peak.Values = poolValues(w.low)
+	peak.Values["readings"], peak.Values["phase_wall_s"] = float64(w.readings), w.wallS
+	peak.Detail = fmt.Sprintf("%d of %d MiB used at the least free of %d readings over the %.0fs %s%s",
+		w.low.UsedMiB, w.low.TotalMiB, w.readings, w.wallS, what, ramDetail(w.low))
 	return append(checks, peak)
 }
 

@@ -76,6 +76,7 @@ func newHarness(t *testing.T, model string) *harness {
 		Media: gate.Media{PNG: []byte("png"), WAV: []byte("wav"), AudioSeconds: 6},
 		MTEB:  uv, ASR: uv, Vision: uv, Agent: uv, Dir: t.TempDir(), Tiers: tiers,
 		Conform: h.conform, Tau2: uv, Grid: h.guidellm.runner(), PollEvery: 2 * time.Millisecond,
+		Peaks: uv, Settle: time.Millisecond,
 	}
 	return h
 }
@@ -222,7 +223,7 @@ func TestRunRefusesUnloadedModel(t *testing.T) {
 // room: admission and fitness are reused, not rerun.
 func TestRunResumes(t *testing.T) {
 	h := newHarness(t, gptOSS)
-	h.footprint.free = []int{3333, 2500} // idle, then under the floor at the peak
+	h.footprint.free = []int{3333, 3333, 2500} // idle, warmed, then under the floor at capacity's peak
 	first := h.run(t, "", nil)
 	if first.Stage(gate.StageCapacity).Status != gate.StatusFail {
 		t.Fatalf("first run %q; want capacity failed", statuses(first))
@@ -291,9 +292,9 @@ func TestFloors(t *testing.T) {
 		{"throughput fails", embedding, gate.StageFitness, gate.RoleEmbedding, "throughput", func(h *harness) { h.runner.Floors.Embedding.ThroughputTokS = huge }, false},
 		{"query passes", embedding, gate.StageFitness, gate.RoleEmbedding, "query 32", func(*harness) {}, true},
 		{"query fails", embedding, gate.StageFitness, gate.RoleEmbedding, "query 32", func(h *harness) { h.runner.Floors.Embedding.Query32MS = tiny }, false},
-		{"idle pool passes", gptOSS, gate.StageFitness, "", "idle pool free", func(*harness) {}, true},
-		{"idle pool fails", gptOSS, gate.StageFitness, "", "idle pool free", func(h *harness) { h.footprint.free = []int{2700} }, false},
-		{"peak pool fails", embedding, gate.StageCapacity, gate.RoleEmbedding, "peak pool free", func(h *harness) { h.footprint.free = []int{3333, 2700} }, false},
+		{"warmed pool passes", gptOSS, gate.StageFitness, "", "warmed pool free", func(*harness) {}, true},
+		{"warmed pool fails", gptOSS, gate.StageFitness, "", "warmed pool free", func(h *harness) { h.footprint.free = []int{3333, 2700} }, false},
+		{"peak pool fails", embedding, gate.StageCapacity, gate.RoleEmbedding, "peak pool free", func(h *harness) { h.footprint.free = []int{3333, 3333, 2700} }, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -314,9 +315,9 @@ func TestFloors(t *testing.T) {
 	}
 }
 
-// TestTranscriptionRequest shows fitness's timed transcription and capacity's are one shape, the
-// quality stage's ASR task's: the model's ASR prompt, read from the profile, first and the clip
-// after it, at temperature 0, with reasoning and the prompt cache off; capacity's carries its
+// TestTranscriptionRequest shows the warm-up's transcription, fitness's timed one and capacity's
+// are one shape, the quality stage's ASR task's: the model's ASR prompt, read from the profile,
+// first and the clip after it, at temperature 0, with reasoning and the prompt cache off; capacity's carries its
 // nonce request after the clip. TestQualityAudio shows the ASR task is given the same prompt.
 func TestTranscriptionRequest(t *testing.T) {
 	h := newHarness(t, gemmaE4B)
@@ -324,9 +325,10 @@ func TestTranscriptionRequest(t *testing.T) {
 	const prompt = "Transcribe this clip, as the profile says."
 	h.runner.Profile.Model(gemmaE4B).Prompts.ASR = prompt
 	h.run(t, "", nil)
-	// The set stage's crossing probe sends capacity's request too, a round at a time.
-	if len(h.router.audio) < 1+4+1 {
-		t.Fatalf("%d audio requests; want fitness's one, capacity's 4 and the set stage's probe", len(h.router.audio))
+	// The set stage's crossing probe sends capacity's request too, a round at a time; the warm-up's
+	// longest clip goes first, as fitness's does.
+	if len(h.router.audio) < 1+1+4+1 {
+		t.Fatalf("%d audio requests; want the warm-up's one, fitness's one, capacity's 4 and the set stage's probe", len(h.router.audio))
 	}
 	for i, body := range h.router.audio {
 		kwargs, _ := body["chat_template_kwargs"].(map[string]any)
@@ -338,7 +340,7 @@ func TestTranscriptionRequest(t *testing.T) {
 		}
 		parts := body["messages"].([]any)[0].(map[string]any)["content"].([]any)
 		want := 2
-		if i > 0 {
+		if i > 1 {
 			want = 3
 		}
 		if len(parts) != want {
@@ -348,7 +350,7 @@ func TestTranscriptionRequest(t *testing.T) {
 		if first["type"] != "text" || first["text"] != prompt || second["type"] != "input_audio" {
 			t.Errorf("request %d: parts %v, %v; want the text %q, then the clip", i, first["type"], second["type"], prompt)
 		}
-		if i > 0 && !fakeNonce.MatchString(parts[2].(map[string]any)["text"].(string)) {
+		if i > 1 && !fakeNonce.MatchString(parts[2].(map[string]any)["text"].(string)) {
 			t.Errorf("request %d: the part after the clip %v; want the nonce request", i, parts[2])
 		}
 	}

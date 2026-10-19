@@ -28,7 +28,8 @@ const (
 )
 
 // fitness smokes each role the model takes with the probe's request for it, measures its
-// single-stream floors, and reads the pool idle. Speeds come from llama.cpp's own timings in
+// single-stream floors, and judges the pool at the warmed peak the run's warm-up read
+// (warmedCheck). Speeds come from llama.cpp's own timings in
 // each answer; a time is the client's, from sending to the answer.
 func (r *Runner) fitness(ctx context.Context, rep *Report) []Check {
 	c := &client{base: r.Router, hc: r.HTTP}
@@ -45,18 +46,7 @@ func (r *Runner) fitness(ctx context.Context, rep *Report) []Check {
 			checks = append(checks, r.fitEmbedding(ctx, c)...)
 		}
 	}
-	return append(checks, r.poolCheck(ctx, "idle pool free"))
-}
-
-// poolCheck reads the pool once and judges its free memory against the floor.
-func (r *Runner) poolCheck(ctx context.Context, name string) Check {
-	p, err := r.Footprint.Read(ctx)
-	if err != nil {
-		return broken(name, "", err)
-	}
-	ch := measure(name, "", float64(p.FreeMiB()), "MiB", AtLeast, r.Floors.Pool.FreeMiB)
-	ch.Detail = fmt.Sprintf("%d of %d MiB used", p.UsedMiB, p.TotalMiB)
-	return ch
+	return append(checks, r.warmedCheck(rep.Warm))
 }
 
 func (r *Runner) fitAgent(ctx context.Context, c *client) []Check {

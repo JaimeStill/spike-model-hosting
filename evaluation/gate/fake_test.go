@@ -42,6 +42,9 @@ type fakeRouter struct {
 	cutOff string
 	// refuse is a model whose chat completions and embeddings fail with a server error.
 	refuse string
+	// unloadOnToolCall is a model the router lists unloaded from the first tool call on, fitness's
+	// first request, after the run's reload and warm-up.
+	unloadOnToolCall string
 
 	mu       sync.Mutex
 	requests []string
@@ -55,6 +58,11 @@ type fakeRouter struct {
 	restarting bool
 	// audio are the chat completions' bodies that carried an audio clip, in order.
 	audio []map[string]any
+	// images are the image parts' data URLs, in order; longest is each model's longest chat
+	// prompt, and widest each model's largest embedding input, in words (the fake's tokens).
+	images  []string
+	longest map[string]int
+	widest  map[string]int
 }
 
 var fakeNonce = regexp.MustCompile(`nonce-[0-9a-f]{16}`)
@@ -63,7 +71,8 @@ var fakeNonce = regexp.MustCompile(`nonce-[0-9a-f]{16}`)
 const crossedNonce = "nonce-0123456789abcdef"
 
 func newFakeRouter(t *testing.T, models ...string) *fakeRouter {
-	f := &fakeRouter{status: map[string]string{}, prefixes: map[string]bool{}, vocab: map[string]int{}, build: "b11669-620d2225c", decode: 50, prefill: 700}
+	f := &fakeRouter{status: map[string]string{}, prefixes: map[string]bool{}, vocab: map[string]int{}, build: "b11669-620d2225c", decode: 50, prefill: 700,
+		longest: map[string]int{}, widest: map[string]int{}}
 	for _, m := range models {
 		f.status[m] = "loaded"
 	}
@@ -143,11 +152,21 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		m, _ := body["model"].(string)
+		// A load or unload takes effect at once, and is recorded as "load <model>" or
+		// "unload <model>".
+		if verb, ok := strings.CutPrefix(r.URL.Path, "/models/"); ok && (verb == "load" || verb == "unload") {
+			f.mu.Lock()
+			f.requests = append(f.requests, verb+" "+m)
+			f.status[m] = verb + "ed"
+			f.mu.Unlock()
+			_, _ = w.Write([]byte(`{"success":true}`))
+			return
+		}
 		if r.URL.Query().Get("autoload") != "false" {
 			http.Error(w, "a model-routed request without autoload=false", http.StatusBadRequest)
 			return
 		}
-		m, _ := body["model"].(string)
 		f.mu.Lock()
 		status := f.status[m]
 		f.mu.Unlock()
@@ -180,6 +199,11 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 		reply(map[string]any{"build_info": f.build})
 	case "/v1/messages":
 		f.record("messages")
+		if f.unloadOnToolCall != "" {
+			f.mu.Lock()
+			f.status[f.unloadOnToolCall] = "unloaded"
+			f.mu.Unlock()
+		}
 		reply(map[string]any{"content": []map[string]any{{"type": "tool_use", "name": "get_weather", "input": map[string]any{"city": "Paris"}}}})
 	case "/metrics":
 		f.metrics(w, r.URL.Query())
@@ -233,6 +257,9 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 				text.WriteString(part["text"].(string))
 			case "image_url":
 				image = true
+				f.mu.Lock()
+				f.images = append(f.images, part["image_url"].(map[string]any)["url"].(string))
+				f.mu.Unlock()
 			case "input_audio":
 				audio = true
 			}
@@ -267,6 +294,10 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 		f.audio = append(f.audio, body)
 		f.mu.Unlock()
 	}
+	f.mu.Lock()
+	m, _ := body["model"].(string)
+	f.longest[m] = max(f.longest[m], len(strings.Fields(text.String())))
+	f.mu.Unlock()
 	stream, _ := body["stream"].(bool)
 	f.record(fmt.Sprintf("%s %v %s", kind, stream, body["model"]))
 	timings := map[string]any{
@@ -313,8 +344,12 @@ func (f *fakeRouter) embeddings(body map[string]any, reply func(any)) {
 	}
 	var data []map[string]any
 	tokens := 0
+	m, _ := body["model"].(string)
 	for i, in := range inputs {
 		tokens += len(strings.Fields(in))
+		f.mu.Lock()
+		f.widest[m] = max(f.widest[m], len(strings.Fields(in)))
+		f.mu.Unlock()
 		h := fnv.New64a()
 		_, _ = h.Write([]byte(in))
 		rng := rand.New(rand.NewPCG(h.Sum64(), 0))
@@ -328,13 +363,17 @@ func (f *fakeRouter) embeddings(body map[string]any, reply func(any)) {
 }
 
 // fakeFootprint returns the pool's free memory from free, one reading after another, the last
-// repeated, out of a 98304MiB pool.
+// repeated, out of a 98304MiB pool, with system RAM beside it: rssMiB for each of set A's models
+// and 1000 more of RAM used for each MiB less free.
 type fakeFootprint struct {
 	mu   sync.Mutex
 	free []int
 	n    int
 	err  error
 }
+
+// rssMiB is every model process's resident memory in fakeFootprint's readings.
+const rssMiB = 400
 
 func (f *fakeFootprint) Read(context.Context) (gate.Pool, error) {
 	f.mu.Lock()
@@ -344,7 +383,12 @@ func (f *fakeFootprint) Read(context.Context) (gate.Pool, error) {
 	}
 	free := f.free[min(f.n, len(f.free)-1)]
 	f.n++
-	return gate.Pool{UsedMiB: 98304 - free, TotalMiB: 98304}, nil
+	rss := map[string]int{}
+	for _, m := range []string{gptOSS, gemma26B, gemmaE4B, embedding} {
+		rss[m] = rssMiB
+	}
+	ram := &gate.RAM{UsedMiB: 100000 - free, AvailableMiB: 28000 + free, TotalMiB: 128076, RSSMiB: rss}
+	return gate.Pool{UsedMiB: 98304 - free, TotalMiB: 98304, RAM: ram}, nil
 }
 
 // fakeConform answers the conform tier with recorded trials, k a harness, and records each plan

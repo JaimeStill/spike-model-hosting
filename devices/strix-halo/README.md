@@ -334,8 +334,8 @@ These need no root, and sessions run them:
   `GET /models` for each model's status.
 - **Swap sets:** `go run ./hosting/cmd/swap <set>` unloads the models the incoming set doesn't
   hold, then loads the rest, timing each step.
-- **Reload a set:** unload and load its models over the API; the evaluation does this before
+- **Reload a set:** unload and load its models over the API; evaluate does this itself before
   every run ([`docs/evaluation.md`](../../docs/evaluation.md), "Before each run").
 - **The pool:** `mise run //evaluation:footprint -- -set a <host> [samples] [seconds between]`,
-  `amdgpu_top -p` over a non-interactive ssh.
+  `amdgpu_top -p` over a non-interactive ssh; evaluate's own readings add `free -b` and `ps`.
 - **The logs:** `journalctl -u llama-router` over user-level ssh.

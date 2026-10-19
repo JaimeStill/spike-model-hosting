@@ -52,9 +52,10 @@ func (f *fakeUV) runner() gate.UV {
 	}
 	script := fmt.Sprintf(`#!/bin/sh
 printf '%%s|%%s|%%s|%%s|%%s\n' "$*" "$HF_HOME" "$MTEB_CACHE" "$ASR_CACHE" "$INSPECT_EVALS_CACHE_DIR" >> %[1]q
-kind= task= set= tier= out= bar= domain=
+kind= task= set= tier= out= bar= domain= peak=
 while [ $# -gt 0 ]; do
 	case $1 in
+	peak) peak=1 ;;
 	*/mteb_quality.py) kind=mteb ;;
 	*/tau2_quality.py) kind=tau2 ;;
 	--domain) domain=$2; shift ;;
@@ -69,6 +70,19 @@ while [ $# -gt 0 ]; do
 	esac
 	shift
 done
+if [ -n "$peak" ]; then
+	# The warm-up's peak media: a fixed image or clip, described as the scripts describe theirs.
+	[ "$kind" = %[2]q ] && exit 1
+	mkdir -p "$out" || exit 1
+	case $kind in
+	vision) printf '\211PNG\r\n\032\npeak image' > "$out/peak.png"
+		printf '{"tier": "vision-vstar", "id": "83", "file": "peak.png", "width": 3300, "height": 2400}\n' > "$out/peak.json" ;;
+	asr) printf 'RIFF peak clip' > "$out/peak.wav"
+		printf '{"tier": "asr-earnings22", "id": "4483338/86.wav", "file": "peak.wav", "audio_s": 29.5}\n' > "$out/peak.json" ;;
+	*) exit 2 ;;
+	esac
+	exit 0
+fi
 case $kind in
 mteb)
 	[ "$task" = %[2]q ] && exit 1
@@ -112,12 +126,13 @@ esac
 
 // calls returns each call of the quality stage's, its arguments, HF_HOME, MTEB_CACHE, ASR_CACHE
 // and INSPECT_EVALS_CACHE_DIR, '|'-separated, in order; setCalls returns the set stage's, those
-// whose output is under a run directory's set/, and deepCalls the deep stage's, under its deep/.
+// whose output is under a run directory's set/, deepCalls the deep stage's, under its deep/, and
+// peakCalls the warm-up's, under its warm/.
 func (f *fakeUV) calls(t *testing.T) []string {
 	t.Helper()
 	var out []string
 	for _, c := range f.allCalls(t) {
-		if !setCall.MatchString(c) && !deepCall.MatchString(c) {
+		if !setCall.MatchString(c) && !deepCall.MatchString(c) && !peakCall.MatchString(c) {
 			out = append(out, c)
 		}
 	}
@@ -137,6 +152,20 @@ func (f *fakeUV) deepCalls(t *testing.T) []string {
 
 // deepCall matches a deep stage's call, by its output under the run directory's deep/.
 var deepCall = regexp.MustCompile(`--output \S*/deep/`)
+
+func (f *fakeUV) peakCalls(t *testing.T) []string {
+	t.Helper()
+	var out []string
+	for _, c := range f.allCalls(t) {
+		if peakCall.MatchString(c) {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// peakCall matches the warm-up's call, by its output under the run directory's warm/.
+var peakCall = regexp.MustCompile(`--output \S*/warm/`)
 
 func (f *fakeUV) setCalls(t *testing.T) []string {
 	t.Helper()

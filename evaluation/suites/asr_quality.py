@@ -8,11 +8,17 @@ the router's audio model, and score it by word error rate.
 
     uv run --project evaluation/suites python evaluation/suites/asr_quality.py ids --set ami
 
+    uv run --project evaluation/suites python evaluation/suites/asr_quality.py peak \
+        --tiers evaluation/tiers --output DIR
+
 eval runs the tier through Inspect's stock openai-api provider, which sends each clip as an
 OpenAI chat input_audio part, the router's shape, one request at a time, and writes Inspect's
 JSON log under DIR; evaluate's quality stage (package evaluation/gate) reads it. ids prints the
 set's dataset, as a tier list's "# dataset" header, then every utterance ID of it the leaderboard
-scores: the pool the command evaluation/cmd/tierlist draws a tier list from.
+scores: the pool the command evaluation/cmd/tierlist draws a tier list from. peak finds the longest
+clip any set's committed tier list (asr-<set>.txt under --tiers) sends and copies it into DIR as
+peak.wav beside peak.json, which names its tier, utterance, file and length: the clip evaluate's
+warm-up sends the audio model before a run, to drive its audio encoder to its high-water mark.
 
 The sets are the leaderboard's English test sets in hf-audio/esb-datasets-test-only-sorted, which
 its run scripts load, and FLEURS English (google/fleurs, en_us test), each at a fixed revision. A
@@ -31,6 +37,7 @@ import io
 import json
 import math
 import os
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -281,11 +288,35 @@ def asr(name: str, tier: str, prompt: str, bar: float | None = None):
     )
 
 
+def peak(tiers: Path, output: Path) -> dict:
+    """The longest clip any set's tier list sends, copied into output beside peak.json; the first
+    of equal length, in SETS' and each list's order, wins."""
+    best = None
+    for name, spec in SETS.items():
+        path = tiers / f"asr-{name}.txt"
+        dataset, uids = read_list(str(path))
+        if dataset != spec.dataset:
+            raise SystemExit(f"{path} is drawn from {dataset!r}, not the set's {spec.dataset!r}")
+        for u, c in clips(name, spec, uids).items():
+            if best is None or c["audio_s"] > best["audio_s"]:
+                best = {"tier": f"asr-{name}", "id": u, "source": c["wav"], "audio_s": c["audio_s"]}
+    if best is None:
+        raise SystemExit(f"no clip in the tier lists under {tiers}")
+    output.mkdir(parents=True, exist_ok=True)
+    best["file"] = "peak.wav"
+    shutil.copyfile(best["source"], output / best["file"])
+    (output / "peak.json").write_text(json.dumps(best, indent=1) + "\n")
+    return best
+
+
 def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     pi = sub.add_parser("ids", help="print every scored utterance ID of a set")
     pi.add_argument("--set", required=True, choices=SETS)
+    pp = sub.add_parser("peak", help="find the longest clip the tier lists send")
+    pp.add_argument("--tiers", required=True)
+    pp.add_argument("--output", required=True)
     pe = sub.add_parser("eval", help="transcribe a tier with Inspect and write its JSON log")
     for flag in ("--router", "--model", "--set", "--tier", "--output", "--prompt"):
         pe.add_argument(flag, required=True)
@@ -296,6 +327,9 @@ def main():
         print(f"# dataset {SETS[a.set].dataset}")
         for u in ids(SETS[a.set]):
             print(u)
+        return
+    if a.cmd == "peak":
+        print(json.dumps(peak(Path(a.tiers), Path(a.output))))
         return
     if a.set not in SETS:
         raise SystemExit(f"no set {a.set!r}; the sets are {', '.join(SETS)}")

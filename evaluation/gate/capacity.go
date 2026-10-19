@@ -114,7 +114,8 @@ func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
 		return append(checks, broken("peak pool free", role, readErr))
 	}
 	peak := measure("peak pool free", role, float64(low.FreeMiB()), "MiB", AtLeast, r.Floors.Pool.FreeMiB)
-	peak.Detail = fmt.Sprintf("%d of %d MiB used at the peak of %d readings", low.UsedMiB, low.TotalMiB, readings)
+	peak.Values = poolValues(low)
+	peak.Detail = fmt.Sprintf("%d of %d MiB used at the peak of %d readings%s", low.UsedMiB, low.TotalMiB, readings, ramDetail(low))
 	return append(checks, peak)
 }
 

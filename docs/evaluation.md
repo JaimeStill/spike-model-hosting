@@ -20,10 +20,10 @@ results are in [`findings/baseline.md`](findings/baseline.md), "Set A's baseline
 | Stage | Gates on | Fails when |
 |---|---|---|
 | Admission | Paper: the profile and the router's build. Licence and origin recorded, origin judged by `STANDARDS.md`, the set's roles declared, the profile's context within the card's, the set's memory budget leaving the pool floor free, the router's build at or above the profile's minimum. | Any check fails. Licence fails only when missing. Origin fails when missing, and for a model of Chinese origin (`origin = "China"`) whose profile entry records no `origin_reason`, why no alternative serves; `STANDARDS.md` chooses such a model only then. Validation refuses an `origin_reason` on any other origin. |
-| Fitness | Under ~3 minutes: a smoke per declared role (the probe's tool call, image, audio clip, or embedding), the role's single-stream floors, and the idle pool. | A smoke fails, a single-stream floor is missed, or the idle pool is under the floor. |
+| Fitness | Under ~3 minutes: a smoke per declared role (the probe's tool call, image, audio clip, or embedding), the role's single-stream floors, and the pool at the warmed peak (below). | A smoke fails, a single-stream floor is missed, or the pool at the warmed peak is under the floor. |
 | Capacity | The model's slots in the profile (4) of requests in flight on the model per role, through the `concurrent` package's run. | A nonce crosses, an embedding leaves its tolerance, the pool at the peak is under the floor, or a 4-stream floor is missed. |
 | Quality | Each role's tiers, cheapest first, each against its bar (below). | A tier misses its bar; the stage stops at that tier. |
-| Set | Each role's tier 1 alone, then every role's at once, all of the set's models loaded. | The pool at the concurrent peak is under the floor, or an answer carries another request's nonce. |
+| Set | Each role's tier 1 alone, then every role's at once, all of the set's models loaded. | The pool at the concurrent peak is under the floor (and, in a set run, the pool at the warmed peak), or an answer carries another request's nonce. |
 | Deep | τ2 airline and retail for the agent role; the GuideLLM grid and prefix reuse for a generative model; then cold load. | Never on a score: only when a measurement can't be taken. |
 
 In a model's run, the set stage takes the alone figure from the model's own quality tier 1, and
@@ -128,29 +128,24 @@ The record names the tier and the bound that stopped it.
 
 ## Before each run
 
-- **Reload the set.** Every model run, and the set run, starts from freshly loaded models. Each
-  model keeps the largest working memory it has needed until it is reloaded, so without a reload
-  one run's growth carries into the next, and a model's verdict would depend on where it ran in
-  the day ([`findings/memory-budget.md`](findings/memory-budget.md), "The pool over a day of
-  runs"). Unload and load the set's models over the router's API, wait 30 s, and record the
-  idle pool:
-
-  ```bash
-  ids=$(go run ./hosting/cmd/profile set -set a strix-halo | awk '$1 == "model" {print $2}')
-  status() { curl -fsS "$SPIKE_ROUTER_URL/models" | jq -r --arg id "$1" '.data[] | select(.id == $id) | .status.value'; }
-  for verb in unload load; do
-    want=${verb}ed
-    for id in $ids; do
-      curl -fsS -X POST "$SPIKE_ROUTER_URL/models/$verb" -H 'Content-Type: application/json' \
-        -d "$(jq -nc --arg m "$id" '{model: $m}')" && echo
-      until [ "$(status "$id")" = "$want" ]; do sleep 1; done
-    done
-  done
-  sleep 30
-  mise run //evaluation:footprint -- -set a <ssh destination> 1
-  ```
-
-  A run resumed with `-from` on the same run directory doesn't reload.
+- **The run reloads the set.** Every model run, and the set run, starts from freshly loaded
+  models. Each model keeps the largest working memory it has needed until it is reloaded, so
+  without a reload one run's growth carries into the next, and a model's verdict would depend on
+  where it ran in the day ([`findings/memory-budget.md`](findings/memory-budget.md), "The pool
+  over a day of runs"). evaluate does it itself, once admission has passed (a set run, before
+  the set stage): it unloads and loads the set's models over the router's API, waits 30 s, and
+  records the idle pool. It then drives each of the set's models to its high-water mark: an
+  8192-token prompt to each generative model (prefilled in full ubatches, as the deep stage's
+  8192-token prompts are), the vision role's largest image and the audio role's longest clip in
+  the committed tier lists (found by `vision_quality.py peak` and `asr_quality.py peak` into the
+  run directory's `warm/`), and the embedding role's largest input, one that fills its physical
+  batch. It reads the pool again at that warmed peak, and every pool floor is judged there:
+  fitness (the set stage, in a set run) judges the warmed reading, and capacity's and the set
+  stage's readings come after it. Each reading carries the host's system RAM beside it: used
+  and available (`free -b`), and each model process's RSS (`ps`, by its `--alias`). The report's
+  `warm` records the reload's steps, both readings and the warm-up's requests. A run resumed
+  with `-from` on the same run directory doesn't reload, and keeps that run's warm-up. The run
+  needs every model of the set loaded, and never loads one it didn't find loaded.
 - **Point `TMPDIR` into `.state`.** inspect_evals' τ2 task writes one copy of the domain's
   database to `TMPDIR` per sample (airline 6.8 MB, retail 2.7 MB) and never removes it, about
   230 MB an agent run, enough to fill the laptop's `/tmp` quota. Run with
@@ -185,8 +180,8 @@ go run ./evaluation/cmd/evaluate -set a -role agent -restart
 ```
 
 `-role` takes agent, vision, audio, or embedding. The set is `-set`, `SPIKE_SET`, or the
-profile's startup set. The run refuses a model the router doesn't list as loaded, and never loads
-one. Each report is `.state/evaluate/<UTC time>-<model>/report.json`, a set run's
+profile's startup set. The run refuses a model the router doesn't list as loaded (for a run that
+reloads, every model of the set), and loads only the set it reloads. Each report is `.state/evaluate/<UTC time>-<model>/report.json`, a set run's
 `.state/evaluate/<UTC time>-set-<name>/report.json`, with a summary on stdout. The raw output stays
 untracked under `.state`; once a run's findings are committed to `docs/findings/`, the run
 outputs are removed, and only the logins and caches stay. `go run ./evaluation/cmd/evaluate -h`

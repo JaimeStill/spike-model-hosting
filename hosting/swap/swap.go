@@ -115,6 +115,40 @@ func Run(ctx context.Context, cfg Config) (rep Report, err error) {
 	return rep, check(ctx, cfg)
 }
 
+// Reload unloads each of cfg.Models and loads it again, so every one starts from a fresh load:
+// a model keeps the largest working memory it has needed until it is reloaded. It fails before
+// any request that changes the router unless the router lists every one of them loaded, and
+// leaves every other model as it is. Every unload finishes before the first load, in cfg.Models'
+// order, and the reload ends by checking each is listed loaded. The Report holds the steps run,
+// even when Reload fails; it keeps none.
+func Reload(ctx context.Context, cfg Config) (rep Report, err error) {
+	cfg.HTTP = cmp.Or(cfg.HTTP, &http.Client{})
+	cfg.Interval = cmp.Or(cfg.Interval, DefaultInterval)
+	cfg.LoadTimeout = cmp.Or(cfg.LoadTimeout, DefaultLoadTimeout)
+	cfg.UnloadTimeout = cmp.Or(cfg.UnloadTimeout, DefaultUnloadTimeout)
+	start := time.Now()
+	defer func() { rep.Total = time.Since(start) }()
+
+	if err := router.CheckLoaded(ctx, cfg.HTTP, cfg.Router, cfg.Models...); err != nil {
+		return rep, fmt.Errorf("a reload starts from every model loaded: %w", err)
+	}
+	for _, id := range cfg.Models {
+		s := unload(ctx, cfg, id)
+		rep.Unloads = append(rep.Unloads, s)
+		if s.Err != nil {
+			return rep, fmt.Errorf("unloading %s: %w", id, s.Err)
+		}
+	}
+	for _, id := range cfg.Models {
+		s := load(ctx, cfg, id, router.StatusUnloaded)
+		rep.Loads = append(rep.Loads, s)
+		if s.Err != nil {
+			return rep, fmt.Errorf("loading %s: %w", id, s.Err)
+		}
+	}
+	return rep, router.CheckLoaded(ctx, cfg.HTTP, cfg.Router, cfg.Models...)
+}
+
 // unload unloads id and polls until the router lists it unloaded.
 func unload(ctx context.Context, cfg Config, id string) Step {
 	start := time.Now()

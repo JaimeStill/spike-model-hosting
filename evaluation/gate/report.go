@@ -111,6 +111,8 @@ type Report struct {
 	Stages  []StageResult `json:"stages"`
 	// Ceiling is nil when the run measured no decode, or the profile lacks the figures.
 	Ceiling *Ceiling `json:"ceiling,omitempty"`
+	// Warm is the run's reload and warm-up, nil for a run that stopped before it.
+	Warm *Warm `json:"warm,omitempty"`
 }
 
 // Stage returns the report's result for the stage named name, or nil.
@@ -202,6 +204,24 @@ func WriteSummary(w io.Writer, r *Report) error {
 	}
 	fmt.Fprintf(&b, "%s on %s, build %s, set %s, roles %s\n", subject, r.Router, r.Build, r.Set, strings.Join(r.Roles, ", "))
 	fmt.Fprintf(&b, "reached %s: %s\n", r.Reached, verdict)
+	if w := r.Warm; w != nil {
+		line := fmt.Sprintf("reload %.0fs", w.ReloadS)
+		if w.Reused {
+			line = "the resumed run's reload"
+		}
+		for _, p := range []struct {
+			name string
+			p    *Pool
+		}{{"idle", w.Idle}, {"warmed peak", w.Peak}} {
+			if p.p != nil {
+				line += fmt.Sprintf(", %s %d MiB free", p.name, p.p.FreeMiB())
+				if ram := p.p.RAM; ram != nil {
+					line += fmt.Sprintf(" (system RAM %d MiB used, %d available)", ram.UsedMiB, ram.AvailableMiB)
+				}
+			}
+		}
+		fmt.Fprintln(&b, line)
+	}
 	for _, s := range r.Stages {
 		line := fmt.Sprintf("%-9s %-9s", s.Name, s.Status)
 		if s.Status == StatusPass || s.Status == StatusFail {

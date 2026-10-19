@@ -13,5 +13,7 @@
 // The API:
 //   - Run swaps the router to a Config's models and returns a Report: the models kept, each
 //     unload and load a Step with its time, and the total.
+//   - Reload unloads each of a Config's models and loads it again, every unload before the first
+//     load, leaving every other model as it is: evaluate starts each run from freshly loaded models.
 //   - DefaultInterval, DefaultLoadTimeout and DefaultUnloadTimeout are the Config's defaults.
 package swap

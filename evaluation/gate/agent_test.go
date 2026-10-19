@@ -253,7 +253,7 @@ func TestQualityAgentBroken(t *testing.T) {
 		"a ceiling": {func(h *harness) { h.runner.Bars = tier.Bars{"agent-bfcl-single": {Value: 0.5, AtMost: true}} },
 			"agent-bfcl-single", "its bar belongs under [bars]"},
 		"conform errs":       {func(h *harness) { h.conform.err = errors.New("no cell") }, "agent-conform", "no cell"},
-		"set model unloaded": {func(h *harness) { h.router.status[gemmaE4B] = "unloaded" }, "agent-conform", gemmaE4B},
+		"set model unloaded": {func(h *harness) { h.router.unloadOnToolCall = gemmaE4B }, "agent-conform", gemmaE4B},
 		"no conform runner":  {func(h *harness) { h.runner.Conform = nil }, "agent-conform", "no conform runner"},
 	}
 	for name, tc := range cases {

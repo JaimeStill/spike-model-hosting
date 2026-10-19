@@ -41,9 +41,9 @@ from `context/README.md`.
   `evaluation/floors.toml` and `evaluation/bars.toml` (set A's two-run baseline); `-set a` alone
   is a set run, `-from <stage>` resumes. The agent's tier 3 is harness fit: conform pass^5
   through every pinned harness, one absolute bar. The instruments also run alone as steps
-  (`conform`, `concurrent`, `prefix`, `coldload`; `-h` lists them). Before each run, reload the
-  set over the router's API and set `TMPDIR` to `.state/tmp` (τ2 leaves a database copy per
-  sample). Reports go to `.state/evaluate/`; once findings are committed, run outputs are
+  (`conform`, `concurrent`, `prefix`, `coldload`; `-h` lists them). evaluate reloads the set over the
+  router's API before each run and judges the pool at the warmed peak; set `TMPDIR` to
+  `.state/tmp` first (τ2 leaves a database copy per sample). Reports go to `.state/evaluate/`; once findings are committed, run outputs are
   removed. `docs/evaluation.md` is the method; each package's `doc.go` lists its API.
 - **Findings:** `docs/findings/baseline.md` (speed, prefix, cold load, set A's scores and bars),
   `docs/findings/tool-reliability.md` (pass^5 and harness fit), and

@@ -89,8 +89,14 @@ type Runner struct {
 	// Restarts says the architect is at hand to restart the router when the deep stage's cold load
 	// asks; without it, cold load is recorded not run.
 	Restarts bool
-	// PollEvery spaces cold load's polls of /models; zero is 250 milliseconds.
+	// PollEvery spaces cold load's polls of /models; zero is 250 milliseconds. The reload before a
+	// run polls at it too, where zero is the swap package's default.
 	PollEvery time.Duration
+	// Peaks finds the largest image and the longest clip the tier lists send, which the warm-up
+	// before a run sends the vision and audio roles' models (Warm).
+	Peaks Peaks
+	// Settle is the wait after the reload before the idle reading; zero is 30 seconds.
+	Settle time.Duration
 }
 
 // Roles returns the roles the set assigns Model, in the order Roles lists them; for a set run,
@@ -119,6 +125,15 @@ const (
 // fails: every later stage is reported not run, naming it. Before any stage it refuses a model
 // the router doesn't list as loaded, with an error wrapping ErrNotLoaded, and reads the router's
 // build.
+//
+// A run that resumes nothing, a model run from admission or any set run, starts from freshly
+// loaded models (Warm): once admission has passed on paper, and before any stage that sends a
+// request, it reloads the set over the router's API, reads the idle pool, drives each of the set's
+// models to its high-water mark and reads the pool at that warmed peak, which fitness (the set
+// stage, for a set run) judges against the pool's floor. Such a run refuses unless every model of
+// the set is loaded, since the reload unloads and loads them all; it never loads a model it
+// didn't find loaded. A reload that fails returns the report so far with its error. A resumed run
+// reloads nothing and keeps the warm-up of the run it resumes.
 //
 // from names the stage to start at; empty starts at admission. A run from a later stage reuses
 // prior's results for every stage before it: prior must be a run of the same model and set in
@@ -151,7 +166,8 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 	if len(roles) == 0 {
 		return nil, fmt.Errorf("set %s assigns %s no role", r.Set.Name, cmp.Or(r.Model, "any model"))
 	}
-	if err := r.checkLoaded(ctx); err != nil {
+	fresh := setRun || start == 0
+	if err := r.checkLoaded(ctx, fresh); err != nil {
 		return nil, err
 	}
 	build, err := router.Build(ctx, r.HTTP, r.Router)
@@ -172,6 +188,11 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 		rep.From = from
 		if err := reuse(rep, prior, start); err != nil {
 			return nil, err
+		}
+		if prior.Warm != nil {
+			w := *prior.Warm
+			w.Reused = true
+			rep.Warm = &w
 		}
 		// A model run's set stage takes its alone figures from the quality stage, so a run resumed
 		// at it needs them in the run it resumes.
@@ -198,6 +219,13 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 		case setRun && name != StageSet:
 			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: setRunAfterReason})
 			continue
+		}
+		if fresh && rep.Warm == nil && name != StageAdmission {
+			w, err := r.warm(ctx)
+			rep.Warm = w
+			if err != nil {
+				return rep, err
+			}
 		}
 		run := stages[name]
 		r.logf("evaluate: %s %s\n", name, cmp.Or(r.Model, SetSubject(r.Set.Name)))
@@ -245,15 +273,15 @@ func reuse(rep, prior *Report, start int) error {
 	return nil
 }
 
-// checkLoaded refuses the run unless the router lists Model loaded, or, for a set run, every
-// model of the set.
-func (r *Runner) checkLoaded(ctx context.Context) error {
+// checkLoaded refuses the run unless the router lists Model loaded, or, for a run that reloads
+// the set first (whole), every model of the set.
+func (r *Runner) checkLoaded(ctx context.Context, whole bool) error {
 	status, err := router.Statuses(ctx, r.HTTP, r.Router)
 	if err != nil {
 		return err
 	}
 	models := []string{r.Model}
-	if r.Model == "" {
+	if whole {
 		models = r.Set.Models
 	}
 	for _, m := range models {
@@ -262,7 +290,7 @@ func (r *Runner) checkLoaded(ctx context.Context) error {
 			s = "unlisted"
 		}
 		if s != router.StatusLoaded {
-			return fmt.Errorf("%w: the router lists %s as %s; evaluate never loads a model, so load it (or swap its set in) first",
+			return fmt.Errorf("%w: the router lists %s as %s; evaluate reloads only a set it finds loaded and never loads a model, so load it (or swap its set in) first",
 				ErrNotLoaded, m, s)
 		}
 	}

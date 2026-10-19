@@ -9,9 +9,17 @@
 //     its origin_reason), the set's roles declared, the profile's context within the card's,
 //     the set's memory budget leaving the pool's floor free, and the router's build at or above
 //     the profile's minimum.
+//   - Before the first stage after admission (for a set run, the set stage), a run that resumes
+//     nothing starts from freshly loaded models (Warm): it reloads the set over the router's API
+//     (swap.Reload), waits Runner.Settle, reads the idle pool, drives each of the set's models to
+//     its high-water mark (an 8192-token prompt to each generative model, the vision role's
+//     largest image and the audio role's longest clip in the committed tier lists, which Peaks
+//     finds, and the embedding role's largest input, its c less embedReserve) and reads the pool
+//     at that warmed peak. Every pool floor is judged at the warmed peak.
 //   - Fitness smokes each role the set assigns the model with the probe's request for it (a
 //     tool call, an image, an audio clip, an embedding), measures the role's single-stream
-//     floors from llama.cpp's timings or the client's clock, and reads the pool idle. The audio
+//     floors from llama.cpp's timings or the client's clock, and judges the pool at the warmed
+//     peak, the idle reading beside it. The audio
 //     clip goes as the quality stage's ASR task sends one: the model's ASR prompt, from the
 //     profile, first, the clip after, at temperature 0 with reasoning off, the request
 //     capacity's audio streams send too.
@@ -74,7 +82,8 @@
 //     it too). Each check records the samples run and passed, the request and wall time, the
 //     dataset's revision, the tasks' inspect_evals versions and Inspect's release, and, for a
 //     tier the model's card reports, the card's figure beside ours.
-//   - Set runs tier 1s (TierOne) on the set's role models, all of them loaded: the agent's BFCL
+//   - Set runs tier 1s (TierOne) on the set's role models, all of them loaded (a set run judges the
+//     warmed peak first, having no fitness stage): the agent's BFCL
 //     single-turn, the vision probe and V*Bench, the audio role's LibriSpeech test-clean and the
 //     embedding role's STSBenchmark, the cheapest of its MTEB tasks, through the quality stage's
 //     suites, whole and without their bars. A set run runs each role's alone, role after role,
@@ -121,7 +130,8 @@
 //     it, it is recorded not run, naming the commands. Its output is in the run's deep/.
 //
 // Every request carries autoload=false; a run refuses a model the router doesn't list loaded
-// before any stage, and never loads one.
+// before any stage (a run that reloads, any model of the set), and loads only the set it reloads.
+// A run resumed from a later stage reloads nothing and keeps the warm-up of the run it resumes.
 //
 // The API:
 //   - Runner runs the stages, judging quality by its Bars (package tier's) and the conform tier
@@ -139,8 +149,13 @@
 //     host's memory bandwidth allows the model, recorded and never gated. WriteReport,
 //     ReadReport and WriteSummary write and read it; RunDir and LatestRun place it under the
 //     state root, as <state>/evaluate/<UTC time>-<Slug(model)>/ReportFile.
-//   - Footprint reads the pool, a Pool; SSH reads it with amdgpu_top over ssh, and
-//     ParseAmdgpuTop parses that reading.
+//   - Footprint reads the pool, a Pool, with the host's system RAM beside it, a RAM; SSH reads
+//     both over ssh, amdgpu_top, free -b and ps, and ParseFootprint parses that reading,
+//     ParseAmdgpuTop its pool and ParseRAM its RAM.
+//   - Warm is a run's reload and warm-up, its WarmStep and WarmRequest records, the requests
+//     named WarmPrompt, WarmImage, WarmClip and WarmInput; Peaks finds a role's Peak media (UV
+//     through vision_quality.py peak and asr_quality.py peak), which ReadPeak reads from its
+//     PeakFile.
 //   - MTEB runs one MTEB task, ASR one ASR set's tier, Vision one vision tier and Agent one BFCL
 //     tier; UV runs each through the suites project (SuitesDir) with uv. ReadTier reads a vision or
 //     BFCL tier's Inspect logs into a TierResult, whose Score and Passes are the tier's;
