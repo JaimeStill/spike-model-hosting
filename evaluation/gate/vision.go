@@ -46,17 +46,19 @@ const probeRepeats = 5
 // the vision tiers run; a log written under another fails its check.
 var InspectEvalsVersion = mustPin("inspect-evals")
 
-// Vision runs one vision tier on a router's vision model and leaves Inspect AI's JSON logs, one a
-// task, in out (ReadTier). input is the tier list for a benchmark, or the probe's image for the
+// Vision runs one vision tier on a router's vision model, slots requests in flight (the model's
+// profile slots, Runner.slotsOf), and leaves Inspect AI's JSON logs, one a task, in out (ReadTier). input is the tier list for a benchmark, or the probe's image for the
 // probe. A bar, a floor, stops a benchmark early once its pass rate can't reach it
 // (vision_quality.py's PassStop); nil runs the whole tier.
 type Vision interface {
-	Vision(ctx context.Context, router, model, tierName, input, out string, bar *float64) error
+	Vision(ctx context.Context, router, model, tierName, input, out string, slots int, bar *float64) error
 }
 
-// Vision runs the tier through vision_quality.py eval, and fails when uv does.
-func (u UV) Vision(ctx context.Context, router, model, tierName, input, out string, bar *float64) error {
-	args := []string{"eval", "--router", router, "--model", model, "--tier", tierName, "--output", out}
+// Vision runs the tier through vision_quality.py eval, slots as its --slots, and fails when uv
+// does.
+func (u UV) Vision(ctx context.Context, router, model, tierName, input, out string, slots int, bar *float64) error {
+	args := []string{"eval", "--router", router, "--model", model, "--tier", tierName, "--output", out,
+		"--slots", strconv.Itoa(slots)}
 	if tierName == "probe" {
 		args = append(args, "--image", input)
 	} else {
@@ -172,11 +174,11 @@ func (r *Runner) visionTier(ctx context.Context, tg target, t VisionTier) Check 
 		var screenOut string
 		if screenOut, err = tg.screenDir(screen, filepath.Join("vision", t.Name, "logs")); err == nil {
 			res, err = r.restTier(t.Name, *list, screenOut, filepath.Join(dir, restDir), func(listPath, restOut string) error {
-				return r.Vision.Vision(ctx, r.Router, tg.model, t.Name, listPath, restOut, nil)
+				return r.Vision.Vision(ctx, r.Router, tg.model, t.Name, listPath, restOut, r.slotsOf(tg.model), nil)
 			})
 		}
 	} else {
-		err = r.Vision.Vision(ctx, r.Router, tg.model, t.Name, input, out, floor)
+		err = r.Vision.Vision(ctx, r.Router, tg.model, t.Name, input, out, r.slotsOf(tg.model), floor)
 		if err == nil {
 			res, err = ReadTier(out)
 		}

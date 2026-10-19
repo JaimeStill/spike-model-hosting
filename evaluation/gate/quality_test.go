@@ -294,7 +294,7 @@ func TestQualityEmbedding(t *testing.T) {
 			t.Errorf("%s: prompts.json %s (%v); want the profile's %v", task, b, err, wantPrompts)
 		}
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
-			"/module/evaluation/suites/mteb_quality.py --router %s --model %s --task %s --prompts %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
+			"/module/evaluation/suites/mteb_quality.py --router %s --model %s --task %s --prompts %s --slots 4 --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
 			h.router.srv.URL, embedding, task, filepath.Join(out, "prompts.json"), out)
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)

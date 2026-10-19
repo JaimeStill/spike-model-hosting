@@ -4,7 +4,7 @@ user Sonnet through the laptop's pinned Claude Code (claude_code.py's provider).
 
     uv run --project evaluation/suites python evaluation/suites/tau2_quality.py eval \
         --router http://framework:8080 --model ggml-org/gpt-oss-120b-GGUF:MXFP4 \
-        --domain airline --list evaluation/tiers/agent-tau2-airline.txt --trials 2 \
+        --domain airline --list evaluation/tiers/agent-tau2-airline.txt --trials 2 --slots 4 \
         --claude /path/to/pinned/claude --claude-config .state/claude --output DIR
 
     uv run --project evaluation/suites python evaluation/suites/tau2_quality.py ids --domain retail
@@ -38,7 +38,7 @@ airline tasks, 114 retail). Telecom is left out: its simulated user needs tools.
     Code use.
 
 Each task runs --trials times (Inspect's epochs), so the log holds one sample a task and trial,
-from which evaluate takes pass^k. Four samples run at once, the router's slots; the simulator
+from which evaluate takes pass^k. --slots samples run at once, the model's slots (slots.py); the simulator
 keeps at most its provider's two calls in flight, whatever the eval's max_connections. The log's metadata names the domain, its
 dataset, the trials, the simulator, and the Claude Code version that simulated.
 """
@@ -57,6 +57,7 @@ from inspect_evals.tau2 import tau2_airline, tau2_retail
 from inspect_evals.tau2.tau2 import EVAL_VERSION
 
 from pass_stop import read_list
+from slots import add_slots
 
 # The tau2-bench commit inspect_evals' τ2 data and domains are adapted from.
 TAU2_COMMIT = "377cecff73b873e63430a0acfce00e0eff024855"
@@ -66,9 +67,6 @@ DOMAINS = {"airline": tau2_airline, "retail": tau2_retail}
 
 # The simulator, as an Inspect model.
 SIMULATOR = "claude-code/sonnet"
-
-# The router's slots: the samples a domain runs at once.
-SLOTS = 4
 
 # The run's account, written beside its log.
 SUMMARY_FILE = "tau2.json"
@@ -105,7 +103,8 @@ def dataset(domain: str) -> str:
     return f"inspect_evals tau2@{EVAL_VERSION.full_version} {domain} base split, sierra-research/tau2-bench@{TAU2_COMMIT}"
 
 
-def main():
+def parser() -> argparse.ArgumentParser:
+    """The command's arguments: ids, or eval with the model's --slots, the samples run at once."""
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     pi = sub.add_parser("ids", help="print every task ID a domain draws from")
@@ -115,7 +114,12 @@ def main():
         pe.add_argument(flag, required=True)
     pe.add_argument("--domain", required=True, choices=DOMAINS)
     pe.add_argument("--trials", type=int, required=True)
-    a = p.parse_args()
+    add_slots(pe)
+    return p
+
+
+def main():
+    a = parser().parse_args()
 
     stock = DOMAINS[a.domain](shuffle=False)
     if a.cmd == "ids":
@@ -144,7 +148,7 @@ def main():
             "domain": a.domain, "dataset": dataset(a.domain), "trials": a.trials,
             "simulator": SIMULATOR, "claude_code_version": version, "simulator_settings": claude_code.GENERATE,
         },
-        max_connections=SLOTS, max_samples=SLOTS, display="plain",
+        max_connections=a.slots, max_samples=a.slots, display="plain",
     )
     if log.status != "success":
         sys.exit(f"inspect eval tau2 {a.domain}: {log.status}: {log.error.message if log.error else ''}")

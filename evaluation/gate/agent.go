@@ -43,16 +43,18 @@ const ConformK = 5
 // then its verdict, agent-conform.
 func AgentCheck(tierName string) string { return "agent-" + tierName }
 
-// Agent runs one BFCL tier on a router's agent model, the tier list at list, and leaves Inspect
-// AI's JSON log in out (ReadTier). A bar, a floor, stops the tier early once its pass rate
-// can't reach it (pass_stop.py's PassStop); nil runs the whole tier.
+// Agent runs one BFCL tier on a router's agent model, the tier list at list, slots requests in
+// flight (the model's profile slots, Runner.slotsOf), and leaves Inspect AI's JSON log in out
+// (ReadTier). A bar, a floor, stops the tier early once its pass rate can't reach it
+// (pass_stop.py's PassStop); nil runs the whole tier.
 type Agent interface {
-	Agent(ctx context.Context, router, model, tierName, list, out string, bar *float64) error
+	Agent(ctx context.Context, router, model, tierName, list, out string, slots int, bar *float64) error
 }
 
-// Agent runs the tier through agent_quality.py eval, and fails when uv does.
-func (u UV) Agent(ctx context.Context, router, model, tierName, list, out string, bar *float64) error {
-	args := []string{"eval", "--router", router, "--model", model, "--tier", tierName, "--list", list, "--output", out}
+// Agent runs the tier through agent_quality.py eval, slots as its --slots, and fails when uv does.
+func (u UV) Agent(ctx context.Context, router, model, tierName, list, out string, slots int, bar *float64) error {
+	args := []string{"eval", "--router", router, "--model", model, "--tier", tierName, "--list", list, "--output", out,
+		"--slots", strconv.Itoa(slots)}
 	if bar != nil {
 		args = append(args, "--bar", strconv.FormatFloat(*bar, 'g', -1, 64))
 	}
@@ -146,11 +148,11 @@ func (r *Runner) bfclTier(ctx context.Context, tg target, t AgentTier) Check {
 		var screenOut string
 		if screenOut, err = tg.screenDir(screen, filepath.Join("agent", t.Name, "logs")); err == nil {
 			res, err = r.restTier(t.Name, list, screenOut, filepath.Join(dir, restDir), func(restList, restOut string) error {
-				return r.Agent.Agent(ctx, r.Router, tg.model, t.Name, restList, restOut, nil)
+				return r.Agent.Agent(ctx, r.Router, tg.model, t.Name, restList, restOut, r.slotsOf(tg.model), nil)
 			})
 		}
 	} else {
-		err = r.Agent.Agent(ctx, r.Router, tg.model, t.Name, listPath, out, floor)
+		err = r.Agent.Agent(ctx, r.Router, tg.model, t.Name, listPath, out, r.slotsOf(tg.model), floor)
 		if err == nil {
 			res, err = ReadTier(out)
 		}

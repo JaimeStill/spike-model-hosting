@@ -3,10 +3,10 @@ or a seeded tier list of a stock inspect_evals benchmark, V*Bench, DocVQA or MMM
 
     uv run --project evaluation/suites python evaluation/suites/vision_quality.py eval \
         --router http://framework:8080 --model ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0 \
-        --tier vstar --list evaluation/tiers/vision-vstar.txt --output DIR [--bar 0.7]
+        --tier vstar --list evaluation/tiers/vision-vstar.txt --slots 4 --output DIR [--bar 0.7]
 
     uv run --project evaluation/suites python evaluation/suites/vision_quality.py eval \
-        --router ... --model ... --tier probe --image hosting/probe/testdata/shapes.png --output DIR
+        --router ... --model ... --tier probe --image hosting/probe/testdata/shapes.png --slots 4 --output DIR
 
     uv run --project evaluation/suites python evaluation/suites/vision_quality.py ids --tier mmmu
 
@@ -50,7 +50,7 @@ Generation: the benchmarks at temperature 0 with reasoning off (the Gemma 4 temp
 enable_thinking, which defaults to on; templates without the switch ignore it), the prompt cache
 on, and room for an answer; the probe as a client sends it, at the router's defaults, the card's
 sampling and the template's default reasoning, since pass^5 measures the served model's
-reliability. Four requests in flight, the profile's slots; the early stop judges samples as they
+reliability. --slots requests in flight, the model's slots (slots.py); the early stop judges samples as they
 complete.
 
 Early stop (pass_stop.py's PassStop, shared with agent_quality.py, with a bar): the tier's
@@ -92,6 +92,7 @@ from inspect_evals.vstar_bench.vstar_bench import HUGGINGFACE_REPO_ID as VSTAR_R
 from inspect_evals.vstar_bench.vstar_bench import VSTAR_BENCH_DATASET_REVISION
 
 from pass_stop import EARLY_STOP_FILE, PassStop, read_list
+from slots import add_slots
 
 # The tiers' tasks, in the order they run, and each one's dataset as a tier list's header names
 # it.
@@ -124,9 +125,6 @@ GENERATE = GenerateConfig(
 PROBE_PROMPT = "Describe this image in one sentence."
 PROBE_WORDS = ["circle", "square", "triangle", "red", "blue", "green"]
 PROBE_REPEATS = 5
-
-# The router's slots: the requests a tier keeps in flight.
-SLOTS = 4
 
 
 @scorer(metrics=[accuracy()])
@@ -187,7 +185,9 @@ def peak(tiers: Path, output: Path) -> dict:
     return best
 
 
-def main():
+def parser() -> argparse.ArgumentParser:
+    """The command's arguments: ids, peak, or eval with the model's --slots, the requests a tier
+    keeps in flight."""
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     pi = sub.add_parser("ids", help="print every sample ID of a benchmark")
@@ -201,7 +201,12 @@ def main():
     pe.add_argument("--list", help="the tier list, for a benchmark")
     pe.add_argument("--image", help="the probe's image, for the probe")
     pe.add_argument("--bar", type=float)
-    a = p.parse_args()
+    add_slots(pe)
+    return p
+
+
+def main():
+    a = parser().parse_args()
 
     if a.cmd == "ids":
         makers, dataset = BENCHMARKS[a.tier]
@@ -248,7 +253,7 @@ def main():
     )
     logs = inspect_eval(
         tasks, model=model, sample_id=sample_id, log_dir=a.output, log_format="json", metadata=metadata,
-        max_tasks=1, max_connections=SLOTS, max_samples=SLOTS, display="plain", log_images=False,
+        max_tasks=1, max_connections=a.slots, max_samples=a.slots, display="plain", log_images=False,
     )
     for log in logs:
         if log.status != "success":

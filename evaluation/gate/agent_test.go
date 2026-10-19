@@ -80,7 +80,7 @@ func TestQualityAgent(t *testing.T) {
 	}
 	for i, at := range gate.AgentTiers[:2] {
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
-			"/module/evaluation/suites/agent_quality.py eval --router %s --model %s --tier %s --list %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
+			"/module/evaluation/suites/agent_quality.py eval --router %s --model %s --tier %s --list %s --output %s --slots 4|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
 			h.router.srv.URL, gptOSS, at.Name, filepath.Join(h.runner.Tiers, gate.AgentCheck(at.Name)+".txt"), filepath.Join(h.runner.Dir, "agent", at.Name, "logs"))
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)

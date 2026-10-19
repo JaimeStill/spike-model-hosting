@@ -49,10 +49,10 @@ const SuitesDir = "evaluation/suites"
 
 // MTEB runs one MTEB task on a router's model, its encoder adding prompts, the model's task
 // prompts by MTEB prompt name (profile.Prompts.Embedding; nil for a model whose card gives none),
-// and leaves, in out, MTEB's result, <task>.json, and the encoder's account of it, encoder.json
-// (ReadMTEB).
+// slots requests in flight (the model's profile slots, Runner.slotsOf), and leaves, in out,
+// MTEB's result, <task>.json, and the encoder's account of it, encoder.json (ReadMTEB).
 type MTEB interface {
-	Task(ctx context.Context, router, model, task string, prompts map[string]string, out string) error
+	Task(ctx context.Context, router, model, task string, prompts map[string]string, slots int, out string) error
 }
 
 // ASR runs one tier of an ASR set on a router's audio model, the tier's list at tierPath, each
@@ -82,9 +82,10 @@ type UV struct {
 	Claude, ClaudeConfig string
 }
 
-// Task runs the MTEB task through mteb_quality.py and fails when uv does. The prompts go to it as
-// a file, out's prompts.json, a JSON object kept beside the result: what the encoder was given.
-func (u UV) Task(ctx context.Context, router, model, task string, prompts map[string]string, out string) error {
+// Task runs the MTEB task through mteb_quality.py, slots as its --slots, and fails when uv does.
+// The prompts go to it as a file, out's prompts.json, a JSON object kept beside the result: what
+// the encoder was given.
+func (u UV) Task(ctx context.Context, router, model, task string, prompts map[string]string, slots int, out string) error {
 	if prompts == nil {
 		prompts = map[string]string{}
 	}
@@ -101,7 +102,7 @@ func (u UV) Task(ctx context.Context, router, model, task string, prompts map[st
 		return err
 	}
 	if err := u.run(ctx, "mteb_quality.py", "--router", router, "--model", model, "--task", task,
-		"--prompts", path, "--output", out); err != nil {
+		"--prompts", path, "--slots", strconv.Itoa(slots), "--output", out); err != nil {
 		return fmt.Errorf("uv run mteb_quality.py --task %s: %w", task, err)
 	}
 	return nil
@@ -322,7 +323,7 @@ func (r *Runner) mtebTask(ctx context.Context, t target, task string) Check {
 	if m := r.Profile.Model(t.model); m != nil && m.Prompts != nil {
 		prompts = m.Prompts.Embedding
 	}
-	err := r.MTEB.Task(ctx, r.Router, t.model, task, prompts, out)
+	err := r.MTEB.Task(ctx, r.Router, t.model, task, prompts, r.slotsOf(t.model), out)
 	wall := time.Since(began).Seconds()
 	var res MTEBResult
 	if err == nil {

@@ -127,13 +127,9 @@ func (r *Runner) fitVision(ctx context.Context, c *client) []Check {
 		checks = append(checks, fact("image", RoleVision, detail, len(missing) == 0))
 	}
 
-	// The timed question is the image, then the question, as a client asks it, with the prompt
-	// cache off so the smoke's image tokens aren't reused.
 	rctx, cancel = context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	comp, err = c.chatUncached(rctx, r.Model, []map[string]any{
-		imagePart(r.Media.PNG), textPart("What shapes are in this image, and what colour is each?"),
-	}, imageAnswerTokens)
+	comp, err = imageQuestion(rctx, c, r.Model, r.Media.PNG)
 	if err != nil {
 		return append(checks, broken("image answer", RoleVision, err))
 	}
@@ -143,6 +139,15 @@ func (r *Runner) fitVision(ctx context.Context, c *client) []Check {
 		"decode_tok_s": comp.Timings.PredictedPerSecond, "prompt_tok_s": comp.Timings.PromptPerSecond,
 	}
 	return append(checks, ch)
+}
+
+// imageQuestion is the timed image question, fitness's alone and capacity's N at once: the image,
+// then the question, as a client asks it, ~100 tokens out (imageAnswerTokens), with the prompt
+// cache off so an earlier send of the image isn't reused.
+func imageQuestion(ctx context.Context, c *client, model string, png []byte) (completion, error) {
+	return c.chatUncached(ctx, model, []map[string]any{
+		imagePart(png), textPart("What shapes are in this image, and what colour is each?"),
+	}, imageAnswerTokens)
 }
 
 func (r *Runner) fitAudio(ctx context.Context, c *client) []Check {

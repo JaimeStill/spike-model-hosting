@@ -133,6 +133,22 @@ type Report struct {
 	// Keys are the keys the run's results are indexed by: each of the set's models', the set's
 	// and the method's; nil for a run with no index.
 	Keys *Keys `json:"keys,omitempty"`
+	// Sessions is a set run's statement of the concurrent agent sessions the set supports on its
+	// host; nil for a model run, or a set that assigns no agent model.
+	Sessions *Sessions `json:"sessions,omitempty"`
+}
+
+// Sessions is the concurrent agent sessions a set supports on its host: its agent model's N, the
+// slots its profile gives it, each a session in the agentic shape that capacity judged at N. The
+// set stage confirms it when it passes with every model of the set at its own slots, which a set
+// run's set stage runs (every role's tier 1 at once, each suite at its model's slots).
+type Sessions struct {
+	// Supported is the agent model's slots; Model, the set's agent model.
+	Supported int    `json:"supported"`
+	Model     string `json:"model"`
+	// Confirmed says the run's set stage passed; Basis says what confirmed it or why it isn't.
+	Confirmed bool   `json:"confirmed"`
+	Basis     string `json:"basis"`
 }
 
 // Stage returns the report's result for the stage named name, or nil.
@@ -299,6 +315,13 @@ func WriteSummary(w io.Writer, r *Report) error {
 			}
 			b.WriteString("\n")
 		}
+	}
+	if s := r.Sessions; s != nil {
+		state := "confirmed"
+		if !s.Confirmed {
+			state = "not confirmed"
+		}
+		fmt.Fprintf(&b, "sessions supported: %d, %s's slots; %s: %s\n", s.Supported, s.Model, state, s.Basis)
 	}
 	if c := r.Ceiling; c != nil {
 		fmt.Fprintf(&b, "ceiling: decode %.1f tok/s of %.1f (%.0f GB/s over %.2f GB a token): %.0f%%\n",

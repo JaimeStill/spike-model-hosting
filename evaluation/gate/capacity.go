@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/concurrent"
@@ -27,12 +28,18 @@ var capacityInputs = []string{
 	"Compile the program, then run its tests.",
 }
 
-// capacity puts the model's slots, from its profile entry (4 for set A's), of requests in
-// flight on it for each role it takes, through the concurrent package's run, while the footprint
-// reads the pool. A chat role's run carries an embedding stream to the set's embedding model
-// beside it; an embedding model's run is one embedding stream a slot. Each run passes when every answer carries its own
-// nonce and no other, every batched vector holds the embedding tolerance, the pool's least free
-// memory stays at the floor, and each stream meets the role's 4-stream floor.
+// capacity puts N requests in flight on the model for each role it takes, N its slots from its
+// profile entry (4 for set A's), while the footprint reads the pool, and judges each of the N
+// against the role's floor at N (Floors). The agent's, vision's and audio role's N go through the
+// concurrent package's run, each answer carrying its nonce: the agent's in the agentic shape (an
+// 8192-token prompt, 512 out, agenticBody) and judged by its decode, the audio role's a timed
+// transcription judged by its RTFx, the vision role's an image to describe. A chat role's run
+// carries an embedding stream to the set's embedding model beside it; an embedding model's run is
+// one embedding stream a slot. The vision and embedding roles then send N of fitness's timed
+// requests at once (atN), its image question and its 32-token query, each judged by fitness's own
+// floor. Each role passes when every answer carries its own nonce and no other, every batched
+// vector holds the embedding tolerance, no request ran out of context (contextCheck), each request
+// meets the floor at N, and the pool's least free memory over the whole of it stays at the floor.
 //
 // A set run puts each of the set's models through it alone, one after another (perModel).
 func (r *Runner) capacity(ctx context.Context, rep *Report) []Check {
@@ -54,12 +61,18 @@ func (r *Runner) capModel(ctx context.Context, rep *Report) []Check {
 	return checks
 }
 
+// inFlight is the name of the check that records a capacity run that couldn't start.
+const inFlight = "N in flight"
+
 func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
-	slots := r.model().Slots
+	slots := r.slotsOf(r.Model)
+	if slots < 1 {
+		return []Check{broken(inFlight, role, fmt.Errorf("the profile gives %s no slots", r.Model))}
+	}
 	cfg := concurrent.Config{Rounds: 1, RequestTimeout: requestTimeout}
 	var rec *recorder
 	if role == RoleEmbedding {
-		// An embedding stream sends batch after batch; three rounds each keep the four in flight
+		// An embedding stream sends batch after batch; three rounds each keep the N in flight
 		// long enough for the footprint to read the pool while they are.
 		cfg.Rounds = 3
 		for i := range slots {
@@ -70,7 +83,7 @@ func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
 			})
 		}
 	} else {
-		rec = &recorder{c: c, model: r.Model, role: role, media: r.Media, asr: r.asrPrompt(r.Model)}
+		rec = &recorder{c: c, model: r.Model, role: role, media: r.Media, asr: r.asrPrompt(r.Model), agentic: role == RoleAgent}
 		cfg.Chat = []concurrent.ChatStream{{Name: role, Chatter: rec, Workers: slots}}
 		if e := r.Set.Roles.Embedding; e != "" {
 			cfg.Embed = []concurrent.EmbedStream{{Name: "embedding", Embedder: embedder{c, e}, Inputs: capacityInputs}}
@@ -79,9 +92,23 @@ func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
 
 	var res concurrent.Report
 	var runErr error
-	low, readings, readErr := r.during(ctx, func() { res, runErr = concurrent.Run(ctx, cfg) })
+	var loaded []timed
+	low, readings, readErr := r.during(ctx, func() {
+		if res, runErr = concurrent.Run(ctx, cfg); runErr != nil {
+			return
+		}
+		switch role {
+		case RoleVision:
+			loaded = atN(ctx, slots, func(ctx context.Context) (time.Duration, error) {
+				comp, err := imageQuestion(ctx, c, r.Model, r.Media.PNG)
+				return comp.Wall, err
+			})
+		case RoleEmbedding:
+			loaded = r.queriesAtN(ctx, c, slots)
+		}
+	})
 	if runErr != nil {
-		return []Check{broken("4 in flight", role, runErr)}
+		return []Check{broken(inFlight, role, runErr)}
 	}
 
 	var checks []Check
@@ -112,14 +139,21 @@ func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
 			fmt.Sprintf("%d of %d batched vectors within 1-%g of their lone embedding, least cosine %.6f",
 				len(res.Embeds)-failed, len(res.Embeds), concurrent.EmbedTolerance, least), failed == 0))
 	}
+	checks = append(checks, contextCheck(role, slots, res, loaded))
 
 	switch role {
 	case RoleAgent:
-		checks = append(checks, rec.floor("4-stream decode", "tok/s", r.Floors.Agent.Stream4DecodeTokS,
+		checks = append(checks, rec.floor("decode at N", "tok/s", slots, r.Floors.Agent.StreamDecodeTokS,
 			func(c completion) float64 { return c.Timings.PredictedPerSecond }))
 	case RoleAudio:
-		checks = append(checks, rec.floor("4-stream rtfx", "x", r.Floors.Audio.Stream4RTFx,
+		checks = append(checks, rec.floor("rtfx at N", "x", slots, r.Floors.Audio.StreamRTFx,
 			func(c completion) float64 { return r.Media.AudioSeconds / c.Wall.Seconds() }))
+	case RoleVision:
+		checks = append(checks, slowest("image answer at N", role, "s", 1, r.Floors.Vision.ImageAnswerS, loaded,
+			"fitness's timed image question, N at once, the slowest of them"))
+	case RoleEmbedding:
+		checks = append(checks, slowest("query 32 at N", role, "ms", 1000, r.Floors.Embedding.Query32MS, loaded,
+			"a 32-token query, N at once, the slowest of them"))
 	}
 
 	if readings == 0 {
@@ -127,8 +161,114 @@ func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
 	}
 	peak := measure("peak pool free", role, float64(low.FreeMiB()), "MiB", AtLeast, r.Floors.Pool.FreeMiB)
 	peak.Values = poolValues(low)
-	peak.Detail = fmt.Sprintf("%d of %d MiB used at the peak of %d readings%s", low.UsedMiB, low.TotalMiB, readings, ramDetail(low))
+	peak.Values["slots"] = float64(slots)
+	peak.Detail = fmt.Sprintf("%d of %d MiB used at the peak of %d readings, %d in flight%s", low.UsedMiB, low.TotalMiB, readings, slots, ramDetail(low))
 	return append(checks, peak)
+}
+
+// timed is one of atN's requests: its wall time, or why it failed.
+type timed struct {
+	wall time.Duration
+	err  error
+}
+
+// atN sends n requests at once, each send bounded by requestTimeout, and returns each one's wall
+// time or error, in the order they were started.
+func atN(ctx context.Context, n int, send func(context.Context) (time.Duration, error)) []timed {
+	out := make([]timed, n)
+	var wg sync.WaitGroup
+	for i := range out {
+		wg.Go(func() {
+			rctx, cancel := context.WithTimeout(ctx, requestTimeout)
+			defer cancel()
+			out[i].wall, out[i].err = send(rctx)
+		})
+	}
+	wg.Wait()
+	return out
+}
+
+// queriesAtN cuts n distinct 32-token queries for the model, then embeds them at once, one a
+// request, timing each embedding alone, as fitness times its one query.
+func (r *Runner) queriesAtN(ctx context.Context, c *client, n int) []timed {
+	queries := make([]string, n)
+	for i := range queries {
+		q, err := c.fitText(ctx, r.Model, queryTokens)
+		if err != nil {
+			return []timed{{err: fmt.Errorf("cutting query %d: %w", i+1, err)}}
+		}
+		queries[i] = q
+	}
+	var next atomic.Int64
+	return atN(ctx, n, func(ctx context.Context) (time.Duration, error) {
+		e, err := c.embed(ctx, r.Model, []string{queries[next.Add(1)-1]})
+		return e.Wall, err
+	})
+}
+
+// slowest judges the slowest of requests, each wall time in unit (scale a second), against floor
+// at most; every request must have answered.
+func slowest(name, role, unit string, scale, floor float64, requests []timed, detail string) Check {
+	var errs []string
+	values := map[string]float64{"slots": float64(len(requests))}
+	most := 0.0
+	for i, q := range requests {
+		if q.err != nil {
+			errs = append(errs, fmt.Sprintf("request %d: %v", i+1, q.err))
+			continue
+		}
+		v := q.wall.Seconds() * scale
+		values[fmt.Sprintf("request%d", i+1)] = v
+		most = max(most, v)
+	}
+	switch {
+	case len(requests) == 0:
+		return broken(name, role, errors.New("no request was sent"))
+	case len(errs) > 0:
+		ch := broken(name, role, fmt.Errorf("%d of the %d requests failed: %s", len(errs), len(requests), listed(errs)))
+		ch.Values = values
+		return ch
+	}
+	ch := measure(name, role, most, unit, AtMost, floor)
+	ch.Values = values
+	ch.Detail = detail
+	return ch
+}
+
+// contextExhausted matches a request's error when it ran out of context: llama.cpp's server
+// refusing a prompt longer than its slot's context (exceed_context_size_error, "the request
+// exceeds the available context size"), or ending a generation that filled it ("Context size has
+// been exceeded."); the router passes either through as the model's server wrote it.
+var contextExhausted = regexp.MustCompile(`(?i)context size has been exceeded|exceeds? the available context size|exceed_context_size`)
+
+// contextCheck fails when any of a capacity run's requests, its concurrent run's or its loaded
+// round's, ran out of context: each of the N sessions must fit in the model's context at once.
+func contextCheck(role string, slots int, res concurrent.Report, loaded []timed) Check {
+	var out []string
+	for _, c := range res.Chats {
+		if c.Err != nil && contextExhausted.MatchString(c.Err.Error()) {
+			out = append(out, fmt.Sprintf("%s: %v", c.ID, c.Err))
+		}
+	}
+	for _, e := range res.Embeds {
+		if e.Err != nil && contextExhausted.MatchString(e.Err.Error()) {
+			out = append(out, fmt.Sprintf("%s: %v", e.ID, e.Err))
+		}
+	}
+	for i, q := range loaded {
+		if q.err != nil && contextExhausted.MatchString(q.err.Error()) {
+			out = append(out, fmt.Sprintf("request %d at N: %v", i+1, q.err))
+		}
+	}
+	if len(out) > 0 {
+		ch := fact("context held", role, fmt.Sprintf("%d ran out of context with %d in flight: %s", len(out), slots, listed(out)), false)
+		ch.Values = map[string]float64{"exhausted": float64(len(out)), "slots": float64(slots)}
+		return ch
+	}
+	ch := fact("context held", role, fmt.Sprintf("none ran out of context with %d in flight: %d answers, %d embedding vectors, %d timed requests",
+		slots, len(res.Chats), len(res.Embeds), len(loaded)), true)
+	ch.Values = map[string]float64{"exhausted": 0, "slots": float64(slots)}
+	return ch
 }
 
 // during runs fn while the footprint reads the pool, once as fn starts and then every
@@ -177,6 +317,9 @@ type recorder struct {
 	media Media
 	// asr is the model's ASR prompt (Runner.asrPrompt), which an audio request sends first.
 	asr string
+	// agentic, set for capacity's agent streams, makes each request the agentic shape
+	// (agenticBody): an agent session's, the shape the floor at N counts sessions by.
+	agentic bool
 	// cutOff, set for the set stage's crossing probe, makes an answer that hit its max_tokens
 	// carrying no nonce at all an error (errCutOff), so the probe records it unanswered: it was
 	// cut off before it could carry one, and holds nothing of another request's.
@@ -186,12 +329,23 @@ type recorder struct {
 	errorCount int
 }
 
-// Chat sends the agent the prompt as given. An image request carries the image and asks for a
-// description first, then the prompt's nonce on a line of its own, so the nonce check reads an
-// answer that did the work; an audio request is fitness's timed transcription
-// (transcriptionBody), the same request to repeat the nonce after the clip.
+// Chat sends the agent the prompt as given, or, agentic, in the agentic shape (agenticBody). An
+// image request carries the image and asks for a description first, then the prompt's nonce on a
+// line of its own, so the nonce check reads an answer that did the work; an audio request is
+// fitness's timed transcription (transcriptionBody), the same request to repeat the nonce after
+// the clip.
 func (rc *recorder) Chat(ctx context.Context, prompt string) (string, error) {
-	comp, err := rc.c.complete(ctx, rc.body(prompt))
+	var body map[string]any
+	var err error
+	if rc.agentic {
+		body, err = agenticBody(ctx, rc.c, rc.model, nonceRE.FindString(prompt))
+	} else {
+		body = rc.body(prompt)
+	}
+	var comp completion
+	if err == nil {
+		comp, err = rc.c.complete(ctx, body)
+	}
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	if err != nil {
@@ -217,6 +371,25 @@ var errCutOff = errors.New("the answer hit its max_tokens")
 // is twice that.
 const visionMaxTokens = 1024
 
+// agenticTokens is the agentic shape's output: an 8192-token prompt (longPromptTokens), 512 out,
+// the shape an agent session is counted by, as the deep stage's agentic grid cell sends it.
+const agenticTokens = 512
+
+// agenticBody is the agentic shape carrying nonce: an 8192-token passage cut for the model
+// (fitText, its own run nonce first, so no cache holds it), then the request to repeat nonce on a
+// line of its own first and summarize the passage after, up to agenticTokens out. The nonce comes
+// first so an answer cut off at its max_tokens still carries it; the summary keeps the stream
+// decoding toward the 512 an agent's turn produces.
+func agenticBody(ctx context.Context, c *client, model, nonce string) (map[string]any, error) {
+	text, err := c.fitText(ctx, model, longPromptTokens)
+	if err != nil {
+		return nil, fmt.Errorf("cutting the agentic prompt: %w", err)
+	}
+	ask := "\n\nFirst, on a line of its own, repeat this request ID exactly: " + nonce +
+		"\nThen summarize the passage above in about 300 words."
+	return chatBody(model, text+ask, agenticTokens, false), nil
+}
+
 // body is the role's request for prompt, which carries a nonce (Chat).
 func (rc *recorder) body(prompt string) map[string]any {
 	nonce := nonceRE.FindString(prompt)
@@ -232,23 +405,24 @@ func (rc *recorder) body(prompt string) map[string]any {
 	}
 }
 
-// floor judges the slowest of the run's answers by value against floor; every request must
-// have answered.
-func (rc *recorder) floor(name, unit string, floor float64, value func(completion) float64) Check {
+// floor judges the slowest of the run's answers, its slots in flight, by value against floor;
+// every request must have answered.
+func (rc *recorder) floor(name, unit string, slots int, floor float64, value func(completion) float64) Check {
 	if rc.errorCount > 0 || len(rc.done) == 0 {
 		return broken(name, rc.role, fmt.Errorf("%d of the requests failed", rc.errorCount))
 	}
-	values := map[string]float64{}
+	values := map[string]float64{"slots": float64(slots)}
 	least := math.Inf(1)
 	for i, c := range rc.done {
 		v := value(c)
 		values[fmt.Sprintf("stream%d", i+1)] = v
 		values[fmt.Sprintf("stream%d_predicted_n", i+1)] = float64(c.Timings.PredictedN)
+		values[fmt.Sprintf("stream%d_prompt_n", i+1)] = float64(c.Timings.PromptN)
 		least = min(least, v)
 	}
 	ch := measure(name, rc.role, least, unit, AtLeast, floor)
 	ch.Values = values
-	ch.Detail = "the slowest of the streams"
+	ch.Detail = fmt.Sprintf("the slowest of the %d streams in flight", len(rc.done))
 	return ch
 }
 

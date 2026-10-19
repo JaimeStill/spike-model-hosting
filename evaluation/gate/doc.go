@@ -32,9 +32,14 @@
 //     clip goes as the quality stage's ASR task sends one: the model's ASR prompt, from the
 //     profile, first, the clip after, at temperature 0 with reasoning off, the request
 //     capacity's audio streams send too.
-//   - Capacity puts the model's slots, from the profile, of requests in flight on it per role,
-//     through the concurrent package's run: no crossed nonce, the embedding tolerance held, the pool's
-//     floor free at the peak, and the role's 4-stream floor.
+//   - Capacity puts N requests in flight on the model per role, N its slots from the profile
+//     (Runner.slotsOf), through the concurrent package's run, and judges each of the N against
+//     the role's floor at N: the agent's streams in the agentic shape (an 8192-token prompt, 512
+//     out), each decode at the per-stream floor; the audio role's timed transcriptions, each RTFx
+//     at its per-stream floor; then N of fitness's timed image questions or 32-token queries at
+//     once, each at fitness's floor. No crossed nonce, the embedding tolerance held, no request
+//     out of context (llama.cpp's context-size errors, as the router passes them through), and
+//     the pool's floor free at capacity's own peak, beside fitness's warmed one.
 //   - Quality runs every role of the run at once, each on its own model, each role's tiers in
 //     order: a quality score doesn't depend on speed, which fitness and capacity measured alone.
 //     In a screen the pass runs inside the set stage's concurrent window, which it stands in for:
@@ -52,7 +57,7 @@
 //     tier that fails. Tier 1 is BFCL's single-turn questions, 100 seeded across its 13
 //     leaderboard categories; tier 2 its multi-turn conversations, 20 seeded across its 4; both
 //     inspect_evals' stock bfcl task through the suites project's agent_quality.py, Inspect AI's
-//     openai-api provider at four requests in flight, at the router's defaults (the card's
+//     openai-api provider at the model's slots in flight (--slots), at the router's defaults (the card's
 //     sampling, the template's reasoning) with parallel tool calls allowed. Each tier's accuracy
 //     is judged against its floor, by check name (agent-<tier>), under [bars] in
 //     evaluation/bars.toml, and recorded, never failing, without one; a floor stops the tier
@@ -90,7 +95,7 @@
 //     dataset's revision, the normalizer's source and Inspect's release, and, for a set the
 //     model's card reports, the card's figure beside ours.
 //   - Quality runs the vision role's tiers (VisionTiers), cheapest first, through the suites
-//     project's vision_quality.py, Inspect AI's openai-api provider at four requests in flight,
+//     project's vision_quality.py, Inspect AI's openai-api provider at the model's slots in flight,
 //     and stops at the first tier that fails. Tier 1 is the probe's image and question five
 //     times, at the router's defaults, passing on all five (pass^5, whatever the bars hold), and
 //     V*Bench, 100 seeded questions; tier 2 DocVQA, 150 seeded validation questions; tier 3
@@ -194,7 +199,11 @@
 //     directories: LoadIndex reads it, Index.Save writes it, and Runner.Index and Runner.Fresh put
 //     a run on it. Each Entry is a passed unit's records under its key; Keys are a run's, in its
 //     Report, each of the set's models' a ModelKey.
-//   - Floors are the per-role floors, data in evaluation/floors.toml, which LoadFloors reads.
+//   - Floors are the per-role floors, data in evaluation/floors.toml, which LoadFloors reads:
+//     the single-stream ones fitness judges, and the floors at N capacity judges each of a model's
+//     N requests in flight by.
+//   - Sessions is a set run's sessions supported, in its Report: the set's agent model's slots,
+//     confirmed when the run's set stage passed with every model at its own slots.
 //   - Report, StageResult and Check are a run's record: the report its mode, whether it made a
 //     finalist and, for a full run, when its screen started; each check its measured value beside
 //     the floor it was judged against (AtLeast or AtMost), in a set run the model it judges, and,
@@ -211,7 +220,8 @@
 //     through vision_quality.py peak and asr_quality.py peak), which ReadPeak reads from its
 //     PeakFile.
 //   - MTEB runs one MTEB task, ASR one ASR set's tier, Vision one vision tier and Agent one BFCL
-//     tier; UV runs each through the suites project (SuitesDir) with uv. ReadTier reads a vision or
+//     tier; UV runs each through the suites project (SuitesDir) with uv, each suite but the ASR
+//     task (one clip at a time) given its model's slots as --slots. ReadTier reads a vision or
 //     BFCL tier's Inspect logs into a TierResult, whose Score and Passes are the tier's;
 //     VisionTiers and AgentTiers name the tiers (each a VisionTier or AgentTier), VisionCheck and
 //     AgentCheck a tier's check, list and bar name, and InspectEvalsVersion is the inspect_evals

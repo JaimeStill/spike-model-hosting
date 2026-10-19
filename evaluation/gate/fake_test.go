@@ -42,6 +42,14 @@ type fakeRouter struct {
 	cutOff string
 	// refuse is a model whose chat completions and embeddings fail with a server error.
 	refuse string
+	// slowTimed delays each timed request after the first, fitness's: each image question (the
+	// probe's "What shapes" question) and each lone 32-word embedding, so capacity's N of them at
+	// once answer slower than fitness's one.
+	slowTimed time.Duration
+	timedSeen int
+	// exhaust is a model whose nonce requests fail as llama.cpp's server fails a prompt longer
+	// than its slot's context: 400, exceed_context_size_error.
+	exhaust string
 	// unloadOnToolCall is a model the router lists unloaded from the first tool call on, fitness's
 	// first request, after the run's reload and warm-up.
 	unloadOnToolCall string
@@ -56,8 +64,10 @@ type fakeRouter struct {
 	words []string
 	// restarting is set while a fake restart has the router down.
 	restarting bool
-	// audio are the chat completions' bodies that carried an audio clip, in order.
-	audio []map[string]any
+	// audio are the chat completions' bodies that carried an audio clip, in order; nonced, the
+	// bodies of the chat completions that carried a nonce, by model.
+	audio  []map[string]any
+	nonced map[string][]map[string]any
 	// images are the image parts' data URLs, in order; longest is each model's longest chat
 	// prompt, and widest each model's largest embedding input, in words (the fake's tokens).
 	images  []string
@@ -72,7 +82,7 @@ const crossedNonce = "nonce-0123456789abcdef"
 
 func newFakeRouter(t *testing.T, models ...string) *fakeRouter {
 	f := &fakeRouter{status: map[string]string{}, prefixes: map[string]bool{}, vocab: map[string]int{}, build: "b11669-620d2225c", decode: 50, prefill: 700,
-		longest: map[string]int{}, widest: map[string]int{}}
+		longest: map[string]int{}, widest: map[string]int{}, nonced: map[string][]map[string]any{}}
 	for _, m := range models {
 		f.status[m] = "loaded"
 	}
@@ -265,6 +275,9 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 			}
 		}
 	}
+	if strings.Contains(text.String(), "What shapes are in this image") {
+		f.timed()
+	}
 	answer := "ready"
 	switch {
 	case image:
@@ -274,6 +287,17 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 	}
 	kind := "chat"
 	if n := fakeNonce.FindString(text.String()); n != "" {
+		m, _ := body["model"].(string)
+		f.mu.Lock()
+		f.nonced[m] = append(f.nonced[m], body)
+		f.mu.Unlock()
+		if m == f.exhaust {
+			f.record("exhausted " + m)
+			w.WriteHeader(http.StatusBadRequest)
+			reply(map[string]any{"error": map[string]any{"code": 400, "type": "exceed_context_size_error",
+				"message": "the request exceeds the available context size, try increasing it"}})
+			return
+		}
 		if body["model"] == f.crossed {
 			n = crossedNonce
 		}
@@ -331,6 +355,17 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 	_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 }
 
+// timed counts a timed request and, after the first, waits slowTimed.
+func (f *fakeRouter) timed() {
+	f.mu.Lock()
+	f.timedSeen++
+	n := f.timedSeen
+	f.mu.Unlock()
+	if n > 1 {
+		time.Sleep(f.slowTimed)
+	}
+}
+
 func (f *fakeRouter) embeddings(body map[string]any, reply func(any)) {
 	f.record("embeddings")
 	var inputs []string
@@ -341,6 +376,9 @@ func (f *fakeRouter) embeddings(body map[string]any, reply func(any)) {
 		for _, s := range in {
 			inputs = append(inputs, s.(string))
 		}
+	}
+	if len(inputs) == 1 && len(strings.Fields(inputs[0])) == 32 {
+		f.timed()
 	}
 	var data []map[string]any
 	tokens := 0

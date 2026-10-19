@@ -314,7 +314,31 @@ func (r *Runner) run(ctx context.Context, mode, from string, prior *Report) (*Re
 	// A screen that passed every stage makes a finalist; a full run is one's.
 	rep.Finalist = rep.Passed || mode == ModeFull
 	rep.Ceiling = r.ceiling(rep)
+	rep.Sessions = r.sessions(rep)
 	return rep, nil
+}
+
+// sessions states a set run's sessions supported: the set's agent model's slots, confirmed when
+// the run's set stage passed, every model at its own slots. A model run states none: its set
+// stage holds the set's other models at Runner.LoadWorkers, not at their own slots.
+func (r *Runner) sessions(rep *Report) *Sessions {
+	agent := r.Set.Roles.Chat
+	if r.Model != "" || agent == "" {
+		return nil
+	}
+	s := &Sessions{Supported: r.slotsOf(agent), Model: agent}
+	switch set := rep.Stage(StageSet); {
+	case set == nil:
+		s.Basis = "the run didn't reach the set stage"
+	case set.Status == StatusPass:
+		s.Confirmed = true
+		s.Basis = "the set stage passed with every model at its own slots"
+	case set.Status == StatusNotRun:
+		s.Basis = "the set stage didn't run: " + set.Reason
+	default:
+		s.Basis = "the set stage failed"
+	}
+	return s
 }
 
 // perModel runs fn, a stage that judges one model (admission's model checks, fitness, capacity,
@@ -413,6 +437,17 @@ func (r *Runner) logf(format string, args ...any) {
 
 // model returns the profile's entry for Model.
 func (r *Runner) model() *profile.Model { return r.Profile.Model(r.Model) }
+
+// slotsOf returns model's slots, from its profile entry: the requests capacity puts in flight on
+// it, and the requests in flight each suite (agent_quality.py, vision_quality.py, mteb_quality.py,
+// tau2_quality.py) keeps on it, given as its --slots, their one source. It is 0 for a model the
+// profile doesn't hold, which the suites refuse.
+func (r *Runner) slotsOf(model string) int {
+	if m := r.Profile.Model(model); m != nil {
+		return m.Slots
+	}
+	return 0
+}
 
 // ceiling compares the run's first measured decode with the model's bandwidth ceiling, or
 // returns nil when the run measured none or the profile lacks a figure it needs.

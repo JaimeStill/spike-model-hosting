@@ -290,21 +290,29 @@ func TestFloors(t *testing.T) {
 		{"prefill fails", gptOSS, gate.StageFitness, gate.RoleAgent, "prefill 8k", func(h *harness) { h.router.prefill = 400 }, false},
 		{"ttft passes", gptOSS, gate.StageFitness, gate.RoleAgent, "ttft 8k", func(*harness) {}, true},
 		{"ttft fails", gptOSS, gate.StageFitness, gate.RoleAgent, "ttft 8k", func(h *harness) { h.runner.Floors.Agent.TTFT8kS = tiny }, false},
-		{"4-stream decode passes", gptOSS, gate.StageCapacity, gate.RoleAgent, "4-stream decode", func(h *harness) { h.router.decode = 21 }, true},
-		{"4-stream decode fails", gptOSS, gate.StageCapacity, gate.RoleAgent, "4-stream decode", func(h *harness) {
+		{"decode at N passes", gptOSS, gate.StageCapacity, gate.RoleAgent, "decode at N", func(h *harness) { h.router.decode = 21 }, true},
+		{"decode at N fails", gptOSS, gate.StageCapacity, gate.RoleAgent, "decode at N", func(h *harness) {
 			h.router.decode = 21
-			h.runner.Floors.Agent.Stream4DecodeTokS = 22
+			h.runner.Floors.Agent.StreamDecodeTokS = 22
 		}, false},
 		{"image answer passes", gemma26B, gate.StageFitness, gate.RoleVision, "image answer", func(*harness) {}, true},
 		{"image answer fails", gemma26B, gate.StageFitness, gate.RoleVision, "image answer", func(h *harness) { h.runner.Floors.Vision.ImageAnswerS = tiny }, false},
+		{"image answer at N passes", gemma26B, gate.StageCapacity, gate.RoleVision, "image answer at N", func(*harness) {}, true},
+		{"image answer at N fails", gemma26B, gate.StageCapacity, gate.RoleVision, "image answer at N", func(h *harness) {
+			h.router.slowTimed, h.runner.Floors.Vision.ImageAnswerS = 200*time.Millisecond, 0.1
+		}, false},
 		{"rtfx passes", gemmaE4B, gate.StageFitness, gate.RoleAudio, "rtfx", func(*harness) {}, true},
 		{"rtfx fails", gemmaE4B, gate.StageFitness, gate.RoleAudio, "rtfx", func(h *harness) { h.runner.Floors.Audio.RTFx = huge }, false},
-		{"4-stream rtfx passes", gemmaE4B, gate.StageCapacity, gate.RoleAudio, "4-stream rtfx", func(*harness) {}, true},
-		{"4-stream rtfx fails", gemmaE4B, gate.StageCapacity, gate.RoleAudio, "4-stream rtfx", func(h *harness) { h.runner.Floors.Audio.Stream4RTFx = huge }, false},
+		{"rtfx at N passes", gemmaE4B, gate.StageCapacity, gate.RoleAudio, "rtfx at N", func(*harness) {}, true},
+		{"rtfx at N fails", gemmaE4B, gate.StageCapacity, gate.RoleAudio, "rtfx at N", func(h *harness) { h.runner.Floors.Audio.StreamRTFx = huge }, false},
 		{"throughput passes", embedding, gate.StageFitness, gate.RoleEmbedding, "throughput", func(*harness) {}, true},
 		{"throughput fails", embedding, gate.StageFitness, gate.RoleEmbedding, "throughput", func(h *harness) { h.runner.Floors.Embedding.ThroughputTokS = huge }, false},
 		{"query passes", embedding, gate.StageFitness, gate.RoleEmbedding, "query 32", func(*harness) {}, true},
 		{"query fails", embedding, gate.StageFitness, gate.RoleEmbedding, "query 32", func(h *harness) { h.runner.Floors.Embedding.Query32MS = tiny }, false},
+		{"query at N passes", embedding, gate.StageCapacity, gate.RoleEmbedding, "query 32 at N", func(*harness) {}, true},
+		{"query at N fails", embedding, gate.StageCapacity, gate.RoleEmbedding, "query 32 at N", func(h *harness) {
+			h.router.slowTimed, h.runner.Floors.Embedding.Query32MS = 200*time.Millisecond, 100
+		}, false},
 		{"warmed pool passes", gptOSS, gate.StageFitness, "", "warmed pool free", func(*harness) {}, true},
 		{"warmed pool fails", gptOSS, gate.StageFitness, "", "warmed pool free", func(h *harness) { h.footprint.free = []int{3333, 2700} }, false},
 		{"peak pool fails", embedding, gate.StageCapacity, gate.RoleEmbedding, "peak pool free", func(h *harness) { h.footprint.free = []int{3333, 3333, 2700} }, false},
@@ -490,14 +498,14 @@ func TestReport(t *testing.T) {
 func TestLoadFloors(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "floors.toml")
-	text := "[pool]\nfree_mib = 1\n[agent]\ndecode_tok_s = 2\nprefill_tok_s = 3\nttft_8k_s = 4\nstream4_decode_tok_s = 5\n" +
-		"[vision]\nimage_answer_s = 6\n[audio]\nrtfx = 7\nstream4_rtfx = 8\n[embedding]\nthroughput_tok_s = 9\nquery32_ms = 10\n"
+	text := "[pool]\nfree_mib = 1\n[agent]\ndecode_tok_s = 2\nprefill_tok_s = 3\nttft_8k_s = 4\nstream_decode_tok_s = 5\n" +
+		"[vision]\nimage_answer_s = 6\n[audio]\nrtfx = 7\nstream_rtfx = 8\n[embedding]\nthroughput_tok_s = 9\nquery32_ms = 10\n"
 	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	f, err := gate.LoadFloors(p)
-	got := []float64{f.Pool.FreeMiB, f.Agent.DecodeTokS, f.Agent.PrefillTokS, f.Agent.TTFT8kS, f.Agent.Stream4DecodeTokS,
-		f.Vision.ImageAnswerS, f.Audio.RTFx, f.Audio.Stream4RTFx, f.Embedding.ThroughputTokS, f.Embedding.Query32MS}
+	got := []float64{f.Pool.FreeMiB, f.Agent.DecodeTokS, f.Agent.PrefillTokS, f.Agent.TTFT8kS, f.Agent.StreamDecodeTokS,
+		f.Vision.ImageAnswerS, f.Audio.RTFx, f.Audio.StreamRTFx, f.Embedding.ThroughputTokS, f.Embedding.Query32MS}
 	if err != nil || !slices.Equal(got, []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}) {
 		t.Errorf("LoadFloors = %v, %v; want 1 to 10, each floor by its key", got, err)
 	}

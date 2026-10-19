@@ -36,14 +36,15 @@ func Tau2Check(domain string) string { return "agent-tau2-" + domain }
 const Tau2Simulator = "claude-code/sonnet"
 
 // Tau2 runs one τ2 domain on a router's agent model, its task list at list, each task trials
-// times, and leaves Inspect AI's log and its summary, Tau2Summary, in out (ReadTau2).
+// times, slots samples at once (the model's profile slots, Runner.slotsOf), and leaves Inspect
+// AI's log and its summary, Tau2Summary, in out (ReadTau2).
 type Tau2 interface {
-	Tau2(ctx context.Context, router, model, domain, list, out string, trials int) error
+	Tau2(ctx context.Context, router, model, domain, list, out string, trials, slots int) error
 }
 
 // Tau2 runs the domain through tau2_quality.py eval, its user simulated through Claude Code at
 // Claude with the login in ClaudeConfig, and fails when uv does.
-func (u UV) Tau2(ctx context.Context, router, model, domain, list, out string, trials int) error {
+func (u UV) Tau2(ctx context.Context, router, model, domain, list, out string, trials, slots int) error {
 	if u.Claude == "" || u.ClaudeConfig == "" {
 		return errors.New("the suites runner has no Claude Code or login directory for τ2's simulated user")
 	}
@@ -51,7 +52,7 @@ func (u UV) Tau2(ctx context.Context, router, model, domain, list, out string, t
 		return err
 	}
 	if err := u.run(ctx, "tau2_quality.py", "eval", "--router", router, "--model", model, "--domain", domain,
-		"--list", list, "--trials", strconv.Itoa(trials), "--claude", u.Claude, "--claude-config", u.ClaudeConfig,
+		"--list", list, "--trials", strconv.Itoa(trials), "--slots", strconv.Itoa(slots), "--claude", u.Claude, "--claude-config", u.ClaudeConfig,
 		"--output", out); err != nil {
 		return fmt.Errorf("uv run tau2_quality.py eval --domain %s: %w", domain, err)
 	}
@@ -245,7 +246,7 @@ func (r *Runner) tau2Domain(ctx context.Context, domain string) (Check, Tau2Resu
 		return broken(name, RoleAgent, err), Tau2Result{}
 	}
 	began := time.Now()
-	err = r.Tau2.Tau2(ctx, r.Router, r.Model, domain, listPath, dir, Tau2Trials)
+	err = r.Tau2.Tau2(ctx, r.Router, r.Model, domain, listPath, dir, Tau2Trials, r.slotsOf(r.Model))
 	wall := time.Since(began).Seconds()
 	var res Tau2Result
 	if err == nil {

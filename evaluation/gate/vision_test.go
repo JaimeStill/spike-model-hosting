@@ -118,7 +118,7 @@ func TestQualityVision(t *testing.T) {
 			input = "--image " + filepath.Join(dir, "shapes.png")
 		}
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
-			"/module/evaluation/suites/vision_quality.py eval --router %s --model %s --tier %s --output %s %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
+			"/module/evaluation/suites/vision_quality.py eval --router %s --model %s --tier %s --output %s --slots 4 %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
 			h.router.srv.URL, gemma26B, vt.Name, filepath.Join(dir, "logs"), input)
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)

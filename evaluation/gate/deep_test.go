@@ -101,7 +101,7 @@ func TestDeepAgent(t *testing.T) {
 	}
 	for i, d := range gate.Tau2Domains {
 		args, _, _ := strings.Cut(tau2[i], "|")
-		for _, want := range []string{"--domain " + d, "--model " + gptOSS, "--trials 2", "--claude /pinned/claude",
+		for _, want := range []string{"--domain " + d, "--model " + gptOSS, "--trials 2", "--slots 4", "--claude /pinned/claude",
 			"--claude-config " + filepath.Join(h.uv.dir, "claude"), "agent-tau2-" + d + ".txt", "/deep/tau2/" + d} {
 			if !strings.Contains(args, want) {
 				t.Errorf("τ2 call %s lacks %q", args, want)
