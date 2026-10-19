@@ -1,8 +1,8 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** brief ready
-- **Task:** evaluation
-- **Branch:** evaluation
+- **State:** idle
+- **Task:** none
+- **Branch:** none
 
 ## Tasks
 
@@ -10,7 +10,7 @@
 2. [x] profile
 3. [x] consumers
 4. [x] main-model
-5. [ ] evaluation
+5. [x] evaluation
 6. [ ] candidates
 7. [ ] rocm
 8. [ ] engines-strix
@@ -174,10 +174,6 @@ Door          two-way, except the cleaned .state run outputs. The repository
               (removed only after the findings are committed), and Claude
               Code subscription usage spent.
 ```
-
-## Progress
-
-slices 12/12 committed · standards ✓ · spec ✓ · editor ✓
 
 ## Decisions
 
