@@ -237,3 +237,23 @@ func TestParseFootprint(t *testing.T) {
 		}
 	}
 }
+
+// TestWarmPromptFitsContext shows a generative model whose context is under the warm-up's
+// 8192-token prompt, as a sweep step's can be, is sent the prompt cut to its context less the
+// room for the template and the answer: the most it can be driven to.
+func TestWarmPromptFitsContext(t *testing.T) {
+	h := newHarness(t, embedding)
+	h.runner.Profile.Model(gemmaE4B).C = 2048
+	rep := h.run(t, "", nil)
+	for _, q := range rep.Warm.Requests {
+		if q.Err != "" {
+			t.Errorf("%s's %s failed: %s", q.Model, q.Name, q.Err)
+		}
+	}
+	if n := h.router.longest[gemmaE4B]; n < 2048-256 || n >= 2048 {
+		t.Errorf("gemma-4-E4B's longest prompt %d tokens at c = 2048; want its c less 256, and the question", n)
+	}
+	if n := h.router.longest[gptOSS]; n < 8192 {
+		t.Errorf("gpt-oss-120b's longest prompt %d tokens; want the full 8192", n)
+	}
+}

@@ -113,6 +113,9 @@ type Runner struct {
 	screen *Report
 	// keys are the run's keys, read once its build is.
 	keys *Keys
+	// peaks, when not nil, keeps each role's peak media once found, so a sweep, which warms the
+	// set at every step, finds them once.
+	peaks map[string]Peak
 }
 
 // Roles returns the roles the set assigns Model, in the order Roles lists them; for a set run,

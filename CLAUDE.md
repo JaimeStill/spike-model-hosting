@@ -42,12 +42,13 @@ from `context/README.md`.
   baseline); `-full -run <dir>` continues a finalist's screen with the rest of each tier, the set
   stage, and deep; `-set a` alone is a set run, `-from <stage>` resumes. The agent's tier 3 is harness fit: conform pass^5
   through every pinned harness, one absolute bar. The instruments also run alone as steps
-  (`conform`, `concurrent`, `prefix`, `coldload`; `-h` lists them). evaluate reloads the set over the
+  (`conform`, `concurrent`, `prefix`, `coldload`; `-h` lists them), and `sweep` chooses one model's slots
+  and c by writing the router's preset file step by step (`-restore` puts the committed render back). evaluate reloads the set over the
   router's API before each run and judges the pool at the warmed peak; set `TMPDIR` to
   `.state/tmp` first (τ2 leaves a database copy per sample). Reports go to `.state/evaluate/`, beside `index.json`, the passed results a rerun reuses by
   model, build, and preset section (`-fresh` reuses none); once findings are committed, run outputs are
   removed. `docs/evaluation.md` is the method; each package's `doc.go` lists its API.
 - **Findings:** `docs/findings/baseline.md` (speed, prefix, cold load, set A's scores and bars),
-  `docs/findings/tool-reliability.md` (pass^5 and harness fit), and
-  `docs/findings/memory-budget.md` (the pool); the Framework's builds are in
+  `docs/findings/tool-reliability.md` (pass^5 and harness fit),
+  `docs/findings/memory-budget.md` (the pool), and `docs/findings/slots.md` (the sweeps); the Framework's builds are in
   `devices/strix-halo/llama-cpp-builds.md`.

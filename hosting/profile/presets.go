@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"text/template"
 )
@@ -108,4 +109,23 @@ func (p *Profile) PresetSection(id string) ([]byte, error) {
 		return nil, fmt.Errorf("profile: the presets render no section for %s", id)
 	}
 	return []byte(out.String()), nil
+}
+
+// Override returns a copy of the profile with the model id at slots and context c, validated as
+// Load validates a profile, so c may not pass the model's card context. The copy's RenderPresets
+// is the render with that override: the model's section renders parallel = slots and c = c, and
+// every other section, [*] among them, renders as the profile's own. Its reasons stay the
+// profile's. evaluate's sweep renders each step this way; the profile itself is left unchanged.
+func (p *Profile) Override(id string, slots, c int) (*Profile, error) {
+	if p.Model(id) == nil {
+		return nil, fmt.Errorf("profile: no model %q", id)
+	}
+	out := *p
+	out.Models = slices.Clone(p.Models)
+	m := out.Model(id)
+	m.Slots, m.C = slots, c
+	if err := out.Validate(); err != nil {
+		return nil, fmt.Errorf("profile: %s at %d slots and c = %d: %w", id, slots, c, err)
+	}
+	return &out, nil
 }

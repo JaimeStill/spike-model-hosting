@@ -84,9 +84,12 @@ type client struct {
 
 // timings is llama.cpp's own accounting of a completion.
 type timings struct {
-	CacheN             int     `json:"cache_n"`
-	PromptN            int     `json:"prompt_n"`
-	PromptPerSecond    float64 `json:"prompt_per_second"`
+	CacheN          int     `json:"cache_n"`
+	PromptN         int     `json:"prompt_n"`
+	PromptPerSecond float64 `json:"prompt_per_second"`
+	// PromptMS is the server's time evaluating the prompt, its media encoded with it: from the
+	// slot taking the request to its first token, the sweep's time to first token.
+	PromptMS           float64 `json:"prompt_ms"`
 	PredictedN         int     `json:"predicted_n"`
 	PredictedPerSecond float64 `json:"predicted_per_second"`
 }

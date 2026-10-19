@@ -8,7 +8,6 @@ import (
 	"io"
 	"maps"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -124,7 +123,7 @@ func (u UV) ASR(ctx context.Context, router, model, set, tierPath, prompt, out s
 
 // run runs the project's script with args through uv.
 func (u UV) run(ctx context.Context, script string, args ...string) error {
-	cmd := exec.CommandContext(ctx, u.Exe, append([]string{"run", "--project", u.Project, "--locked", "--no-python-downloads",
+	cmd := groupCommand(ctx, u.Exe, append([]string{"run", "--project", u.Project, "--locked", "--no-python-downloads",
 		"--python", u.Python, "python", filepath.Join(u.Project, script)}, args...)...)
 	cmd.Env = append(os.Environ(), "HF_HOME="+filepath.Join(u.Cache, "huggingface"),
 		"MTEB_CACHE="+filepath.Join(u.Cache, "mteb"), "ASR_CACHE="+filepath.Join(u.Cache, "asr"),

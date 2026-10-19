@@ -1,0 +1,42 @@
+# The per-session targets evaluate's sweep sizes a model's context by (package evaluation/gate,
+# Targets): per role, the largest request its committed tier lists send, its prompt (in) and the
+# room its answer is given (out), in tokens. A sweep step's c is N times the largest target of the
+# swept model's roles, capped at the card's context; a step the cap leaves a session short of its
+# target fails on context. out is the answer's max_tokens, the room the request asks for, not an
+# answer's measured length: a session needs that room to answer at all.
+#
+# Measured on b11734, 2026-10-19, on set A's model for each role, by the router's own count of
+# each request's prompt (timings.prompt_n, usage.prompt_tokens). A vision or audio request's
+# tokens are its model's: a model with another image or audio encoder counts the same request
+# differently, so a candidate's sweep reads these as set A's measure until its own are taken.
+
+[agent]
+# The agentic shape an agent session is counted by, as capacity's agent streams and the deep
+# stage's agentic grid cell send it: an 8192-token prompt, 512 out.
+in = 8192
+out = 512
+source = "the agentic shape: an 8192-token prompt and 512 out (capacity's agent streams, the deep stage's agentic cell)"
+
+[vision]
+# Every sample of the three vision tier lists (vision-vstar, vision-docvqa, vision-mmmu, 450
+# questions) sent once through vision_quality.py's own eval at max_tokens 1 to Gemma 4 26B-A4B:
+# the largest prompt is MMMU validation_Geography_16, 1076 tokens (the next, Psychology_11, 862).
+# out is the tiers' max_tokens, 4096: at 1024, 32 of MMMU's 200 answers ran out.
+in = 1076
+out = 4096
+source = "the vision tier lists' largest prompt on gemma-4-26B-A4B (MMMU validation_Geography_16, 1076 tokens), and the tiers' max_tokens, 4096"
+
+[audio]
+# The ASR tier lists' longest clip, asr_quality.py peak's (Earnings-22 4483338/281.wav, 36.4 s),
+# sent once as the ASR task sends it, the card's prompt first, to gemma-4-E4B: 932 prompt tokens.
+# out is the ASR task's max_tokens, 1024, room for the longest transcript (117 tokens here).
+in = 932
+out = 1024
+source = "the ASR tier lists' longest clip on gemma-4-E4B (Earnings-22 4483338/281.wav, 36.4 s, 932 tokens with the ASR prompt), and the task's max_tokens, 1024"
+
+[embedding]
+# One input of the card's context, 8192 tokens, the largest the role takes (the warm-up's largest
+# input fills it); an embedding has no answer.
+in = 8192
+out = 0
+source = "one input of EmbeddingGemma 2's card context, 8192 tokens; no answer"

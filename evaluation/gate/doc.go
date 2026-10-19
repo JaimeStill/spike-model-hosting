@@ -160,6 +160,19 @@
 //     run takes each model's τ2, grid and prefix reuse in turn, under the run directory's
 //     <Slug(model)>/deep, then cold load once.
 //
+// The sweep (Sweep) is no stage: it chooses one model's slots and c on the router, the rest of
+// its set loaded at their own settings, N through SweepSteps until a step fails, then one
+// bisection. Each step's c is N times the model's per-session target (Targets), rounded up to a
+// multiple of 256 and capped at the card's context, where a session short of its target fails on
+// context with no request. Each other step renders the profile with the override
+// (profile.Profile.Override), installs it (Presets), has the router read it again
+// (router.ReloadPresets), loads the model again and checks its server runs at the step's setting,
+// then warms the set as a run does (Warm, its 8192-token prompt cut to a smaller c) and runs
+// capacity on the model at N. A step holds when every floor at N, the pool floor and every
+// session's context hold; the chosen N is the smaller of the largest N that held and the knee
+// (KneeGain), and the report names which bound. The sweep ends on every exit by restoring the
+// committed render, checked by its SHA-256 on the host (Sweep.Restore).
+//
 // Every request carries autoload=false; a run refuses a model the router doesn't list loaded
 // before any stage (a run that reloads, any model of the set), and loads only the set it reloads.
 // A run resumed from a later stage, or a full run continuing its screen, reloads nothing and keeps
@@ -219,9 +232,22 @@
 //     named WarmPrompt, WarmImage, WarmClip and WarmInput; Peaks finds a role's Peak media (UV
 //     through vision_quality.py peak and asr_quality.py peak), which ReadPeak reads from its
 //     PeakFile.
+//   - Sweep is the sweep, Sweep.Run's SweepReport its record: each SweepStep with each set
+//     model's Setting served, its checks and each role's RoleRate (total throughput and time to
+//     first token), then the held N, the knee and the chosen N with its bounds (BoundFloor,
+//     BoundPool, BoundContext, BoundKnee, BoundTop), and the Restore that ended it. Sweep.Restore
+//     restores alone; a restore that fails wraps ErrRestore. SweepSteps and KneeGain are the
+//     steps and the knee's threshold; WriteSweep writes the report as a run directory's SweepFile,
+//     named for SweepSubject, and WriteSweepSummary and WriteRestoreSummary write it for a reader.
+//   - Presets is the router's presets file, which a sweep installs and sums; SSHPresets reaches it
+//     over ssh, a temporary file in its directory renamed over it. Targets are the roles'
+//     per-session targets, each a Target, data in evaluation/targets.toml, which LoadTargets
+//     reads.
 //   - MTEB runs one MTEB task, ASR one ASR set's tier, Vision one vision tier and Agent one BFCL
 //     tier; UV runs each through the suites project (SuitesDir) with uv, each suite but the ASR
-//     task (one clip at a time) given its model's slots as --slots. ReadTier reads a vision or
+//     task (one clip at a time) given its model's slots as --slots. uv, and GuideLLM, start in a
+//     process group of their own, killed whole when the run's context is done, so an interrupt
+//     leaves none of the suite's Python processes running. ReadTier reads a vision or
 //     BFCL tier's Inspect logs into a TierResult, whose Score and Passes are the tier's;
 //     VisionTiers and AgentTiers name the tiers (each a VisionTier or AgentTier), VisionCheck and
 //     AgentCheck a tier's check, list and bar name, and InspectEvalsVersion is the inspect_evals

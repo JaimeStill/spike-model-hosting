@@ -58,6 +58,9 @@
 //     startup set's models; [*] holds the shared defaults and the profile's KV mode.
 //     Profile.PresetSection returns the preset one model runs at, [*] and its own section, key
 //     lines alone: the bytes evaluate keys the model's results by.
+//   - Profile.Override returns a copy of the profile with one model at the slots and c it is
+//     given, validated: its RenderPresets is the render with that override, every other section
+//     the profile's own. evaluate's sweep renders each step this way.
 //   - Profile.RenderUnit writes the router's systemd unit, with a Host's values; Host.Validate
 //     reports a Host value that is missing or that the unit can't carry.
 //   - EngineBinary, PresetsPath and RouterPort are the install layout every unit renders.

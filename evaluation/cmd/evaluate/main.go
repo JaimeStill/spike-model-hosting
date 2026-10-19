@@ -24,9 +24,11 @@
 //   - prefix measures prefix-cache reuse for each generative model of a set (package prefixstep).
 //   - coldload times a router restart until every model of a set is loaded again (package
 //     coldloadstep).
+//   - sweep chooses one model's slots and c on the router, writing each step's presets and
+//     restoring the committed render after, -restore alone restoring it (package sweepstep).
 //
-// Each step's package documents its flags, its environment fallbacks, and its exit status: 0 when
-// it passes, 1 when it fails or can't run, and 2 on a usage error, as the gated run's does.
+// An interrupt, SIGINT or SIGTERM, cancels the run or the step. Each step's package documents its
+// flags, its environment fallbacks, and its exit status: 0 when it passes, 1 when it fails or can't run, and 2 on a usage error, as the gated run's does.
 // evaluate itself exits 2 when neither flags nor a step, or an unknown step, are named, and 0 on
 // -h.
 package main
@@ -38,12 +40,14 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/coldloadstep"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/concurrentstep"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/conformstep"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/gatestep"
 	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/prefixstep"
+	"github.com/JaimeStill/spike-model-hosting/evaluation/cmd/evaluate/internal/sweepstep"
 )
 
 // step is one instrument evaluate runs by name.
@@ -60,10 +64,12 @@ var steps = []step{
 	{"concurrent", "run Pi, Claude Code and the model client at once, each answer checked against its request", concurrentstep.Run},
 	{"prefix", "measure prefix-cache reuse for each generative model of a set", prefixstep.Run},
 	{"coldload", "time a router restart until every model of a set is loaded again", coldloadstep.Run},
+	{"sweep", "choose a model's slots and c, then restore the committed presets", sweepstep.Run},
 }
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// SIGTERM cancels a step as an interrupt does, so a sweep restores the presets on either.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	code := run(ctx, os.Args[1:], os.Getenv, os.Stdout, os.Stderr)
 	stop()
 	os.Exit(code)

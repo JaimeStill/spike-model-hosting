@@ -65,9 +65,23 @@ func (r *Runner) capModel(ctx context.Context, rep *Report) []Check {
 const inFlight = "N in flight"
 
 func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
+	return r.capAt(ctx, c, role).checks
+}
+
+// capRun is one role's capacity run at the model's slots: its checks, and what the sweep reads
+// beside them, the chat stream's answers (rec, nil for the embedding role) and the requests sent
+// N at once after the run (loaded).
+type capRun struct {
+	checks []Check
+	rec    *recorder
+	loaded []timed
+}
+
+// capAt runs capacity for role at the model's slots, from its profile entry (capRole).
+func (r *Runner) capAt(ctx context.Context, c *client, role string) capRun {
 	slots := r.slotsOf(r.Model)
 	if slots < 1 {
-		return []Check{broken(inFlight, role, fmt.Errorf("the profile gives %s no slots", r.Model))}
+		return capRun{checks: []Check{broken(inFlight, role, fmt.Errorf("the profile gives %s no slots", r.Model))}}
 	}
 	cfg := concurrent.Config{Rounds: 1, RequestTimeout: requestTimeout}
 	var rec *recorder
@@ -108,7 +122,7 @@ func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
 		}
 	})
 	if runErr != nil {
-		return []Check{broken(inFlight, role, runErr)}
+		return capRun{checks: []Check{broken(inFlight, role, runErr)}}
 	}
 
 	var checks []Check
@@ -156,14 +170,17 @@ func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
 			"a 32-token query, N at once, the slowest of them"))
 	}
 
+	out := capRun{rec: rec, loaded: loaded}
 	if readings == 0 {
-		return append(checks, broken("peak pool free", role, readErr))
+		out.checks = append(checks, broken("peak pool free", role, readErr))
+		return out
 	}
 	peak := measure("peak pool free", role, float64(low.FreeMiB()), "MiB", AtLeast, r.Floors.Pool.FreeMiB)
 	peak.Values = poolValues(low)
 	peak.Values["slots"] = float64(slots)
 	peak.Detail = fmt.Sprintf("%d of %d MiB used at the peak of %d readings, %d in flight%s", low.UsedMiB, low.TotalMiB, readings, slots, ramDetail(low))
-	return append(checks, peak)
+	out.checks = append(checks, peak)
+	return out
 }
 
 // timed is one of atN's requests: its wall time, or why it failed.

@@ -1227,3 +1227,49 @@ func TestPresetSection(t *testing.T) {
 		t.Errorf("PresetSection(unknown) = %q; want an error", b)
 	}
 }
+
+// TestOverride shows Override renders one model's section at the slots and c it is given, every
+// other section as the profile's own, leaves the profile itself unchanged, and refuses a c over
+// the card's context or a model the profile doesn't hold.
+func TestOverride(t *testing.T) {
+	p, err := profile.Load(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+	committed := parseINI(t, render(t, strixHalo))
+	o, err := p.Override(id, 8, 15648)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var b bytes.Buffer
+	if err := o.RenderPresets(&b); err != nil {
+		t.Fatal(err)
+	}
+	got := parseINI(t, b.String())
+	if got[id]["parallel"] != "8" || got[id]["c"] != "15648" {
+		t.Errorf("[%s] parallel = %q, c = %q; want 8 and 15648", id, got[id]["parallel"], got[id]["c"])
+	}
+	for name, keys := range committed {
+		want := keys
+		if name == id {
+			want = maps.Clone(keys)
+			want["parallel"], want["c"] = "8", "15648"
+		}
+		if !maps.Equal(got[name], want) {
+			t.Errorf("[%s] %v; want %v", name, got[name], want)
+		}
+	}
+	if len(got) != len(committed) {
+		t.Errorf("%d sections; want the profile's %d", len(got), len(committed))
+	}
+	if m := p.Model(id); m.Slots != 4 || m.C != 32768 {
+		t.Errorf("the profile's own %s is at %d slots and c = %d after Override; want it unchanged", id, m.Slots, m.C)
+	}
+	if _, err := p.Override(id, 2, 262144); err == nil || !strings.Contains(err.Error(), "over the card's context") {
+		t.Errorf("Override over the card's context = %v; want refused", err)
+	}
+	if _, err := p.Override("example/none-GGUF:Q4_0", 2, 4096); err == nil {
+		t.Error("Override of a model the profile doesn't hold: no error")
+	}
+}

@@ -297,6 +297,25 @@ router never reads a half-written file. A file a sweep left there is the service
 sweep restores the committed render (checked by its SHA-256) or the next install replaces it.
 The write access also lets the service user remove the backups kept beside the presets.
 
+`evaluate sweep` ([`docs/evaluation.md`](../../docs/evaluation.md), "The sweep") is the session's
+one writer, over user-level ssh and with no `sudo`: each step writes a temporary file,
+`/etc/llama-router/.models.ini.XXXXXX` (`mktemp`), makes it `0644`, renames it over `models.ini`
+and asks `GET /models?reload=1`; it writes no other file. It refuses to start unless the
+installed file is the committed render, and ends every exit, an error, SIGINT and SIGTERM among
+them, by installing the committed render and checking its SHA-256 on the host. A sweep killed
+before its restore (SIGKILL, or the laptop lost mid-step) leaves a step's file, which names
+itself in its first comment line; restore it from the laptop and check it:
+
+```bash
+# laptop
+go run ./evaluation/cmd/evaluate sweep -restore -set a
+mise run //devices/strix-halo:render:presets | sha256sum
+ssh <host> sha256sum /etc/llama-router/models.ini
+```
+
+Expect `restored: the committed render, sha256 <sum>, installed and verified`, and the two sums
+equal.
+
 It reverts by one root command, which also hands back a `models.ini` a sweep left behind:
 
 ```bash

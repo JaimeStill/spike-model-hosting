@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -73,6 +75,24 @@ type fakeRouter struct {
 	images  []string
 	longest map[string]int
 	widest  map[string]int
+
+	// presets, when set, is the router's presets file: GET /models?reload=1 reads it again,
+	// unloading each loaded model whose section changed since it loaded, and a load takes its
+	// model's section's parallel and c, which GET /props?model= reports as total_slots and
+	// n_ctx. sections are the sections each loaded model runs at; served, its slots and c.
+	presets  string
+	sections map[string]map[string]string
+	served   map[string]gate.Setting
+	// failReload is the GET /models?reload=1, counted from 1, that fails; reloads, those seen.
+	failReload, reloads int
+	// decodeAt, when set, is a nonce request's decode at its model's served slots; slowAt, at
+	// served slots it holds, the decode of the first nonce request served at them, the rest at
+	// decodeAt.
+	decodeAt func(slots int) float64
+	slowAt   map[int]float64
+	slowSeen map[int]bool
+	// exhaustAt says a model's nonce requests run out of context at its served slots.
+	exhaustAt func(model string, slots int) bool
 }
 
 var fakeNonce = regexp.MustCompile(`nonce-[0-9a-f]{16}`)
@@ -169,6 +189,9 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 			f.mu.Lock()
 			f.requests = append(f.requests, verb+" "+m)
 			f.status[m] = verb + "ed"
+			if verb == "load" && f.presets != "" {
+				f.apply(m)
+			}
 			f.mu.Unlock()
 			_, _ = w.Write([]byte(`{"success":true}`))
 			return
@@ -192,6 +215,12 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 	reply := func(v any) { _ = json.NewEncoder(w).Encode(v) }
 	switch r.URL.Path {
 	case "/models":
+		if r.URL.Query().Get("reload") == "1" {
+			if err := f.reread(); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
 		f.record("models")
 		if f.down() {
 			http.Error(w, "restarting", http.StatusServiceUnavailable)
@@ -206,7 +235,19 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 		reply(map[string]any{"data": data})
 	case "/props":
 		f.record("props")
-		reply(map[string]any{"build_info": f.build})
+		props := map[string]any{"build_info": f.build}
+		if m := r.URL.Query().Get("model"); m != "" {
+			f.mu.Lock()
+			at, ok := f.served[m]
+			status := f.status[m]
+			f.mu.Unlock()
+			if !ok || status != "loaded" {
+				http.Error(w, "model not loaded: "+m, http.StatusBadRequest)
+				return
+			}
+			props["total_slots"], props["default_generation_settings"] = at.Slots, map[string]any{"n_ctx": at.C}
+		}
+		reply(props)
 	case "/v1/messages":
 		f.record("messages")
 		if f.unloadOnToolCall != "" {
@@ -291,7 +332,10 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 		f.mu.Lock()
 		f.nonced[m] = append(f.nonced[m], body)
 		f.mu.Unlock()
-		if m == f.exhaust {
+		f.mu.Lock()
+		slots := f.served[m].Slots
+		f.mu.Unlock()
+		if m == f.exhaust || (f.exhaustAt != nil && f.exhaustAt(m, slots)) {
 			f.record("exhausted " + m)
 			w.WriteHeader(http.StatusBadRequest)
 			reply(map[string]any{"error": map[string]any{"code": 400, "type": "exceed_context_size_error",
@@ -326,7 +370,7 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 	f.record(fmt.Sprintf("%s %v %s", kind, stream, body["model"]))
 	timings := map[string]any{
 		"prompt_n": len(strings.Fields(text.String())), "prompt_per_second": f.prefill,
-		"predicted_n": 10, "predicted_per_second": f.decode,
+		"predicted_n": 10, "predicted_per_second": f.decodeOf(kind == "capacity", m), "prompt_ms": 120.0,
 	}
 	// A long prompt whose start was sent before finds all but its last ten words cached.
 	if words := strings.Fields(text.String()); len(words) > 1000 {
@@ -494,4 +538,100 @@ func (f *fakeConform) Run(_ context.Context, plan passk.Plan) (passk.Result, err
 		res.Rows, res.Fits = append(res.Rows, fit.Row), append(res.Fits, fit)
 	}
 	return res, nil
+}
+
+// decodeOf is a chat completion's decode: decodeAt's at the model's served slots for a nonce
+// request, slowAt's for the first nonce request at slots it holds, and decode otherwise.
+func (f *fakeRouter) decodeOf(nonced bool, model string) float64 {
+	if !nonced || f.decodeAt == nil {
+		return f.decode
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	slots := f.served[model].Slots
+	if v, ok := f.slowAt[slots]; ok && !f.slowSeen[slots] {
+		if f.slowSeen == nil {
+			f.slowSeen = map[int]bool{}
+		}
+		f.slowSeen[slots] = true
+		return v
+	}
+	return f.decodeAt(slots)
+}
+
+// readPresets parses the presets file into its sections' keys, comments left out.
+func (f *fakeRouter) readPresets() (map[string]map[string]string, error) {
+	b, err := os.ReadFile(f.presets)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]map[string]string{}
+	var cur map[string]string
+	for line := range strings.Lines(string(b)) {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "" || strings.HasPrefix(line, ";"):
+		case strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]"):
+			cur = map[string]string{}
+			out[line[1:len(line)-1]] = cur
+		default:
+			k, v, _ := strings.Cut(line, "=")
+			if cur != nil {
+				cur[strings.TrimSpace(k)] = strings.TrimSpace(v)
+			}
+		}
+	}
+	return out, nil
+}
+
+// apply has model run at its section of the presets file, as a load does; f.mu is held.
+func (f *fakeRouter) apply(model string) {
+	secs, err := f.readPresets()
+	if err != nil {
+		return
+	}
+	slots, _ := strconv.Atoi(secs[model]["parallel"])
+	c, _ := strconv.Atoi(secs[model]["c"])
+	f.sections[model], f.served[model] = secs[model], gate.Setting{Slots: slots, C: c}
+	f.requests = append(f.requests, fmt.Sprintf("served %s %d %d", model, slots, c))
+}
+
+// reread reads the presets file again, as GET /models?reload=1 does: each loaded model whose
+// section changed since it loaded is unloaded ("reread-unload <model>"); none is loaded.
+func (f *fakeRouter) reread() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reloads++
+	if f.reloads == f.failReload {
+		return fmt.Errorf("fake: reload %d fails", f.reloads)
+	}
+	secs, err := f.readPresets()
+	if err != nil {
+		return err
+	}
+	f.requests = append(f.requests, "reread")
+	for m, s := range f.status {
+		if s == "loaded" && !maps.Equal(secs[m], f.sections[m]) {
+			f.status[m] = "unloaded"
+			f.requests = append(f.requests, "reread-unload "+m)
+		}
+	}
+	return nil
+}
+
+// usePresets makes path the router's presets file, holding data, and has every loaded model run
+// at its section.
+func (f *fakeRouter) usePresets(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.presets, f.sections, f.served = path, map[string]map[string]string{}, map[string]gate.Setting{}
+	for m, s := range f.status {
+		if s == "loaded" {
+			f.apply(m)
+		}
+	}
 }

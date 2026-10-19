@@ -203,6 +203,53 @@ The suites' own caches stay off, so a unit that runs is a real rerun: the Inspec
 `eval`, never `eval_set` or `eval_retry`, with no model-output cache, and MTEB runs with
 `cache=None`. The suites' tests hold them so.
 
+## The sweep
+
+`evaluate sweep` chooses one model's slots and context, `c`, on the router, with the rest of its
+set loaded and idle at their own settings. It is a step, not a stage: it writes the router's
+preset file, which no stage touches, and records nothing in the results index.
+
+- **Steps.** N runs 1, 2, 4, 8 and 16 until a step fails, then one bisection between the last
+  step that held and that failure (their integer midpoint; none when they are adjacent).
+- **Context.** Each step's `c` is N times the model's per-session target, rounded up to a
+  multiple of 256 and capped at the card's context. The target is the largest of the model's
+  roles' in [`evaluation/targets.toml`](../evaluation/targets.toml): each role's largest tier
+  request, its prompt and the room its answer is given, measured once on b11734 by the router's
+  own token count. The agent's is the agentic shape, 8192 in and 512 out; the vision role's the
+  tier lists' largest prompt on Gemma 4 26B-A4B (MMMU, 1076 tokens) and the tiers' 4096 out; the
+  audio role's the longest clip on gemma-4-E4B (Earnings-22, 36.4 s, 932 tokens) and the ASR
+  task's 1024 out; the embedding role's one 8192-token input. A step the cap leaves a session
+  short of its target fails on context, with no request sent.
+- **Each step** renders the profile with that one model's override
+  (`profile.Profile.Override`), installs it as the router's preset file, has the router read it
+  again (`GET /models?reload=1`, which unloads the model whose section changed), loads the model
+  again and checks its server reports the step's slots and context (`/props`), then reloads and
+  warms the whole set as a run does ("Before each run", below; the warm-up's 8192-token prompt is
+  cut to a smaller `c`) and runs the capacity stage on the model at N, each role the set assigns
+  it.
+- **Each step records** every stream's rate against the floors at N; the median and 95th
+  percentile time to first token (llama.cpp's `prompt_ms`; an embedding query's wall time) and
+  the total throughput of the N requests (the streams' decode summed for the agent and vision
+  roles, their RTFx summed for audio, the queries' tokens a second for embedding); the pool at the
+  warmed peak with system RAM, and at capacity's peak; and any request that ran out of context.
+- **The choice.** A step holds when every floor at N, the pool's floor and every session's
+  context hold; a step whose requests ran out of context names the context alone. The chosen N
+  is the smaller of the largest N that held and the knee, the last N before total throughput
+  gains under 10% a step (over the steps whose requests all answered). The report gives both,
+  and which bound: the floor, the pool, the context, the knee, or the sweep's last step.
+- **Restore.** The sweep refuses to start unless the set is loaded and the installed preset file
+  is the committed render, by SHA-256. Once started, it ends on every exit, an error, SIGINT and
+  SIGTERM among them, by installing the committed render, checking the installed file's SHA-256
+  on the host over ssh, having the router read it again, and waiting until every model of the
+  set serves at its committed setting. A restore that fails says `RESTORE FAILED` and exits 1;
+  `evaluate sweep -restore` runs the restore alone. The preset file is written as the Strix Halo
+  runbook's "The preset file's write access" allows: a temporary file in `/etc/llama-router`,
+  renamed over `models.ini`, with no sudo and no other file touched.
+
+The report is `.state/evaluate/<UTC time>-sweep-<model>/sweep.json`, with a summary on stdout.
+A sweep's chosen N is a finding, recorded in [`findings/slots.md`](findings/slots.md); the
+profile's slots change only by a commit.
+
 ## Before each run
 
 - **The run reloads the set.** Every model run, and the set run, starts from freshly loaded
@@ -263,6 +310,10 @@ go run ./evaluation/cmd/evaluate -set a -role agent -fresh
 
 # The architect is at hand for the deep stage's two cold-load restarts.
 go run ./evaluation/cmd/evaluate -set a -role agent -full -restart
+
+# Sweep one model's slots and c, the rest of its set loaded; restore the committed presets alone.
+go run ./evaluation/cmd/evaluate sweep -set a -role audio
+go run ./evaluation/cmd/evaluate sweep -restore -set a
 ```
 
 `-role` takes agent, vision, audio, or embedding. The set is `-set`, `SPIKE_SET`, or the
@@ -272,7 +323,7 @@ reloads, every model of the set), and loads only the set it reloads. Each report
 untracked under `.state`; once a run's findings are committed to `docs/findings/`, the run
 outputs are removed, and only the logins and caches stay. `go run ./evaluation/cmd/evaluate -h`
 lists every flag and the instruments' steps (`conform`, `concurrent`, `prefix`, `coldload`), each
-of which also runs alone.
+of which also runs alone, and the sweep (`sweep`, above).
 
 The tier lists are drawn again from their seed with the consumers environment's tasks, for
 example `MISE_ENV=consumers mise run //evaluation:vision-tiers`; each rewrites the committed lists.
@@ -288,7 +339,7 @@ The goal record's Decisions plan these changes for `candidates`:
   trustworthy.
 - **The concurrency count.** Every evaluated set reports the most agent sessions at once that
   still meet the per-stream floors with the pool floor held, even when it is one. The capacity
-  stage checks a fixed 4 in flight.
+  stage checks each model's own slots in flight, and the sweep ("The sweep", above) chooses them.
 - **A lighter grouping.** Candidates also looks for a grouping that scores near set A's bars
   with less of the pool and bandwidth, so the host keeps headroom and concurrency.
 - **Only passing models.** A host keeps installed only the models that passed evaluation on it,

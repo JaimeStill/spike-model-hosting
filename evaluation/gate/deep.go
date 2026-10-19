@@ -9,7 +9,6 @@ import (
 	"maps"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -395,7 +394,7 @@ func (g GuideLLM) Cell(ctx context.Context, router, model, tokenizer string, c G
 	if err := os.WriteFile(scenario, b, 0o600); err != nil {
 		return GridResult{}, err
 	}
-	cmd := exec.CommandContext(ctx, g.Exe, "run", "-c", scenario, "--disable-console")
+	cmd := groupCommand(ctx, g.Exe, "run", "-c", scenario, "--disable-console")
 	cmd.Env = append(os.Environ(), "HF_HOME="+g.HFHome)
 	cmd.Stdout, cmd.Stderr = g.Log, g.Log
 	if err := cmd.Run(); err != nil {

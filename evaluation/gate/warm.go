@@ -62,7 +62,9 @@ type WarmRequest struct {
 // The warm-up's requests, by Name.
 const (
 	// WarmPrompt is an 8192-token prompt, every generative model's: prefilled in full ubatches,
-	// it grows the language model's backend buffers as the deep stage's 8192-token prompts do.
+	// it grows the language model's backend buffers as the deep stage's 8192-token prompts do. A
+	// model whose context is under it and warmReserve, as a sweep step's can be, takes its c less
+	// warmReserve.
 	WarmPrompt = "8192-token prompt"
 	// WarmImage is the vision role's largest image in the committed tier lists, WarmClip the
 	// audio role's longest clip in them, and WarmInput the embedding role's largest input, one
@@ -75,6 +77,10 @@ const (
 // embedReserve is the room the embedding model's largest input leaves in its physical batch
 // (c = b = ub) for the special tokens the server adds around an input.
 const embedReserve = 8
+
+// warmReserve is the room the warm-up's prompt leaves in a model's context, when the context is
+// under the prompt and a reserve, for the chat template's tokens and the 16-token answer.
+const warmReserve = 256
 
 // defaultSettle is the wait after a reload before the idle reading, as the manual procedure
 // waited (docs/findings/memory-budget.md, "The pool over a day of runs").
@@ -196,8 +202,12 @@ func (r *Runner) read(ctx context.Context) (*Pool, string) {
 	return &p, ""
 }
 
-// findPeak finds the role's peak media into the run directory's warm/<role>.
+// findPeak finds the role's peak media into the run directory's warm/<role>, or returns the one
+// the runner's peaks keep.
 func (r *Runner) findPeak(ctx context.Context, role string) (Peak, error) {
+	if p, ok := r.peaks[role]; ok {
+		return p, nil
+	}
 	if r.Peaks == nil {
 		return Peak{}, errors.New("the runner has no peak finder")
 	}
@@ -211,7 +221,11 @@ func (r *Runner) findPeak(ctx context.Context, role string) (Peak, error) {
 	if err := r.Peaks.Peak(ctx, role, r.Tiers, out); err != nil {
 		return Peak{}, err
 	}
-	return ReadPeak(out)
+	p, err := ReadPeak(out)
+	if err == nil && r.peaks != nil {
+		r.peaks[role] = p
+	}
+	return p, err
 }
 
 // warmModel sends model its warm-up: the 8192-token prompt for a generative model, then each role
@@ -231,8 +245,11 @@ func (r *Runner) warmModel(ctx context.Context, c *client, model string, peaks m
 	}
 	m := r.Profile.Model(model)
 	if m != nil && m.Kind == profile.KindGenerative {
+		// A sweep step can give the model less context than the prompt: it is cut to fit, room
+		// left for the template and the answer, the most the model can be driven to.
+		n := min(longPromptTokens, m.C-warmReserve)
 		send("", WarmPrompt, func(ctx context.Context) (string, error) {
-			text, err := c.fitText(ctx, model, longPromptTokens)
+			text, err := c.fitText(ctx, model, n)
 			if err != nil {
 				return "", err
 			}

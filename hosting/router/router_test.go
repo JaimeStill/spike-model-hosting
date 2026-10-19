@@ -120,3 +120,48 @@ func TestLoadUnload(t *testing.T) {
 		t.Error("Unload(quiet): an answer without success gave no error")
 	}
 }
+
+// TestReloadPresets shows ReloadPresets asks GET /models?reload=1 and fails on the router's error.
+func TestReloadPresets(t *testing.T) {
+	var got []string
+	fail := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = append(got, r.Method+" "+r.URL.RequestURI())
+		if fail {
+			http.Error(w, "bad presets", http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(models))
+	}))
+	t.Cleanup(srv.Close)
+	if err := router.ReloadPresets(t.Context(), http.DefaultClient, srv.URL); err != nil {
+		t.Fatalf("ReloadPresets: %v", err)
+	}
+	if want := []string{"GET /models?reload=1"}; !slices.Equal(got, want) {
+		t.Errorf("requests %q, want %q", got, want)
+	}
+	fail = true
+	if err := router.ReloadPresets(t.Context(), http.DefaultClient, srv.URL); err == nil || !strings.Contains(err.Error(), "bad presets") {
+		t.Errorf("ReloadPresets on a failing router = %v, want the router's message", err)
+	}
+}
+
+// TestServedAt shows ServedAt reads a model's total_slots and n_ctx from GET /props?model=, never
+// loading it.
+func TestServedAt(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/props" || r.URL.Query().Get("model") != "m:Q8_0" || r.URL.Query().Get("autoload") != "false" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"total_slots":8,"default_generation_settings":{"n_ctx":15648},"build_info":"b1"}`))
+	}))
+	t.Cleanup(srv.Close)
+	got, err := router.ServedAt(t.Context(), http.DefaultClient, srv.URL, "m:Q8_0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (router.Served{Slots: 8, NCtx: 15648}); got != want {
+		t.Errorf("ServedAt = %+v, want %+v", got, want)
+	}
+}

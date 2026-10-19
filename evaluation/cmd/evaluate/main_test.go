@@ -20,7 +20,7 @@ var bin string
 const root = "../../.."
 
 // stepNames are the steps evaluate runs, in the order its usage lists them.
-var stepNames = []string{"conform", "concurrent", "prefix", "coldload"}
+var stepNames = []string{"conform", "concurrent", "prefix", "coldload", "sweep"}
 
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "evaluate-tool")
