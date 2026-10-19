@@ -4,7 +4,6 @@
 # required fields, shortened; the live profile's say why each value is what it is.
 host_class = "strix-halo"
 bind = "tailnet"
-slots = 4
 kv = "unified"
 memory_bandwidth_gb_s = 256
 
@@ -53,6 +52,8 @@ bits_per_weight = 4.34
 kind = "generative"
 c = 131072
 c_reason = "The harness model, at its trained context."
+slots = 4
+slots_reason = "The evaluation baseline's value."
 
 [models.sampling]
 source = "https://github.com/openai/gpt-oss"
@@ -75,6 +76,8 @@ bits_per_weight = 4.63
 kind = "generative"
 c = 32768
 c_reason = "The vision model, at the context the shared budget allows."
+slots = 4
+slots_reason = "The evaluation baseline's value."
 mtmd_batch_max_tokens = 512
 mtmd_batch_max_tokens_reason = "One image to an encoder batch."
 
@@ -99,6 +102,8 @@ bits_per_weight = 8.53
 kind = "generative"
 c = 32768
 c_reason = "The audio model, at a quarter of its trained context."
+slots = 4
+slots_reason = "The evaluation baseline's value."
 
 [models.sampling]
 source = "https://huggingface.co/google/gemma-4-E4B-it"
@@ -107,6 +112,11 @@ top_p = 0.95
 top_k = 64
 min_p = 0.0
 reason = "The card's recommended sampling."
+
+[models.prompts]
+source = "https://huggingface.co/google/gemma-4-E4B-it"
+asr = "Transcribe the following speech segment in English into English text."
+reason = "The card's ASR prompt, without its formatting bullets."
 
 [[models]]
 id = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
@@ -122,6 +132,8 @@ kind = "embedding"
 dims = 768
 c = 8192
 c_reason = "The context window its card states."
+slots = 4
+slots_reason = "The evaluation baseline's value."
 args_reason = "An embedding model, mean pooled, its encoders kept out, one batch an input."
 
 [models.args]
@@ -130,3 +142,16 @@ pooling = "mean"
 no-mmproj = true
 b = 8192
 ub = 8192
+
+[models.prompts]
+source = "https://huggingface.co/google/embeddinggemma-2"
+reason = "The prompts of the model's sentence-transformers configuration that MTEB resolves."
+
+[models.prompts.embedding]
+Classification = "task: classification | query: "
+Retrieval = "task: search result | query: "
+Retrieval-document = "title: none | text: "
+Retrieval-query = "task: search result | query: "
+STS = "task: sentence similarity | query: "
+document = "title: none | text: "
+query = "task: search result | query: "

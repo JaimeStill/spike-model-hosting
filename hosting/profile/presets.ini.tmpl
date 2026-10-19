@@ -1,9 +1,11 @@
 {{/*
   The llama.cpp router's model presets, rendered from a host-class profile. Keys are llama-server
   argument names without their leading dashes. Every model runs its GGUF's embedded chat
-  template (jinja) and exposes /metrics, so those two are not profile fields. Setting parallel
-  turns kv-unified's auto default off, so a unified KV pool is stated explicitly, and a per-slot
-  one is the absence of the key. The startup set's models load when the router starts
+  template (jinja) and exposes /metrics, so those two are not profile fields. Each model's slots
+  render as parallel in its own section, after its c; the router applies [*] and then a model's
+  section, so the section's value is the one the model runs at. Setting parallel turns
+  kv-unified's auto default off, so a unified KV pool, the host class's for every model, is
+  stated explicitly in [*], and a per-slot one is the absence of the key. The startup set's models load when the router starts
   (load-on-startup), so the set's memory is committed up front, not on a model's first request.
   Every other model renders without the key, which the router reads as false (it loads a model
   at startup only when the key is present and truthy), so it stays unloaded until a load
@@ -24,7 +26,6 @@ n-gpu-layers = {{.Defaults.GPULayers}}
 c = {{.Defaults.C}}
 metrics = true
 checkpoint-min-step = {{.Defaults.CheckpointMinStep}}
-parallel = {{.Slots}}
 {{- if eq .KV "unified"}}
 kv-unified = true
 {{- end}}
@@ -36,6 +37,8 @@ kv-unified = true
 {{- end}}
 ;
 {{comment .CReason -}}
+;
+{{comment .SlotsReason -}}
 {{- if .MtmdBatchMaxTokensReason}};
 {{comment .MtmdBatchMaxTokensReason}}{{end -}}
 {{- with .Sampling}};
@@ -48,6 +51,7 @@ load-on-startup = true
 {{- end}}
 hf-repo = {{.ID}}
 c = {{.C}}
+parallel = {{.Slots}}
 {{- if .MtmdBatchMaxTokens}}
 mtmd-batch-max-tokens = {{.MtmdBatchMaxTokens}}
 {{- end}}

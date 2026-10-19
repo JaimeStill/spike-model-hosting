@@ -109,7 +109,8 @@ The evaluation ([`evaluation.md`](evaluation.md)) reads the card in five places:
 - **The card's prompts** are the requests' own: the embedding encoder adds EmbeddingGemma 2's
   task prompts (its "Task Instruction Prefixes", by MTEB task type), and every transcription
   sends gemma-4-E4B's ASR prompt first and the clip after it, the card's order for audio. The
-  `gate` package's `ASRPrompt` holds that prompt, for fitness, capacity, and the ASR task alike.
+  profile holds both, each model's `prompts` with its `source`, for the encoder, fitness,
+  capacity, and the ASR task alike.
 - **The card's tokenizer** cuts the GuideLLM grid's prompts to their token counts: the deep
   stage takes it from the model's `card_url`.
 - **The card's own scores** are recorded beside ours where the card reports one for a tier, and

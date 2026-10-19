@@ -13,7 +13,7 @@
 # response_format), not the profile's.
 host_class = "strix-halo"
 bind = "tailnet"
-slots = 4
+# One KV pool for each model, its slots sharing it; each model sets its own slots.
 kv = "unified"
 # Strix Halo's memory bandwidth: 256-bit LPDDR5X-8000, 256 GB/s. evaluate compares each decode
 # speed with the ceiling it sets (bandwidth over the bytes a token reads); nothing gates on it.
@@ -149,6 +149,11 @@ The harness model. c = 131072 is its trained context_length, the ceiling: its KV
 36,864 bytes/token (18 of 36 layers hold a full-attention cache; the rest are 128-token sliding
 windows), 4.5GiB at this c, beside ~59GiB of MXFP4 weights.
 """
+slots = 4
+slots_reason = """
+4 slots, the evaluation baseline's value: set A's two-run baseline ran every model at 4 requests
+in flight, until screen's sweep chooses each model's own.
+"""
 
 [models.sampling]
 source = "https://github.com/openai/gpt-oss"
@@ -186,6 +191,11 @@ full-attention cache (20,480 bytes/token, 0.625GiB at this c); the rest are 1024
 windows. The shared budget binds here, not its trained 262144: at c = 65536, all four loaded
 with four requests in flight on each left 2.61GiB of the pool free, under the 2.75GiB pool floor,
 so this c, the first to drop, is 32768.
+"""
+slots = 4
+slots_reason = """
+4 slots, the evaluation baseline's value: set A's two-run baseline ran every model at 4 requests
+in flight, until screen's sweep chooses each model's own.
 """
 # The flag is --mtmd-batch-max-tokens in common/arg.cpp from b11452 (the minimum build) through
 # b11734; its default is 1024.
@@ -238,6 +248,11 @@ The audio model; the router loads its Q8_0 mmproj alongside. 4 of its 42 layers 
 full-attention cache (the last 18 reuse earlier layers' KV), 16,384 bytes/token, 0.5GiB at this
 c; c = 32768 is a quarter of its trained 131072.
 """
+slots = 4
+slots_reason = """
+4 slots, the evaluation baseline's value: set A's two-run baseline ran every model at 4 requests
+in flight, until screen's sweep chooses each model's own.
+"""
 
 [models.sampling]
 source = "https://huggingface.co/google/gemma-4-E4B-it"
@@ -250,6 +265,20 @@ Sampling from the google/gemma-4-E4B-it model card, "1. Sampling Parameters": te
 top_p 0.95, top_k 64. b11529 already applies the GGUF's general.sampling.* keys, which carry the
 same three values; the preset states them so the card, not the conversion, is the source, and
 sets min-p = 0 because the card names no min_p (llama.cpp's default is 0.05).
+"""
+
+[models.prompts]
+source = "https://huggingface.co/google/gemma-4-E4B-it"
+asr = "Transcribe the following speech segment in English into English text."
+reason = """
+The card's ASR prompt ("6. Audio"), the language filled in, without its formatting bullets
+("Only output the transcription, with no newlines"; "When transcribing numbers, write the
+digits"). On a clip of a word or two, gemma-4-E4B reads the bullets back as the transcript: on
+AMI's 40 shortest tier clips the full prompt scored 165% WER and the sentence alone 47%, and on
+40 LibriSpeech test.other utterances both scored 6.3%. The normalizer writes numbers as digits
+whichever way they come, so the bullets don't bear on the score. Fitness, capacity, the set
+stage and the quality stage's ASR task all send it, so every stage that times or scores a
+transcription asks for one the same way.
 """
 
 [[models]]
@@ -275,6 +304,11 @@ c_reason = """
 Text embeddings only, 768-dimension output. c = 8192 is the context window its card states (the
 GGUF's context_length key reads 262144). No sampling: an embedding model doesn't sample.
 """
+slots = 4
+slots_reason = """
+4 slots, the evaluation baseline's value: set A's two-run baseline ran every model at 4 requests
+in flight, until screen's sweep chooses each model's own.
+"""
 args_reason = """
 embeddings serves it as an embedding model. Mean pooling, per its model card and its GGUF's
 pooling_type. The repository also ships an mmproj (its image and audio encoders), which
@@ -288,6 +322,37 @@ pooling = "mean"
 no-mmproj = true
 b = 8192
 ub = 8192
+
+# The prompts' keys are MTEB's prompt names; MTEB picks one by its order
+# (mteb.models.abs_encoder.get_prompt_name): task-prompt type, task, type-prompt type, type,
+# prompt type.
+[models.prompts]
+source = "https://huggingface.co/google/embeddinggemma-2"
+reason = """
+EmbeddingGemma 2's prompts: the "prompts" of its sentence-transformers configuration
+(config_sentence_transformers.json in the model's repository), the card's "Task Instruction
+Prefixes" table as prompt names. Kept are the keys MTEB resolves (task types, prompt types, and
+type-prompt compounds), verbatim; the card's own names (SearchQuery, Document, FactChecking,
+...) are sentence-transformers' prompt_name values, which MTEB never looks up. The document
+prompt's "title: none" takes a corpus item's own title where it has one, the card's document
+form.
+"""
+
+[models.prompts.embedding]
+BitextMining = "task: search result | query: "
+Classification = "task: classification | query: "
+Clustering = "task: clustering | query: "
+InstructionRetrieval = "task: code retrieval | query: "
+MultilabelClassification = "task: classification | query: "
+PairClassification = "task: sentence similarity | query: "
+Reranking = "task: search result | query: "
+Retrieval = "task: search result | query: "
+Retrieval-document = "title: none | text: "
+Retrieval-query = "task: search result | query: "
+STS = "task: sentence similarity | query: "
+Summarization = "task: sentence similarity | query: "
+document = "title: none | text: "
+query = "task: search result | query: "
 
 # The ID's tag is Q4_K_XL, not the UD-Q4_K_XL of unsloth's file names: the router lists a section
 # by the quant type at the end of its tag (profile.RouterTag), so a UD-Q4_K_XL section lists as
@@ -317,6 +382,11 @@ The Mistral Small 4 candidate's main model, unsloth's UD-Q4_K_XL (no ggml-org or
 exists); the router loads its mmproj alongside. Its card states a 256k (262144) context; c =
 131072 is gpt-oss-120b's, so the candidates compare at set A's main-model context, and 262144
 would leave the pool under main-model's 3GiB floor. Its KV at this c is estimated at 2.8-5.1GiB.
+"""
+slots = 4
+slots_reason = """
+4 slots, the evaluation baseline's value, set A's: the candidates are judged at the requests in
+flight set A's models were, until screen's sweep chooses each model's own.
 """
 
 [models.sampling]
@@ -372,6 +442,11 @@ alongside. A Mamba-2 and Transformer hybrid MoE, 120B parameters with 12B active
 states up to 1M tokens of context. c = 131072 is gpt-oss-120b's, so the candidates compare at
 set A's main-model context. Only its attention layers keep a KV cache, ~1GiB at this c; its
 Mamba layers keep a fixed recurrent state per sequence, ~660MiB for 4 slots.
+"""
+slots = 4
+slots_reason = """
+4 slots, the evaluation baseline's value, set A's: the candidates are judged at the requests in
+flight set A's models were, until screen's sweep chooses each model's own.
 """
 args_reason = """
 ctx-checkpoints = 8 caps the context checkpoints each slot keeps at 8, down from llama.cpp's 32

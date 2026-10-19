@@ -315,13 +315,14 @@ func TestFloors(t *testing.T) {
 }
 
 // TestTranscriptionRequest shows fitness's timed transcription and capacity's are one shape, the
-// quality stage's ASR task's: the card's prompt, ASRPrompt, first and the clip after it, at
-// temperature 0, with reasoning and the prompt cache off; capacity's carries its nonce request
-// after the clip. TestQualityAudio shows the ASR task is given the same prompt.
+// quality stage's ASR task's: the model's ASR prompt, read from the profile, first and the clip
+// after it, at temperature 0, with reasoning and the prompt cache off; capacity's carries its
+// nonce request after the clip. TestQualityAudio shows the ASR task is given the same prompt.
 func TestTranscriptionRequest(t *testing.T) {
-	prompt := gate.ASRPrompt
-
 	h := newHarness(t, gemmaE4B)
+	// A changed prompt in the profile is the one every request sends.
+	const prompt = "Transcribe this clip, as the profile says."
+	h.runner.Profile.Model(gemmaE4B).Prompts.ASR = prompt
 	h.run(t, "", nil)
 	// The set stage's crossing probe sends capacity's request too, a round at a time.
 	if len(h.router.audio) < 1+4+1 {

@@ -364,7 +364,7 @@ func (r *Runner) newLoad(c *client, a assignment) *load {
 		}
 		return l
 	}
-	rec := &recorder{c: c, model: a.model, role: a.role, media: r.Media}
+	rec := &recorder{c: c, model: a.model, role: a.role, media: r.Media, asr: r.asrPrompt(a.model)}
 	l.send = func(ctx context.Context, n uint64) (int, error) {
 		comp, err := c.complete(ctx, rec.body(concurrent.Prompt(fmt.Sprintf("nonce-%016x", n))))
 		return comp.Timings.PredictedN, err
@@ -542,7 +542,7 @@ func (r *Runner) cross(ctx context.Context, c *client, roles []assignment, done 
 			continue
 		}
 		cfg.Chat = append(cfg.Chat, concurrent.ChatStream{
-			Name: a.role, Chatter: &recorder{c: c, model: a.model, role: a.role, media: r.Media, cutOff: true}, Workers: 1,
+			Name: a.role, Chatter: &recorder{c: c, model: a.model, role: a.role, media: r.Media, asr: r.asrPrompt(a.model), cutOff: true}, Workers: 1,
 		})
 	}
 	for {

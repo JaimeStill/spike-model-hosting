@@ -193,7 +193,7 @@ func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
 		return broken(name, RoleAudio, err)
 	}
 	began := time.Now()
-	err = r.ASR.ASR(ctx, r.Router, t.model, set, listPath, out, ceiling)
+	err = r.ASR.ASR(ctx, r.Router, t.model, set, listPath, r.asrPrompt(t.model), out, ceiling)
 	wall := time.Since(began).Seconds()
 	var res ASRResult
 	if err == nil {

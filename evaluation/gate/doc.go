@@ -12,10 +12,11 @@
 //   - Fitness smokes each role the set assigns the model with the probe's request for it (a
 //     tool call, an image, an audio clip, an embedding), measures the role's single-stream
 //     floors from llama.cpp's timings or the client's clock, and reads the pool idle. The audio
-//     clip goes as the quality stage's ASR task sends one: the card's ASR prompt first, the clip
-//     after, at temperature 0 with reasoning off, the request capacity's audio streams send too.
-//   - Capacity puts the profile's slots of requests in flight on the model per role, through
-//     the concurrent package's run: no crossed nonce, the embedding tolerance held, the pool's
+//     clip goes as the quality stage's ASR task sends one: the model's ASR prompt, from the
+//     profile, first, the clip after, at temperature 0 with reasoning off, the request
+//     capacity's audio streams send too.
+//   - Capacity puts the model's slots, from the profile, of requests in flight on it per role,
+//     through the concurrent package's run: no crossed nonce, the embedding tolerance held, the pool's
 //     floor free at the peak, and the role's 4-stream floor.
 //   - Quality runs the agent role's tiers (AgentTiers), cheapest first, and stops at the first
 //     tier that fails. Tier 1 is BFCL's single-turn questions, 100 seeded across its 13
@@ -160,6 +161,7 @@
 //     GridCells and GridCell.Name name the cells. PrefixTokens is prefix reuse's prefix;
 //     ColdLoadWarm and ColdLoadCold are cold load's root commands.
 //   - Media are the image and audio clip the stages send, the probe's (LoadMedia); WAVSeconds
-//     is a clip's length. ASRPrompt is the card's ASR prompt, which fitness and capacity send
-//     with the clip and UV.ASR passes asr_quality.py, its one source.
+//     is a clip's length. The ASR prompt fitness, capacity and the set stage send with the clip,
+//     and UV.ASR passes asr_quality.py, is the profile's (profile.Prompts.ASR), its one source;
+//     so are the embedding prompts UV.Task passes mteb_quality.py (profile.Prompts.Embedding).
 package gate

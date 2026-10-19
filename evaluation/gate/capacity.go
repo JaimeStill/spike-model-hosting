@@ -27,10 +27,10 @@ var capacityInputs = []string{
 	"Compile the program, then run its tests.",
 }
 
-// capacity puts the profile's slots (4) of requests in flight on the model for each role it
-// takes, through the concurrent package's run, while the footprint reads the pool. A chat
-// role's run carries an embedding stream to the set's embedding model beside it; an embedding
-// model's run is one embedding stream a slot. Each run passes when every answer carries its own
+// capacity puts the model's slots, from its profile entry (4 for set A's), of requests in
+// flight on it for each role it takes, through the concurrent package's run, while the footprint
+// reads the pool. A chat role's run carries an embedding stream to the set's embedding model
+// beside it; an embedding model's run is one embedding stream a slot. Each run passes when every answer carries its own
 // nonce and no other, every batched vector holds the embedding tolerance, the pool's least free
 // memory stays at the floor, and each stream meets the role's 4-stream floor.
 func (r *Runner) capacity(ctx context.Context, rep *Report) []Check {
@@ -43,7 +43,7 @@ func (r *Runner) capacity(ctx context.Context, rep *Report) []Check {
 }
 
 func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
-	slots := r.Profile.Slots
+	slots := r.model().Slots
 	cfg := concurrent.Config{Rounds: 1, RequestTimeout: requestTimeout}
 	var rec *recorder
 	if role == RoleEmbedding {
@@ -58,7 +58,7 @@ func (r *Runner) capRole(ctx context.Context, c *client, role string) []Check {
 			})
 		}
 	} else {
-		rec = &recorder{c: c, model: r.Model, role: role, media: r.Media}
+		rec = &recorder{c: c, model: r.Model, role: role, media: r.Media, asr: r.asrPrompt(r.Model)}
 		cfg.Chat = []concurrent.ChatStream{{Name: role, Chatter: rec, Workers: slots}}
 		if e := r.Set.Roles.Embedding; e != "" {
 			cfg.Embed = []concurrent.EmbedStream{{Name: "embedding", Embedder: embedder{c, e}, Inputs: capacityInputs}}
@@ -162,6 +162,8 @@ type recorder struct {
 	model string
 	role  string
 	media Media
+	// asr is the model's ASR prompt (Runner.asrPrompt), which an audio request sends first.
+	asr string
 	// cutOff, set for the set stage's crossing probe, makes an answer that hit its max_tokens
 	// carrying no nonce at all an error (errCutOff), so the probe records it unanswered: it was
 	// cut off before it could carry one, and holds nothing of another request's.
@@ -210,7 +212,7 @@ func (rc *recorder) body(prompt string) map[string]any {
 	case RoleVision:
 		return chatBody(rc.model, []map[string]any{imagePart(rc.media.PNG), textPart("Describe this image in one sentence. " + repeat)}, visionMaxTokens, false)
 	case RoleAudio:
-		return transcriptionBody(rc.model, rc.media.WAV, repeat)
+		return transcriptionBody(rc.model, rc.asr, rc.media.WAV, repeat)
 	default:
 		// Room for a reasoning model's reasoning before its answer.
 		return chatBody(rc.model, prompt, 4096, false)

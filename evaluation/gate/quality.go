@@ -46,17 +46,20 @@ func mustPin(name string) string {
 // encoder the embedding tasks run through.
 const SuitesDir = "evaluation/suites"
 
-// MTEB runs one MTEB task on a router's model and leaves, in out, MTEB's result, <task>.json,
-// and the encoder's account of it, encoder.json (ReadMTEB).
+// MTEB runs one MTEB task on a router's model, its encoder adding prompts, the model's task
+// prompts by MTEB prompt name (profile.Prompts.Embedding; nil for a model whose card gives none),
+// and leaves, in out, MTEB's result, <task>.json, and the encoder's account of it, encoder.json
+// (ReadMTEB).
 type MTEB interface {
-	Task(ctx context.Context, router, model, task, out string) error
+	Task(ctx context.Context, router, model, task string, prompts map[string]string, out string) error
 }
 
-// ASR runs one tier of an ASR set on a router's audio model, the tier's list at tierPath, and
-// leaves Inspect AI's JSON log in out (ReadASR). A bar, a WER ceiling, stops the set early once
+// ASR runs one tier of an ASR set on a router's audio model, the tier's list at tierPath, each
+// clip sent after prompt, the model's ASR prompt (profile.Prompts.ASR), and leaves Inspect AI's
+// JSON log in out (ReadASR). A bar, a WER ceiling, stops the set early once
 // its WER can't come under the bar (asr_quality.py's WERStop); nil runs the whole tier.
 type ASR interface {
-	ASR(ctx context.Context, router, model, set, tierPath, out string, bar *float64) error
+	ASR(ctx context.Context, router, model, set, tierPath, prompt, out string, bar *float64) error
 }
 
 // UV runs the suites project's scripts with uv: `uv run --project <Project> --locked
@@ -78,19 +81,36 @@ type UV struct {
 	Claude, ClaudeConfig string
 }
 
-// Task runs the MTEB task through mteb_quality.py, and fails when uv does.
-func (u UV) Task(ctx context.Context, router, model, task, out string) error {
-	if err := u.run(ctx, "mteb_quality.py", "--router", router, "--model", model, "--task", task, "--output", out); err != nil {
+// Task runs the MTEB task through mteb_quality.py and fails when uv does. The prompts go to it as
+// a file, out's prompts.json, a JSON object kept beside the result: what the encoder was given.
+func (u UV) Task(ctx context.Context, router, model, task string, prompts map[string]string, out string) error {
+	if prompts == nil {
+		prompts = map[string]string{}
+	}
+	// encoding/json writes a map's keys sorted, so the file is the same on every run.
+	js, err := json.MarshalIndent(prompts, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(out, "prompts.json")
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, append(js, '\n'), 0o644); err != nil {
+		return err
+	}
+	if err := u.run(ctx, "mteb_quality.py", "--router", router, "--model", model, "--task", task,
+		"--prompts", path, "--output", out); err != nil {
 		return fmt.Errorf("uv run mteb_quality.py --task %s: %w", task, err)
 	}
 	return nil
 }
 
-// ASR runs the set's tier through asr_quality.py eval, with ASRPrompt as its prompt, and fails
+// ASR runs the set's tier through asr_quality.py eval, with prompt as its --prompt, and fails
 // when uv does.
-func (u UV) ASR(ctx context.Context, router, model, set, tierPath, out string, bar *float64) error {
+func (u UV) ASR(ctx context.Context, router, model, set, tierPath, prompt, out string, bar *float64) error {
 	args := []string{"eval", "--router", router, "--model", model, "--set", set, "--tier", tierPath, "--output", out,
-		"--prompt", ASRPrompt}
+		"--prompt", prompt}
 	if bar != nil {
 		args = append(args, "--bar", strconv.FormatFloat(*bar, 'g', -1, 64))
 	}
@@ -239,7 +259,11 @@ func (r *Runner) mtebTask(ctx context.Context, t target, task string) Check {
 		return broken(task, RoleEmbedding, err)
 	}
 	began := time.Now()
-	err := r.MTEB.Task(ctx, r.Router, t.model, task, out)
+	var prompts map[string]string
+	if m := r.Profile.Model(t.model); m != nil && m.Prompts != nil {
+		prompts = m.Prompts.Embedding
+	}
+	err := r.MTEB.Task(ctx, r.Router, t.model, task, prompts, out)
 	wall := time.Since(began).Seconds()
 	var res MTEBResult
 	if err == nil {

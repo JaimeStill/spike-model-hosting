@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -48,7 +49,6 @@ func TestLoadNamesMissingField(t *testing.T) {
 	}{
 		{"host_class =", "host_class"},
 		{"bind =", "bind"},
-		{"slots =", "slots"},
 		{"kv =", "kv"},
 		{"name = \"llama.cpp\"", "engine.name"},
 		{"backend =", "engine.backend"},
@@ -69,6 +69,8 @@ func TestLoadNamesMissingField(t *testing.T) {
 		{"card_context =", "models[0].card_context"},
 		{"c = 131072", "models[0].c"},
 		{"c = 32768", "defaults.c"},
+		{"slots =", "models[0].slots"},
+		{"slots_reason =", "models[0].slots_reason"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.field, func(t *testing.T) {
@@ -116,7 +118,8 @@ func TestLoadNamesInvalidValue(t *testing.T) {
 		{`bind = "tailnet"`, `bind = "lan"`, "bind"},
 		{`kv = "unified"`, `kv = "shared"`, "kv"},
 		{`min_build = "b11452"`, `min_build = "0.4.0"`, "engine.min_build"},
-		{`slots = 4`, `slots = -1`, "slots"},
+		{`slots = 4`, `slots = 0`, "models[0].slots"},
+		{`slots = 4`, `slots = -1`, "models[0].slots"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.field, func(t *testing.T) {
@@ -163,14 +166,16 @@ func TestRenderPresets(t *testing.T) {
 	}
 }
 
-// TestStrixHaloMatchesPinnedPreset renders the Strix Halo profile and compares the sections, keys
-// and values of set A, its startup set, with the pinned copy of personal-agents' 96GiB preset. The
-// differences allowed are load-on-startup = true and hf-repo = the section's name on each of set
-// A's sections, and mtmd-batch-max-tokens on a model that caps its image batch (the vision
-// model's, from evaluation's slice 8), which the profile renders and the pinned copy lacks. Every
-// other set's model
-// renders without load-on-startup and is left out of the comparison: the pinned copy predates the
-// candidates.
+// TestStrixHaloMatchesPinnedPreset renders the Strix Halo profile and compares the values each of
+// set A's models, its startup set, runs at with the pinned copy of personal-agents' 96GiB preset.
+// Each side is compared as the router applies it, [*] and then the model's section over it, so a
+// key the pinned copy sets in [*] and the profile in each section (parallel, each model's own
+// slots since screen's slice 2) compares as the same value. The differences allowed are
+// load-on-startup = true and hf-repo = the section's name on each of set A's sections, and
+// mtmd-batch-max-tokens on a model that caps its image batch (the vision model's, from
+// evaluation's slice 8), which the profile renders and the pinned copy lacks. Every other set's
+// model renders without load-on-startup and is left out of the comparison: the pinned copy
+// predates the candidates.
 func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 	p, err := profile.Load(strixHalo)
 	if err != nil {
@@ -185,7 +190,7 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := parseINI(t, string(text))
+	want := applied(parseINI(t, string(text)))
 
 	models := 0
 	for name, keys := range got {
@@ -200,6 +205,8 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 			continue
 		}
 		models++
+		keys = applied(map[string]map[string]string{"*": got["*"], name: keys})[name]
+		got[name] = keys
 		if keys["load-on-startup"] != "true" {
 			t.Errorf("[%s] load-on-startup = %q; want true", name, keys["load-on-startup"])
 		}
@@ -218,6 +225,7 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 	if models != 4 {
 		t.Errorf("rendered %d of set A's model sections; want 4", models)
 	}
+	delete(got, "*")
 	for name, wantKeys := range want {
 		gotKeys, ok := got[name]
 		if !ok {
@@ -674,6 +682,129 @@ func TestLoadNamesSamplingOutOfRange(t *testing.T) {
 	}
 }
 
+// TestLoadPrompts shows the Strix Halo profile's card prompts load as written: gemma-4-E4B's ASR
+// instruction and EmbeddingGemma 2's task prompts, each with its source, and none on a model
+// whose card gives none.
+func TestLoadPrompts(t *testing.T) {
+	p, err := profile.Load(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	asr := p.Model("ggml-org/gemma-4-E4B-it-GGUF:Q8_0").Prompts
+	if asr == nil || asr.ASR != "Transcribe the following speech segment in English into English text." ||
+		asr.Source != "https://huggingface.co/google/gemma-4-E4B-it" || len(asr.Embedding) != 0 {
+		t.Errorf("gemma-4-E4B's prompts %+v; want the card's ASR instruction alone, from its card", asr)
+	}
+	emb := p.Model("ggml-org/embeddinggemma-2-GGUF:Q8_0").Prompts
+	if emb == nil || emb.Embedding["STS"] != "task: sentence similarity | query: " ||
+		emb.Embedding["Retrieval-document"] != "title: none | text: " || len(emb.Embedding) != 14 || emb.ASR != "" {
+		t.Errorf("EmbeddingGemma 2's prompts %+v; want its 14 task prompts alone", emb)
+	}
+	if got := p.Model("ggml-org/gpt-oss-120b-GGUF:MXFP4").Prompts; got != nil {
+		t.Errorf("gpt-oss-120b's prompts %+v; want none", got)
+	}
+}
+
+// TestValidateNamesInvalidPrompts changes the Strix Halo profile's prompts in code, each one
+// breaking one rule, and expects the error that names it: a prompt belongs to a role the model
+// declares, carries its source and reason, and isn't empty, and a set's audio model gives the
+// ASR prompt its transcriptions send.
+func TestValidateNamesInvalidPrompts(t *testing.T) {
+	const (
+		gptOSS    = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+		e4b       = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+		embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+	)
+	card := func() *profile.Prompts {
+		return &profile.Prompts{Source: "https://example.com/card", Reason: "The card's."}
+	}
+	for _, tt := range []struct {
+		name string
+		edit func(p *profile.Profile)
+		want string
+	}{
+		{"an ASR prompt on a model without the audio role", func(p *profile.Profile) {
+			pr := card()
+			pr.ASR = "Transcribe this."
+			p.Model(gptOSS).Prompts = pr
+		}, "models[0].prompts.asr: only a model with the audio role transcribes"},
+		{"embedding prompts on a model without the embedding role", func(p *profile.Profile) {
+			pr := card()
+			pr.Embedding = map[string]string{"query": "query: "}
+			p.Model(gptOSS).Prompts = pr
+		}, "models[0].prompts.embedding: only a model with the embedding role takes embedding prompts"},
+		{"no prompt at all", func(p *profile.Profile) {
+			p.Model(gptOSS).Prompts = card()
+		}, "models[0].prompts: sets neither embedding nor asr"},
+		{"no source", func(p *profile.Profile) {
+			p.Model(embedding).Prompts.Source = ""
+		}, "models[3].prompts.source: required"},
+		{"no reason", func(p *profile.Profile) {
+			p.Model(e4b).Prompts.Reason = ""
+		}, "models[2].prompts.reason: required"},
+		{"an empty prompt", func(p *profile.Profile) {
+			p.Model(embedding).Prompts.Embedding["STS"] = ""
+		}, "models[3].prompts.embedding.STS: empty"},
+		{"a set's audio model without an ASR prompt", func(p *profile.Profile) {
+			p.Model(e4b).Prompts = nil
+		}, `sets[0].roles.audio: "ggml-org/gemma-4-E4B-it-GGUF:Q8_0" gives no prompts.asr to transcribe with`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			p, err := profile.Load(strixHalo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tt.edit(p)
+			if err := p.Validate(); err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("Validate = %v; want an error containing %q", err, tt.want)
+			}
+		})
+	}
+
+	base, err := os.ReadFile(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := addLine(t, string(base), "asr =", `instruction = "Transcribe this."`)
+	assertFails(t, writeProfile(t, text), "models.prompts.instruction: not a key the schema defines")
+}
+
+// TestRenderPresetsSlots shows each model's slots render as parallel in its own section, each
+// model's value its own, with its reason in the comment above, and none in [*], which keeps the
+// host class's unified KV.
+func TestRenderPresetsSlots(t *testing.T) {
+	got := render(t, skeleton)
+	ini := parseINI(t, got)
+	if v, ok := ini["*"]["parallel"]; ok {
+		t.Errorf("[*] parallel = %q; want the key absent, each model's section setting its own", v)
+	}
+	if v := ini["*"]["kv-unified"]; v != "true" {
+		t.Errorf("[*] kv-unified = %q; want true", v)
+	}
+	for id, want := range map[string]string{
+		"ggml-org/gpt-oss-120b-GGUF:MXFP4":    "4",
+		"ggml-org/embeddinggemma-2-GGUF:Q8_0": "2",
+	} {
+		if v := ini[id]["parallel"]; v != want {
+			t.Errorf("[%s] parallel = %q; want %s", id, v, want)
+		}
+	}
+	at := strings.Index(got, "; 2 slots, so the render shows each model's own.")
+	section := strings.Index(got, "[ggml-org/embeddinggemma-2-GGUF:Q8_0]")
+	if at < 0 || section < 0 || at > section || strings.Contains(got[at:section], "\n[") {
+		t.Errorf("the embedding model's slots reason does not render in the comment above its section")
+	}
+	// The router's own parallel and kv-unified keys, long or short, stay the typed fields'.
+	base, err := os.ReadFile(skeleton)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"parallel", "np", "kv-unified", "kvu"} {
+		text := addLine(t, string(base), "ub =", key+" = 4")
+		assertFails(t, writeProfile(t, text), "models[1].args."+key+": rendered from the profile's typed fields")
+	}
+}
+
 // TestRenderPresetsReasoning shows a reasoning effort, when one is set, renders as the chat
 // template's reasoning_effort; set A sets none.
 func TestRenderPresetsReasoning(t *testing.T) {
@@ -826,6 +957,24 @@ func parseINI(t *testing.T, text string) map[string]map[string]string {
 		}
 	}
 	return sections
+}
+
+// applied returns each model section of sections as the router applies it: the [*] section's
+// keys, then the section's own over them. [*] itself is left out.
+func applied(sections map[string]map[string]string) map[string]map[string]string {
+	out := map[string]map[string]string{}
+	for name, keys := range sections {
+		if name == "*" {
+			continue
+		}
+		merged := maps.Clone(sections["*"])
+		if merged == nil {
+			merged = map[string]string{}
+		}
+		maps.Copy(merged, keys)
+		out[name] = merged
+	}
+	return out
 }
 
 // sameValue reports whether two presets values are equal, as numbers when both are: llama.cpp

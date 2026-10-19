@@ -589,3 +589,21 @@ architect ran steps a to d on 2026-10-19, with no output differing from the runb
   The idle pool read 3464 to 3491 MiB free at fitness, and the least free at capacity's peak was
   3446 MiB (the agent's), against the 2816 MiB floor. The figures sit with the OS update's on
   b11715; the embedding's throughput and query time read faster, from one run each.
+
+### Per-model slots, 2026-10-19
+
+`screen`'s slice 2 moved the slots from the profile's one host-wide value into each model's
+entry, rendered as each section's own `parallel` beside `[*]`'s `kv-unified = true`; every model
+keeps 4, so set A's values are unchanged. The new render, sha256
+`591c0ddbf57c04d3af6576dc8f951801d4c3d6a852dedd92b2d75a08be6f40b8`, replaced `9c983739` with no
+root command and no restart, by the runbook's "The preset file's write access": written beside
+`models.ini` in `/etc/llama-router`, renamed over it, and applied with `GET /models?reload=1`.
+
+- **The install.** `sha256sum /etc/llama-router/models.ini` on the Framework reads `591c0ddb…`,
+  the committed render. The file is now the service user's (`-rw-r--r-- <user>:<group>`), as a
+  rename leaves it, until the next install replaces it with a root-owned one.
+- **The reload.** It unloaded nothing: each model's arguments are the same as before
+  (`--parallel 4` and `--kv-unified` on each), so set A stayed loaded, and `/props` reports
+  `total_slots` 4 for each of its models.
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a, with its new slots check (each model's `total_slots` against its profile entry).

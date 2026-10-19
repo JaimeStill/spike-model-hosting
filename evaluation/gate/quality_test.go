@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -216,16 +217,28 @@ func TestQualityEmbedding(t *testing.T) {
 		t.Errorf("SciFact detail %q; want its query and document prompts", d)
 	}
 
-	// Each task ran once, in order, through the suites project at the pinned Python, its output
-	// in the run directory's mteb/<task>, the caches under the state directory's.
+	// Each task ran once, in order, through the suites project at the pinned Python, given the
+	// model's prompts from the profile in its output's prompts.json, its output in the run
+	// directory's mteb/<task>, the caches under the state directory's.
 	calls := h.uv.calls(t)
 	if len(calls) != len(gate.EmbeddingTasks) {
 		t.Fatalf("uv calls %q; want one a task", calls)
 	}
+	wantPrompts := h.runner.Profile.Model(embedding).Prompts.Embedding
+	if wantPrompts["STS"] != "task: sentence similarity | query: " {
+		t.Fatalf("the test profile's embedding prompts %v lack STS's", wantPrompts)
+	}
 	for i, task := range gate.EmbeddingTasks {
+		out := filepath.Join(h.runner.Dir, "mteb", task)
+		var prompts map[string]string
+		if b, err := os.ReadFile(filepath.Join(out, "prompts.json")); err != nil {
+			t.Error(err)
+		} else if err := json.Unmarshal(b, &prompts); err != nil || !maps.Equal(prompts, wantPrompts) {
+			t.Errorf("%s: prompts.json %s (%v); want the profile's %v", task, b, err, wantPrompts)
+		}
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
-			"/module/evaluation/suites/mteb_quality.py --router %s --model %s --task %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
-			h.router.srv.URL, embedding, task, filepath.Join(h.runner.Dir, "mteb", task))
+			"/module/evaluation/suites/mteb_quality.py --router %s --model %s --task %s --prompts %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
+			h.router.srv.URL, embedding, task, filepath.Join(out, "prompts.json"), out)
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)
 		}
@@ -351,6 +364,9 @@ const (
 // and, with no bar, it passes. FLEURS English records the card's FLEURS figure beside it.
 func TestQualityAudio(t *testing.T) {
 	h := newHarness(t, gemmaE4B)
+	// The ASR task's prompt is the profile's: a changed one is the one passed.
+	const prompt = "Transcribe this clip, as the profile says."
+	h.runner.Profile.Model(gemmaE4B).Prompts.ASR = prompt
 	rep := h.run(t, "", nil)
 	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) {
@@ -395,7 +411,7 @@ func TestQualityAudio(t *testing.T) {
 	}
 
 	// Each set ran once, in order, through the suites project at the pinned Python, with its
-	// tier list, the card's prompt (ASRPrompt, the one fitness and capacity send), no bar, its
+	// tier list, the profile's prompt (the one fitness and capacity send), no bar, its
 	// log in the run directory's asr/<set>, the caches under the state directory's.
 	calls := h.uv.calls(t)
 	if len(calls) != len(gate.AudioSets) {
@@ -404,7 +420,7 @@ func TestQualityAudio(t *testing.T) {
 	for i, set := range gate.AudioSets {
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
 			"/module/evaluation/suites/asr_quality.py eval --router %s --model %s --set %s --tier %s --output %s --prompt %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
-			h.router.srv.URL, gemmaE4B, set, filepath.Join(h.runner.Tiers, gate.ASRTier(set)+".txt"), filepath.Join(h.runner.Dir, "asr", set), gate.ASRPrompt)
+			h.router.srv.URL, gemmaE4B, set, filepath.Join(h.runner.Tiers, gate.ASRTier(set)+".txt"), filepath.Join(h.runner.Dir, "asr", set), prompt)
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)
 		}
