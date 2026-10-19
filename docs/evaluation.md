@@ -78,7 +78,10 @@ Each tool, its kind, the stage that uses it, and why:
 The Python suites are one uv project, [`evaluation/suites`](../evaluation/suites), at Python
 3.14.8 with `uv.lock` committed; the coding agents, GuideLLM, uv, and Python are pinned in
 [`evaluation/mise.consumers.toml`](../evaluation/mise.consumers.toml). Every benchmark is the
-stock task, unforked.
+stock task, unforked. `mise run check` runs the suites' own Python tests through that uv and
+Python, offline, and fails on a machine without them, so the environment is set up once, from the
+repository root, before the check: `MISE_ENV=consumers mise -C evaluation install`, then
+`MISE_ENV=consumers mise -C evaluation exec -- uv sync --project suites --locked`.
 
 ## Floors
 

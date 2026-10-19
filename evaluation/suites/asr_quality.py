@@ -4,7 +4,7 @@ the router's audio model, and score it by word error rate.
     uv run --project evaluation/suites python evaluation/suites/asr_quality.py eval \
         --router http://framework:8080 --model ggml-org/gemma-4-E4B-it-GGUF:Q8_0 \
         --set librispeech-clean --tier evaluation/tiers/asr-librispeech-clean.txt \
-        --output DIR [--bar 0.05]
+        --output DIR --prompt TEXT [--bar 0.05]
 
     uv run --project evaluation/suites python evaluation/suites/asr_quality.py ids --set ami
 
@@ -82,19 +82,14 @@ SETS = {
     "fleurs-en": AsrSet(*FLEURS, "parquet-data/en_us/test-*.parquet", "raw_transcription", True),
 }
 
-# The card's ASR prompt (https://huggingface.co/google/gemma-4-E4B-it, "6. Audio"), the language
-# filled in, without its formatting bullets ("Only output the transcription, with no newlines";
-# "When transcribing numbers, write the digits"). On a clip of a word or two, gemma-4-E4B reads
-# the bullets back as the transcript: on AMI's 40 shortest tier clips the full prompt scored
-# 165% WER and the sentence alone 47%, and on 40 LibriSpeech test.other utterances both scored
-# 6.3%. The normalizer writes numbers as digits whichever way they come, so the bullets don't
-# bear on the score. The prompt goes first and the clip after it, the card's modality order for
-# audio ("4. Modality order"): on those LibriSpeech utterances clip-first scored 8.4%, dropping
-# the start of some, and on the short AMI clips it read the bullets back 17 times in 40. The
-# fitness and capacity stages send the same prompt in the same order (package evaluation/gate's
-# transcriptionBody); Go can't import this constant, so gate holds its own copy, asrPrompt, and a
-# gate test holds the two the same.
-PROMPT = "Transcribe the following speech segment in English into English text."
+# The prompt is the caller's, eval's --prompt: evaluate's quality stage passes the card's ASR
+# prompt, package evaluation/gate's ASRPrompt, its one source, which says why its formatting
+# bullets are left out; the fitness and capacity stages send the same. Each sample sends the
+# prompt first and the clip after it, the card's modality order for audio
+# (https://huggingface.co/google/gemma-4-E4B-it, "4. Modality order"): on 40 LibriSpeech
+# test.other utterances clip-first scored 8.4% WER against 6.3%, dropping the start of some, and
+# on AMI's 40 shortest tier clips it read the card's bullets back 17 times in 40. The fitness and
+# capacity stages send the same order (gate's transcriptionBody).
 
 # Greedy decoding, room for the longest clip's transcript, and the router's settings for a timed
 # transcription: the prompt cache off (llama.cpp's cache_prompt) and reasoning off (the
@@ -259,9 +254,9 @@ class WERStop:
 
 
 @task
-def asr(name: str, tier: str, bar: float | None = None):
-    """One tier of the set name's utterances, transcribed and scored by WER; a bar stops it
-    early."""
+def asr(name: str, tier: str, prompt: str, bar: float | None = None):
+    """One tier of the set name's utterances, each sent after prompt, transcribed and scored by
+    WER; a bar stops it early."""
     spec = SETS[name]
     dataset, uids = read_list(tier)
     if dataset != spec.dataset:
@@ -270,7 +265,7 @@ def asr(name: str, tier: str, bar: float | None = None):
     samples = [
         Sample(
             id=u,
-            input=[ChatMessageUser(content=[ContentText(text=PROMPT), ContentAudio(audio=found[u]["wav"], format="wav")])],
+            input=[ChatMessageUser(content=[ContentText(text=prompt), ContentAudio(audio=found[u]["wav"], format="wav")])],
             target=found[u]["text"],
             metadata={"audio_s": found[u]["audio_s"]},
         )
@@ -282,7 +277,7 @@ def asr(name: str, tier: str, bar: float | None = None):
         scorer=wer(),
         config=GENERATE,
         early_stopping=WERStop(bar) if bar is not None else None,
-        metadata={"set": name, "dataset": spec.dataset, "normalizer": NORMALIZER, "prompt": PROMPT},
+        metadata={"set": name, "dataset": spec.dataset, "normalizer": NORMALIZER, "prompt": prompt},
     )
 
 
@@ -292,7 +287,7 @@ def main():
     pi = sub.add_parser("ids", help="print every scored utterance ID of a set")
     pi.add_argument("--set", required=True, choices=SETS)
     pe = sub.add_parser("eval", help="transcribe a tier with Inspect and write its JSON log")
-    for flag in ("--router", "--model", "--set", "--tier", "--output"):
+    for flag in ("--router", "--model", "--set", "--tier", "--output", "--prompt"):
         pe.add_argument(flag, required=True)
     pe.add_argument("--bar", type=float)
     a = p.parse_args()
@@ -312,7 +307,7 @@ def main():
     # One request at a time, in the list's order: RTFx is single-stream, and early stopping
     # judges the utterances in order.
     [log] = inspect_eval(
-        asr(name=a.set, tier=a.tier, bar=a.bar), model=model, log_dir=a.output, log_format="json",
+        asr(name=a.set, tier=a.tier, prompt=a.prompt, bar=a.bar), model=model, log_dir=a.output, log_format="json",
         max_connections=1, max_samples=1, display="plain", log_images=False,
     )
     if log.status != "success":

@@ -86,9 +86,11 @@ func (u UV) Task(ctx context.Context, router, model, task, out string) error {
 	return nil
 }
 
-// ASR runs the set's tier through asr_quality.py eval, and fails when uv does.
+// ASR runs the set's tier through asr_quality.py eval, with ASRPrompt as its prompt, and fails
+// when uv does.
 func (u UV) ASR(ctx context.Context, router, model, set, tierPath, out string, bar *float64) error {
-	args := []string{"eval", "--router", router, "--model", model, "--set", set, "--tier", tierPath, "--output", out}
+	args := []string{"eval", "--router", router, "--model", model, "--set", set, "--tier", tierPath, "--output", out,
+		"--prompt", ASRPrompt}
 	if bar != nil {
 		args = append(args, "--bar", strconv.FormatFloat(*bar, 'g', -1, 64))
 	}

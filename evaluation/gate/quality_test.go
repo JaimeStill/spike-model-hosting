@@ -395,16 +395,16 @@ func TestQualityAudio(t *testing.T) {
 	}
 
 	// Each set ran once, in order, through the suites project at the pinned Python, with its
-	// tier list, no bar, its log in the run directory's asr/<set>, the caches under the state
-	// directory's.
+	// tier list, the card's prompt (ASRPrompt, the one fitness and capacity send), no bar, its
+	// log in the run directory's asr/<set>, the caches under the state directory's.
 	calls := h.uv.calls(t)
 	if len(calls) != len(gate.AudioSets) {
 		t.Fatalf("uv calls %q; want one a set", calls)
 	}
 	for i, set := range gate.AudioSets {
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
-			"/module/evaluation/suites/asr_quality.py eval --router %s --model %s --set %s --tier %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
-			h.router.srv.URL, gemmaE4B, set, filepath.Join(h.runner.Tiers, gate.ASRTier(set)+".txt"), filepath.Join(h.runner.Dir, "asr", set))
+			"/module/evaluation/suites/asr_quality.py eval --router %s --model %s --set %s --tier %s --output %s --prompt %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
+			h.router.srv.URL, gemmaE4B, set, filepath.Join(h.runner.Tiers, gate.ASRTier(set)+".txt"), filepath.Join(h.runner.Dir, "asr", set), gate.ASRPrompt)
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)
 		}

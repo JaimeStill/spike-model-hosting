@@ -163,11 +163,16 @@ func (r *Runner) fitAudio(ctx context.Context, c *client) []Check {
 	return []Check{smoke, rtfx}
 }
 
-// asrPrompt is the card's ASR prompt (https://huggingface.co/google/gemma-4-E4B-it, "6. Audio"),
-// the language filled in and its formatting bullets left out. The quality stage's ASR task sends
-// the same sentence, asr_quality.py's PROMPT, which says why the bullets are left out; Python
-// can't read a Go constant, so it is written twice, and a test holds the two the same.
-const asrPrompt = "Transcribe the following speech segment in English into English text."
+// ASRPrompt is the card's ASR prompt (https://huggingface.co/google/gemma-4-E4B-it, "6. Audio"),
+// the language filled in, without its formatting bullets ("Only output the transcription, with
+// no newlines"; "When transcribing numbers, write the digits"). On a clip of a word or two,
+// gemma-4-E4B reads the bullets back as the transcript: on AMI's 40 shortest tier clips the full
+// prompt scored 165% WER and the sentence alone 47%, and on 40 LibriSpeech test.other utterances
+// both scored 6.3%. The normalizer writes numbers as digits whichever way they come, so the
+// bullets don't bear on the score. This is its one source: fitness and capacity send it, and
+// UV.ASR passes it to the quality stage's ASR task, asr_quality.py, as its --prompt, so every
+// stage that times or scores a transcription asks for one the same way.
+const ASRPrompt = "Transcribe the following speech segment in English into English text."
 
 // transcriptionBody is a timed transcription of wav by model, as fitness and capacity send it
 // and as the quality stage's ASR task does: the card's prompt first and the clip after it (the
@@ -179,7 +184,7 @@ const asrPrompt = "Transcribe the following speech segment in English into Engli
 // clip.", which put fitness's RTFx at 1.2-1.5 against its floor of 5. A non-empty after follows
 // the clip as a text part of its own: capacity's request to repeat its nonce.
 func transcriptionBody(model string, wav []byte, after string) map[string]any {
-	content := []map[string]any{textPart(asrPrompt), audioPart(wav)}
+	content := []map[string]any{textPart(ASRPrompt), audioPart(wav)}
 	if after != "" {
 		content = append(content, textPart(after))
 	}

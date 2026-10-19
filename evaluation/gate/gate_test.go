@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -17,8 +16,9 @@ import (
 	"github.com/JaimeStill/spike-model-hosting/hosting/profile"
 )
 
-// strixHalo is the profile the runs are judged by: set A's models, roles and budget.
-const strixHalo = "../../devices/strix-halo/profile.toml"
+// strixHalo is the profile the runs are judged by, set A's models, roles and budget: the
+// committed Strix Halo profile's set A, held in testdata so that tuning the live one moves no test.
+const strixHalo = "testdata/profile.toml"
 
 const (
 	gptOSS    = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
@@ -37,7 +37,8 @@ type harness struct {
 	runner    *gate.Runner
 }
 
-// newHarness returns a runner for model in set A against a fake router with set A loaded, the
+// newHarness returns a runner for model in set A (testdata/profile.toml) against a fake router
+// with set A loaded, the
 // test floors (testdata/floors.toml), a pool with 3333MiB free, as set A left it idle on b11669, no bars, a fake uv
 // that answers each MTEB task, ASR set, vision tier, BFCL tier and τ2 domain with its recorded
 // result, a fake conform run in which Pi fits and Claude Code and OpenCode drop at their first
@@ -314,19 +315,11 @@ func TestFloors(t *testing.T) {
 }
 
 // TestTranscriptionRequest shows fitness's timed transcription and capacity's are one shape, the
-// quality stage's ASR task's: the card's prompt, asr_quality.py's PROMPT, first and the clip after
-// it, at temperature 0, with reasoning and the prompt cache off; capacity's carries its nonce
-// request after the clip.
+// quality stage's ASR task's: the card's prompt, ASRPrompt, first and the clip after it, at
+// temperature 0, with reasoning and the prompt cache off; capacity's carries its nonce request
+// after the clip. TestQualityAudio shows the ASR task is given the same prompt.
 func TestTranscriptionRequest(t *testing.T) {
-	src, err := os.ReadFile("../suites/asr_quality.py")
-	if err != nil {
-		t.Fatal(err)
-	}
-	m := regexp.MustCompile(`(?m)^PROMPT = "([^"]*)"$`).FindSubmatch(src)
-	if m == nil {
-		t.Fatal(`asr_quality.py holds no PROMPT = "..." line`)
-	}
-	prompt := string(m[1])
+	prompt := gate.ASRPrompt
 
 	h := newHarness(t, gemmaE4B)
 	h.run(t, "", nil)

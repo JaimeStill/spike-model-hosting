@@ -47,16 +47,16 @@
 //   - Quality runs the audio role's ASR sets (AudioSets: the Open ASR Leaderboard's English
 //     LibriSpeech test-clean and test-other, VoxPopuli, AMI and Earnings-22, and FLEURS English),
 //     150 seeded utterances each, the tier lists in evaluation/tiers, through the suites project's
-//     Inspect AI task, asr_quality.py, which sends each clip with the card's ASR prompt through
-//     Inspect's openai-api provider, one at a time. Each set's corpus WER (every word error over
-//     every reference word, after the leaderboard's English normalizer) is judged against its
-//     ceiling, by tier name (asr-<set>), under [bars_at_most] in evaluation/bars.toml, and
-//     recorded, never failing, without one. A ceiling also stops the set early: after the
-//     screening fifth, once the one-sided 95% lower bound on the WER (a ratio estimator's,
-//     utterance-clustered) is above it. Each check records the RTFx (the audio's seconds over the
-//     requests'), the utterances, errors and words, the wall time, the dataset's revision, the
-//     normalizer's source and Inspect's release, and, for a set the model's card reports, the
-//     card's figure beside ours.
+//     Inspect AI task, asr_quality.py, which sends each clip with the card's ASR prompt, given it
+//     as --prompt, through Inspect's openai-api provider, one at a time. Each set's corpus WER
+//     (every word error over every reference word, after the leaderboard's English normalizer)
+//     is judged against its ceiling, by tier name (asr-<set>), under [bars_at_most] in
+//     evaluation/bars.toml, and recorded, never failing, without one. A ceiling also stops the
+//     set early: after the screening fifth, once the one-sided 95% lower bound on the WER (a
+//     ratio estimator's, utterance-clustered) is above it. Each check records the RTFx (the
+//     audio's seconds over the requests'), the utterances, errors and words, the wall time, the
+//     dataset's revision, the normalizer's source and Inspect's release, and, for a set the
+//     model's card reports, the card's figure beside ours.
 //   - Quality runs the vision role's tiers (VisionTiers), cheapest first, through the suites
 //     project's vision_quality.py, Inspect AI's openai-api provider at four requests in flight,
 //     and stops at the first tier that fails. Tier 1 is the probe's image and question five
@@ -160,5 +160,6 @@
 //     GridCells and GridCell.Name name the cells. PrefixTokens is prefix reuse's prefix;
 //     ColdLoadWarm and ColdLoadCold are cold load's root commands.
 //   - Media are the image and audio clip the stages send, the probe's (LoadMedia); WAVSeconds
-//     is a clip's length.
+//     is a clip's length. ASRPrompt is the card's ASR prompt, which fitness and capacity send
+//     with the clip and UV.ASR passes asr_quality.py, its one source.
 package gate

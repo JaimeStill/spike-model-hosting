@@ -3,7 +3,10 @@
 // they are set. The quality stage (package evaluation/gate) checks that a result was written by
 // the pinned MTEB or Inspect AI. Its test also runs the project's own Python tests, test_*.py,
 // through the pinned uv and Python, offline: the claude-code Inspect provider against a fake
-// claude executable (test_claude_code.py), and the tiers' early stops (test_early_stop.py).
+// claude executable (test_claude_code.py), and the tiers' early stops (test_early_stop.py). On a
+// machine without the consumers environment, or without the project's locked packages synced,
+// the test fails, naming the commands that set them up, rather than skipping: a passing check
+// has always run them.
 //
 // The API:
 //   - Pin returns the exact version pyproject.toml pins a package to.
