@@ -160,6 +160,26 @@
 // A run resumed from a later stage, or a full run continuing its screen, reloads nothing and keeps
 // the warm-up of the run it resumes.
 //
+// A run given an Index reuses the passed results it holds and records its own. A model's results
+// are kept under its ModelKey: the model, the router's build and the SHA-256 of its preset section
+// (profile.Profile.PresetSection), with its card's prompts and consumer reasoning beside them.
+// Each role's fitness and capacity records of a model are one entry, and so is each quality unit
+// (an MTEB task, an ASR set, a vision or BFCL tier), except harness fit, which sends to every role's
+// model and is kept under the set's key, a SHA-256 over the set's role assignments and each of its
+// models' keys; the set stage of a run (its model, or the set run) is one entry under the set's
+// key too. Every entry is kept under the method's key as well, the floors, bars, suites' pins,
+// tier lists and probe media, and holds a copy of its checks, so it outlives its run directory. A
+// unit whose entry matches is reused, each check naming the run it was measured in
+// (Check.ReusedFrom): a screen reuses a full run's entry or else a screen's, and a full run only a
+// full run's. A failed unit is never kept. A changed profile thus reruns the roles of the models
+// whose sections changed, harness fit and the set stage. Admission, the reload and warm-up, the
+// deep stage and the gates of the whole set's pool are measured in every run: fitness's warmed
+// peak, and a screen's quality pass's two gates, over the units it runs or, when it reuses them
+// all, one crossing round. Capacity's peak, the model's own slots in flight, is kept with its
+// role's record: the warmed peak, measured fresh, holds every model's KV, fixed when it loads. A
+// full run continuing a screen that reused a stopped tier reads that tier's screen output from the
+// run that measured it. Runner.Fresh reuses nothing and still records.
+//
 // The API:
 //   - Runner runs the stages, judging quality by its Bars (package tier's) and the conform tier
 //     by harness fit, and keeping the suites' output in its Dir; Runner.Run returns the
@@ -170,6 +190,10 @@
 //     marks a refused run. TierOne names a role's tier 1 units, which the set stage runs.
 //   - Stages and the Stage* constants name the stages; Roles and the Role* constants name the
 //     roles, RoleAgent being the profile's chat role (ProfileRole, ParseRole).
+//   - Index is the results index, kept as <state>/evaluate/IndexFile, beside the run
+//     directories: LoadIndex reads it, Index.Save writes it, and Runner.Index and Runner.Fresh put
+//     a run on it. Each Entry is a passed unit's records under its key; Keys are a run's, in its
+//     Report, each of the set's models' a ModelKey.
 //   - Floors are the per-role floors, data in evaluation/floors.toml, which LoadFloors reads.
 //   - Report, StageResult and Check are a run's record: the report its mode, whether it made a
 //     finalist and, for a full run, when its screen started; each check its measured value beside

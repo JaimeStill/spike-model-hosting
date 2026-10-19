@@ -86,14 +86,14 @@ var cardScores = map[string]map[string]cardScore{
 	},
 }
 
-// visionTiers runs the vision role's tiers on t's model in order, and stops at the first that
-// fails.
+// visionTiers runs the vision role's tiers on t's model in order, each reused from the index when
+// the run may reuse its passed record (unit), and stops at the first that fails.
 func (r *Runner) visionTiers(ctx context.Context, t target) []Check {
 	var checks []Check
 	for _, vt := range VisionTiers {
-		ch := r.visionTier(ctx, t, vt)
-		checks = append(checks, ch)
-		if !ch.Passed || ctx.Err() != nil {
+		tierChecks := r.unit(t, RoleVision, VisionCheck(vt.Name), func() []Check { return []Check{r.visionTier(ctx, t, vt)} })
+		checks = append(checks, tierChecks...)
+		if !passed(tierChecks) || ctx.Err() != nil {
 			break
 		}
 	}
@@ -169,9 +169,12 @@ func (r *Runner) visionTier(ctx context.Context, tg target, t VisionTier) Check 
 	var res TierResult
 	var err error
 	if tg.full {
-		res, err = r.restTier(t.Name, *list, out, filepath.Join(dir, restDir), func(listPath, restOut string) error {
-			return r.Vision.Vision(ctx, r.Router, tg.model, t.Name, listPath, restOut, nil)
-		})
+		var screenOut string
+		if screenOut, err = tg.screenDir(screen, filepath.Join("vision", t.Name, "logs")); err == nil {
+			res, err = r.restTier(t.Name, *list, screenOut, filepath.Join(dir, restDir), func(listPath, restOut string) error {
+				return r.Vision.Vision(ctx, r.Router, tg.model, t.Name, listPath, restOut, nil)
+			})
+		}
 	} else {
 		err = r.Vision.Vision(ctx, r.Router, tg.model, t.Name, input, out, floor)
 		if err == nil {

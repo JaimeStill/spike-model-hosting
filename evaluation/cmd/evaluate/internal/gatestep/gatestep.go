@@ -3,7 +3,7 @@
 //
 // Usage:
 //
-//	evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-full] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-guidellm path] [-restart] [-state dir]
+//	evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-full] [-fresh] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-guidellm path] [-restart] [-state dir]
 //
 // The model is -model, by router ID, or the model the set assigns -role: agent (the profile's
 // chat role; chat is accepted), vision, audio or embedding. The set is -set, or SPIKE_SET, or
@@ -36,6 +36,23 @@
 // directory. A screen starts no later than quality; a full run (-full -from) resumes only at set
 // or deep, from a full run, and a model's from set also needs that run's quality records of the
 // model's tier 1, which the set stage reuses as its alone figure.
+//
+// evaluate keeps an index of its passed results, <state>/evaluate/index.json, beside the run
+// directories, each entry a copy of a unit's records, so it outlives the run directory it was
+// measured in. A model's results are keyed by the model, the router's build and the SHA-256 of its
+// rendered preset section (with its card's prompts and consumer reasoning), the set stage's by
+// every one of the set's models' keys, and every entry by the method (the floors, the bars, the
+// suites' pins, the tier lists and the probe's media). A run reuses each unit whose key matches a
+// passed entry, and the report names the run each reused record was measured in: fitness's and
+// capacity's records of a role, each quality unit (an MTEB task, an ASR set, a vision or BFCL
+// tier; harness fit under the set's key), and the set stage. A screen reuses a screen's or a full
+// run's, a full run only a full run's. A changed profile reruns the roles of the models whose
+// sections changed, and the set stage. Admission, the reload and warm-up and the deep stage run
+// in every run, as do the gates of the whole set's pool: fitness's warmed peak and a screen's
+// quality pass, its two gates measured over the units it runs, or one crossing round when it
+// reuses them all. -fresh reuses nothing and still records. The suites' own caches stay off:
+// Inspect's eval_set log reuse is never used and MTEB runs without its result cache, so a unit
+// that runs is a real rerun.
 //
 // The report is <state>/evaluate/<UTC time>-<model>/report.json, the state directory being
 // -state, or SPIKE_STATE_DIR, or else the module root's untracked .state/. A summary of it goes
@@ -111,7 +128,7 @@ import (
 )
 
 // Usage is the run's usage line, which evaluate's own usage lists.
-const Usage = "evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-full] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-guidellm path] [-restart] [-state dir]"
+const Usage = "evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-full] [-fresh] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-guidellm path] [-restart] [-state dir]"
 
 const usage = "usage:\n  " + Usage + "\n"
 
@@ -125,6 +142,8 @@ type options struct {
 	// full makes the run a full run, a finalist's, continuing its screen; without it the run is a
 	// screen.
 	full bool
+	// fresh makes the run reuse nothing from the results index; it still records its results.
+	fresh bool
 	// consumers are the conform tier's consumer executables, by name; empty asks mise.
 	consumers map[string]string
 }
@@ -168,6 +187,7 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs.StringVar(&o.role, "role", "", "the role whose model to evaluate: agent, vision, audio or embedding")
 	fs.StringVar(&o.model, "model", "", "the model to evaluate, by router ID")
 	fs.BoolVar(&o.full, "full", false, "run the full run, a finalist's: continue the screen -run names, or screen first")
+	fs.BoolVar(&o.fresh, "fresh", false, "reuse no result from the results index: measure every unit again")
 	fs.StringVar(&o.from, "from", "", "the stage to start at, reusing an earlier run's results before it")
 	fs.StringVar(&o.run, "run", "", "with -from, the run directory to resume, default the newest; with -full, the screen to continue")
 	fs.StringVar(&o.ssh, "ssh", "", "the ssh destination the pool is read on; default the router's host")
@@ -292,9 +312,14 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 	if dir == "" {
 		dir = gate.RunDir(state, subject, time.Now())
 	}
+	index, err := gate.LoadIndex(state)
+	if err != nil {
+		return false, err
+	}
 	r := &gate.Runner{
 		Router: o.router, Profile: p, Set: set, Model: model, Floors: floors,
 		Footprint: gate.SSH{Dest: o.ssh}, Media: media, Log: stderr, Bars: bars, Dir: dir, Restarts: o.restart, Full: o.full,
+		Index: index, Fresh: o.fresh,
 	}
 	roles := r.Roles()
 	if len(roles) > 0 {
@@ -344,6 +369,9 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 		return false, err
 	}
 	if werr := gate.WriteReport(dir, rep); werr != nil {
+		return false, errors.Join(err, werr)
+	}
+	if werr := index.Save(); werr != nil {
 		return false, errors.Join(err, werr)
 	}
 	if werr := gate.WriteSummary(stdout, rep); werr != nil {

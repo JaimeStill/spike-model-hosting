@@ -68,3 +68,44 @@ func comment(text string) string {
 	}
 	return b.String()
 }
+
+// PresetSection returns the preset model id runs at, as the router applies it: the rendered [*]
+// section of shared defaults, then the model's own section, each under its header and holding
+// its key lines alone, in the order they render. A section's comments, the reasons, are left
+// out, and so is load-on-startup, which says when the model loads, not how it runs. The bytes
+// are the same for the same profile on every call: evaluate keys a model's results by their
+// SHA-256, so a change to a key the model runs at, its own or a shared default, changes them, and
+// a change to a reason, or to which set the router starts with, does not.
+func (p *Profile) PresetSection(id string) ([]byte, error) {
+	if p.Model(id) == nil {
+		return nil, fmt.Errorf("profile: no model %q", id)
+	}
+	var rendered strings.Builder
+	if err := p.RenderPresets(&rendered); err != nil {
+		return nil, err
+	}
+	var out strings.Builder
+	section, found := "", false
+	for line := range strings.Lines(rendered.String()) {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "" || strings.HasPrefix(line, ";"):
+			continue
+		case strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]"):
+			section = line[1 : len(line)-1]
+			if section == "*" || section == id {
+				found = found || section == id
+				out.WriteString(line + "\n")
+			}
+			continue
+		}
+		key, _, _ := strings.Cut(line, "=")
+		if (section == "*" || section == id) && strings.TrimSpace(key) != "load-on-startup" {
+			out.WriteString(line + "\n")
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("profile: the presets render no section for %s", id)
+	}
+	return []byte(out.String()), nil
+}

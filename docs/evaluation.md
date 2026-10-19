@@ -167,6 +167,42 @@ list, and carries the screen's pool and crossing gates. Then it runs the set sta
 figures, concurrent phase and slowdowns, and the deep stage. A full run given no screen screens
 first, in a new run directory, and continues only a finalist; a screen that fails is its report.
 
+## The results index
+
+evaluate keeps an index of its passed results, `.state/evaluate/index.json`, beside the run
+directories, and reuses them: a rerun measures only what changed.
+
+- **Keys.** A model's results are keyed by the model, the router's build (`/props` build_info),
+  and the SHA-256 of the preset it runs at: the rendered `[*]` defaults and its own section, key
+  lines only (`profile.Profile.PresetSection`), so a changed `c`, slots or sampling changes it and
+  a changed reason or startup set doesn't. Its card's prompts and consumer reasoning, which render
+  into no preset, are hashed beside it. The set's key is a SHA-256 over its role assignments and
+  every model's key. Every entry is also kept under the method's key: the floors, the bars, the
+  suites' pins, the tier lists and the probe's media; a change to any of them reruns everything.
+- **Units.** Each role's fitness and capacity records of a model are one entry, and each quality
+  unit (an MTEB task, an ASR set, a vision or BFCL tier) another, under the model's key. Harness
+  fit sends to every role's model, so it is kept under the set's key, and so is the set stage. A
+  changed profile reruns the roles of the models whose sections changed, harness fit, and the set
+  stage; a new build reruns everything.
+- **Mode.** A screen reuses a full run's entry or else a screen's; a full run reuses only a full
+  run's, which judged each tier's whole list. A full run continuing a screen that reused a stopped
+  tier reads the screen's samples from the run that measured them; once that run is removed,
+  screen again with `-fresh`.
+- **Never kept.** A failed unit is never kept, so it reruns. Admission (on paper), the reload and
+  warm-up, and the deep stage run every time, and so do the gates of the whole set's pool, which
+  depend on every model loaded: fitness's warmed peak, and a screen's quality-pass pool and
+  crossing gates, over the units it runs or, when every unit is reused, one crossing round.
+  Capacity's peak, the model's own slots in flight, stays with its role's record: the warmed peak
+  holds every model's KV, fixed when the model loads.
+- **The report** names, for each reused check, the run it was measured in (`reused_from`), and
+  holds the run's keys; the summary marks each reused check and stage. Each entry holds a copy of
+  its checks, so the index outlives the run directories removed once findings are committed.
+  `-fresh` reuses nothing and still records.
+
+The suites' own caches stay off, so a unit that runs is a real rerun: the Inspect suites call
+`eval`, never `eval_set` or `eval_retry`, with no model-output cache, and MTEB runs with
+`cache=None`. The suites' tests hold them so.
+
 ## Before each run
 
 - **The run reloads the set.** Every model run, and the set run, starts from freshly loaded
@@ -222,6 +258,9 @@ go run ./evaluation/cmd/evaluate -set a -role agent -full -run .state/evaluate/<
 # or deep.
 go run ./evaluation/cmd/evaluate -set a -role agent -full -from deep -run .state/evaluate/<run>
 
+# Screen again, reusing nothing from the results index.
+go run ./evaluation/cmd/evaluate -set a -role agent -fresh
+
 # The architect is at hand for the deep stage's two cold-load restarts.
 go run ./evaluation/cmd/evaluate -set a -role agent -full -restart
 ```
@@ -242,9 +281,9 @@ example `MISE_ENV=consumers mise run //evaluation:vision-tiers`; each rewrites t
 
 The goal record's Decisions plan these changes for `candidates`:
 
-- **A screen, not a full run.** Built in `screen` ("Screen and full run", above). Still to come:
-  results kept by model, build, and preset, so a changed profile reruns only its changed roles
-  plus the set stage. The estimate, 15 to 25 minutes a candidate, is extrapolated, not measured.
+- **A screen, not a full run.** Built in `screen` ("Screen and full run" and "The results index",
+  above), results kept by model, build, and preset, so a changed profile reruns only its changed
+  roles plus the set stage. The estimate, 15 to 25 minutes a candidate, is extrapolated, not measured.
   Set A's baseline stays two full runs, since its bars and spreads are what make a screen
   trustworthy.
 - **The concurrency count.** Every evaluated set reports the most agent sessions at once that

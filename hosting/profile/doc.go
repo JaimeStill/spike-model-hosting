@@ -56,6 +56,8 @@
 //   - Profile.RenderPresets writes the router's --models-preset INI file, every model's section
 //     with hf-repo = its ID, its own parallel = its Slots, and load-on-startup only for the
 //     startup set's models; [*] holds the shared defaults and the profile's KV mode.
+//     Profile.PresetSection returns the preset one model runs at, [*] and its own section, key
+//     lines alone: the bytes evaluate keys the model's results by.
 //   - Profile.RenderUnit writes the router's systemd unit, with a Host's values; Host.Validate
 //     reports a Host value that is missing or that the unit can't carry.
 //   - EngineBinary, PresetsPath and RouterPort are the install layout every unit renders.

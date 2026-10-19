@@ -102,9 +102,17 @@ type Runner struct {
 	// tier, the set stage and the deep stage. Without it the run is a screen, which ends at the
 	// quality stage.
 	Full bool
+	// Index is evaluate's index of passed results: with one, the run reuses each unit whose key
+	// matches a passed entry, and records each unit it passes, for the caller to save. Fresh
+	// reuses nothing, measuring every unit again, and still records. Without an Index, the run
+	// reuses and records nothing.
+	Index *Index
+	Fresh bool
 
 	// screen is the screen a full run continues.
 	screen *Report
+	// keys are the run's keys, read once its build is.
+	keys *Keys
 }
 
 // Roles returns the roles the set assigns Model, in the order Roles lists them; for a set run,
@@ -217,10 +225,17 @@ func (r *Runner) run(ctx context.Context, mode, from string, prior *Report) (*Re
 	if err != nil {
 		return nil, err
 	}
+	r.keys = nil
+	if r.Index != nil {
+		if r.keys, err = r.keysOf(build); err != nil {
+			return nil, err
+		}
+	}
 	rep := &Report{
 		Router: r.Router, Build: build, HostClass: r.Profile.HostClass, Set: r.Set.Name,
-		Model: r.Model, Roles: roles, Mode: mode, Started: time.Now().UTC(),
+		Model: r.Model, Roles: roles, Mode: mode, Started: time.Now().UTC(), Keys: r.keys,
 	}
+	defer r.record(rep)
 	if start > 0 {
 		if r.screen != nil {
 			screened := r.screen.Started
@@ -275,7 +290,14 @@ func (r *Runner) run(ctx context.Context, mode, from string, prior *Report) (*Re
 		run := stages[name]
 		r.logf("evaluate: %s %s (%s)\n", name, cmp.Or(r.Model, SetSubject(r.Set.Name)), mode)
 		began := time.Now()
-		checks := run(ctx, rep)
+		// The set stage is reused whole, under the set's key: every model of the set unchanged.
+		checks, ok := []Check(nil), false
+		if name == StageSet {
+			checks, ok = r.reusable(mode, r.setEntry(StageSet, "", "", cmp.Or(r.Model, SetSubject(r.Set.Name))))
+		}
+		if !ok {
+			checks = run(ctx, rep)
+		}
 		res := StageResult{Name: name, Status: StatusPass, Checks: checks, WallS: time.Since(began).Seconds()}
 		for _, c := range checks {
 			if !c.Passed {

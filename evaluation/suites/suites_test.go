@@ -1,8 +1,11 @@
 package suites_test
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/consumers"
@@ -43,5 +46,40 @@ func TestPython(t *testing.T) {
 		"--python", python, "python", "-W", "ignore", "-m", "unittest", "discover", "-p", "test_*.py")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("python tests: %v\n%s\nif uv can't resolve offline, %s", err, out, install)
+	}
+}
+
+// TestCachesOff shows the suites' own result caches stay off, so a unit evaluate runs is a real
+// rerun and evaluate's results index (package gate) is the only reuse: no script reuses Inspect
+// logs (eval_set, eval_retry) or caches model output (a generate cache, CachePolicy), and every
+// MTEB evaluation runs without its result cache (cache=None).
+func TestCachesOff(t *testing.T) {
+	scripts, err := filepath.Glob("*.py")
+	if err != nil || len(scripts) == 0 {
+		t.Fatalf("the suites' scripts: %q, %v", scripts, err)
+	}
+	reuse := regexp.MustCompile(`\beval_set\b|\beval_retry\b|\bCachePolicy\b|\bcache\s*=\s*True\b`)
+	mtebCalls := 0
+	for _, path := range scripts {
+		if strings.HasPrefix(path, "test_") {
+			continue
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(b)
+		if m := reuse.FindString(src); m != "" {
+			t.Errorf("%s uses %q: a cache or log reuse of the suite's own", path, m)
+		}
+		for _, call := range regexp.MustCompile(`mteb\.evaluate\([^)]*\)`).FindAllString(src, -1) {
+			mtebCalls++
+			if !regexp.MustCompile(`\bcache\s*=\s*None\b`).MatchString(call) {
+				t.Errorf("%s: %s runs with MTEB's result cache; want cache=None", path, call)
+			}
+		}
+	}
+	if mtebCalls == 0 {
+		t.Error("no script calls mteb.evaluate; the check of its cache checks nothing")
 	}
 }

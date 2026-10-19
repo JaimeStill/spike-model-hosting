@@ -38,11 +38,16 @@ func (r *Runner) fitness(ctx context.Context, rep *Report) []Check {
 	return append(r.perModel(ctx, rep, (*Runner).fitRoles), r.warmedCheck(rep.Warm))
 }
 
-// fitRoles smokes each role the model takes and measures its single-stream floors.
+// fitRoles smokes each role the model takes and measures its single-stream floors, reusing a
+// role's passed record from the index when its model's key matches (reusable).
 func (r *Runner) fitRoles(ctx context.Context, rep *Report) []Check {
 	c := &client{base: r.Router, hc: r.HTTP}
 	var checks []Check
 	for _, role := range rep.Roles {
+		if reused, ok := r.reusable(rep.Mode, r.modelEntry(StageFitness, role, "", r.Model)); ok {
+			checks = append(checks, reused...)
+			continue
+		}
 		switch role {
 		case RoleAgent:
 			checks = append(checks, r.fitAgent(ctx, c)...)

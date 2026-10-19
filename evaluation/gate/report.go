@@ -41,6 +41,10 @@ type Check struct {
 	// Stop is a sampled tier's early stop in a screen, the side and bound that ended it; nil
 	// for a tier that ran its whole list.
 	Stop *Stop `json:"stop,omitempty"`
+	// ReusedFrom names the run directory, under the state root's evaluate/, of the run that
+	// measured a check this run reused from the results index (Index); empty for a check
+	// measured in this run, or taken from the run it resumes or continues.
+	ReusedFrom string `json:"reused_from,omitempty"`
 }
 
 // measure returns a check of measured against floor by op.
@@ -126,6 +130,9 @@ type Report struct {
 	Ceiling *Ceiling `json:"ceiling,omitempty"`
 	// Warm is the run's reload and warm-up, nil for a run that stopped before it.
 	Warm *Warm `json:"warm,omitempty"`
+	// Keys are the keys the run's results are indexed by: each of the set's models', the set's
+	// and the method's; nil for a run with no index.
+	Keys *Keys `json:"keys,omitempty"`
 }
 
 // Stage returns the report's result for the stage named name, or nil.
@@ -253,6 +260,14 @@ func WriteSummary(w io.Writer, r *Report) error {
 		if s.Reused {
 			line += " (reused)"
 		}
+		if from := reusedFrom(s.Checks); len(from) > 0 {
+			n := len(slices.DeleteFunc(slices.Clone(s.Checks), func(c Check) bool { return c.ReusedFrom == "" }))
+			if n == len(s.Checks) {
+				line += " (reused from " + strings.Join(from, ", ") + ")"
+			} else {
+				line += fmt.Sprintf(" (%d of %d checks reused from %s)", n, len(s.Checks), strings.Join(from, ", "))
+			}
+		}
 		if s.Reason != "" {
 			line += "  " + s.Reason
 		}
@@ -279,6 +294,9 @@ func WriteSummary(w io.Writer, r *Report) error {
 			if c.Detail != "" {
 				fmt.Fprintf(&b, " (%s)", c.Detail)
 			}
+			if c.ReusedFrom != "" {
+				fmt.Fprintf(&b, " [reused from %s]", c.ReusedFrom)
+			}
 			b.WriteString("\n")
 		}
 	}
@@ -288,6 +306,18 @@ func WriteSummary(w io.Writer, r *Report) error {
 	}
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// reusedFrom returns the runs checks were reused from, each once, sorted.
+func reusedFrom(checks []Check) []string {
+	var runs []string
+	for _, c := range checks {
+		if c.ReusedFrom != "" && !slices.Contains(runs, c.ReusedFrom) {
+			runs = append(runs, c.ReusedFrom)
+		}
+	}
+	slices.Sort(runs)
+	return runs
 }
 
 // num formats v with as many decimals as it needs, up to three.

@@ -39,11 +39,16 @@ func (r *Runner) capacity(ctx context.Context, rep *Report) []Check {
 	return r.perModel(ctx, rep, (*Runner).capModel)
 }
 
-// capModel is capacity for the model, each role it takes.
+// capModel is capacity for the model, each role it takes, reusing a role's passed record from
+// the index when its model's key matches (reusable).
 func (r *Runner) capModel(ctx context.Context, rep *Report) []Check {
 	c := &client{base: r.Router, hc: r.HTTP}
 	var checks []Check
 	for _, role := range rep.Roles {
+		if reused, ok := r.reusable(rep.Mode, r.modelEntry(StageCapacity, role, "", r.Model)); ok {
+			checks = append(checks, reused...)
+			continue
+		}
 		checks = append(checks, r.capRole(ctx, c, role)...)
 	}
 	return checks

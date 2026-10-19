@@ -268,7 +268,8 @@ func (r *Runner) quality(ctx context.Context, rep *Report) []Check {
 	return append(slices.Concat(results...), w.gates(r.Floors.Pool.FreeMiB, what)...)
 }
 
-// roleQuality runs role's quality suite on t's model.
+// roleQuality runs role's quality suite on t's model, each unit reused from the index when the
+// run may reuse its passed record (unit).
 func (r *Runner) roleQuality(ctx context.Context, rep *Report, t target, role string) []Check {
 	var checks []Check
 	switch role {
@@ -276,14 +277,14 @@ func (r *Runner) roleQuality(ctx context.Context, rep *Report, t target, role st
 		return r.agentTiers(ctx, rep, t)
 	case RoleEmbedding:
 		for _, task := range EmbeddingTasks {
-			checks = append(checks, r.mtebTask(ctx, t, task))
+			checks = append(checks, r.unit(t, role, task, func() []Check { return []Check{r.mtebTask(ctx, t, task)} })...)
 			if ctx.Err() != nil {
 				break
 			}
 		}
 	case RoleAudio:
 		for _, set := range AudioSets {
-			checks = append(checks, r.asrSet(ctx, t, set))
+			checks = append(checks, r.unit(t, role, ASRTier(set), func() []Check { return []Check{r.asrSet(ctx, t, set)} })...)
 			if ctx.Err() != nil {
 				break
 			}

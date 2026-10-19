@@ -67,25 +67,24 @@ type Conform interface {
 	Run(ctx context.Context, plan passk.Plan) (passk.Result, error)
 }
 
-// agentTiers runs the agent role's tiers on t's model in order, and stops at the first that
-// fails. A full run reuses the screen's harness fit, which runs whole in a screen.
+// agentTiers runs the agent role's tiers on t's model in order, each reused from the index when
+// the run may reuse its passed record (unit), and stops at the first that fails. A full run
+// reuses the screen's harness fit, which runs whole in a screen.
 func (r *Runner) agentTiers(ctx context.Context, rep *Report, t target) []Check {
 	var checks []Check
 	for _, at := range AgentTiers {
-		var tierChecks []Check
-		switch {
-		case at.Name == ConformTier && t.full:
-			tierChecks = reusedConform(t)
-		case at.Name == ConformTier:
-			tierChecks = r.conformTier(ctx, rep, t, at)
-		default:
-			tierChecks = []Check{r.bfclTier(ctx, t, at)}
-		}
-		checks = append(checks, tierChecks...)
-		for _, c := range tierChecks {
-			if !c.Passed {
-				return checks
+		tierChecks := r.unit(t, RoleAgent, AgentCheck(at.Name), func() []Check {
+			switch {
+			case at.Name == ConformTier && t.full:
+				return reusedConform(t)
+			case at.Name == ConformTier:
+				return r.conformTier(ctx, rep, t, at)
 			}
+			return []Check{r.bfclTier(ctx, t, at)}
+		})
+		checks = append(checks, tierChecks...)
+		if !passed(tierChecks) {
+			return checks
 		}
 		if ctx.Err() != nil {
 			return checks
@@ -144,9 +143,12 @@ func (r *Runner) bfclTier(ctx context.Context, tg target, t AgentTier) Check {
 	began := time.Now()
 	var res TierResult
 	if tg.full {
-		res, err = r.restTier(t.Name, list, out, filepath.Join(dir, restDir), func(restList, restOut string) error {
-			return r.Agent.Agent(ctx, r.Router, tg.model, t.Name, restList, restOut, nil)
-		})
+		var screenOut string
+		if screenOut, err = tg.screenDir(screen, filepath.Join("agent", t.Name, "logs")); err == nil {
+			res, err = r.restTier(t.Name, list, screenOut, filepath.Join(dir, restDir), func(restList, restOut string) error {
+				return r.Agent.Agent(ctx, r.Router, tg.model, t.Name, restList, restOut, nil)
+			})
+		}
 	} else {
 		err = r.Agent.Agent(ctx, r.Router, tg.model, t.Name, listPath, out, floor)
 		if err == nil {

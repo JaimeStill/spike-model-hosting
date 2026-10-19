@@ -229,7 +229,10 @@ func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
 	began := time.Now()
 	var res ASRResult
 	if t.full {
-		res, err = r.restASR(ctx, t, set, list, out)
+		var screenOut string
+		if screenOut, err = t.screenDir(screen, filepath.Join("asr", set)); err == nil {
+			res, err = r.restASR(ctx, t, set, list, screenOut, out)
+		}
 	} else {
 		err = r.ASR.ASR(ctx, r.Router, t.model, set, listPath, r.asrPrompt(t.model), out, ceiling)
 		if err == nil {
@@ -278,11 +281,11 @@ func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
 }
 
 // restASR runs the rest of an ASR set's tier a full run continues: it reads the screen's run of
-// list from out, writes the utterances the screen stopped into out's rest/ as a list of their own,
-// runs that list whole, without a bar, into rest/, and returns the two runs together, checked to be
-// list's whole.
-func (r *Runner) restASR(ctx context.Context, t target, set string, list tier.List, out string) (ASRResult, error) {
-	screen, err := ReadASR(out)
+// list from screenOut, writes the utterances the screen stopped into out's rest/ as a list of
+// their own, runs that list whole, without a bar, into rest/, and returns the two runs together,
+// checked to be list's whole.
+func (r *Runner) restASR(ctx context.Context, t target, set string, list tier.List, screenOut, out string) (ASRResult, error) {
+	screen, err := ReadASR(screenOut)
 	if err == nil {
 		err = screen.matches(set, list)
 	}

@@ -1176,3 +1176,54 @@ func TestLoadNamesInvalidConsumers(t *testing.T) {
 		t.Errorf("Validate(consumers without a reason) = %v; want models[4].consumers.reason: required", err)
 	}
 }
+
+// TestPresetSection shows a model's preset section is the [*] defaults and its own section, key
+// lines alone, the same bytes on every call; that a change to a key it runs at changes them, and
+// a change to a reason does not; and that another model's section, load-on-startup and the
+// comments are left out.
+func TestPresetSection(t *testing.T) {
+	const chat, embed = "ggml-org/gpt-oss-120b-GGUF:MXFP4", "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+	p, err := profile.Load(skeleton)
+	if err != nil {
+		t.Fatal(err)
+	}
+	section := func() string {
+		t.Helper()
+		b, err := p.PresetSection(chat)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	got := section()
+	if !strings.HasPrefix(got, "[*]\njinja = true\n") || !strings.Contains(got, "\n["+chat+"]\nhf-repo = "+chat+"\nc = 131072\n") {
+		t.Errorf("PresetSection(%s) =\n%s\nwant [*] then the model's section, key lines alone", chat, got)
+	}
+	for _, absent := range []string{";", "load-on-startup", "[" + embed + "]"} {
+		if strings.Contains(got, absent) {
+			t.Errorf("PresetSection(%s) holds %q:\n%s", chat, absent, got)
+		}
+	}
+	if again := section(); again != got {
+		t.Errorf("a second PresetSection differs:\n%s\nwant\n%s", again, got)
+	}
+
+	m := p.Model(chat)
+	m.CReason += " A reason changed."
+	if s := section(); s != got {
+		t.Errorf("a changed reason changed the section:\n%s", s)
+	}
+	m.C /= 2
+	if s := section(); s == got || !strings.Contains(s, "\nc = 65536\n") {
+		t.Errorf("a changed c left the section\n%s", s)
+	}
+	m.C *= 2
+	p.Defaults.C /= 2
+	if s := section(); s == got {
+		t.Errorf("a changed default left the section\n%s", s)
+	}
+
+	if b, err := p.PresetSection("example/none-GGUF:Q4_0"); err == nil {
+		t.Errorf("PresetSection(unknown) = %q; want an error", b)
+	}
+}
