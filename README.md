@@ -50,7 +50,7 @@ The findings:
 
 ## What the Framework serves
 
-The Framework runs llama.cpp b11715 (`b11715-9d1878a43`, upstream Vulkan x64) behind the
+The Framework runs llama.cpp b11734 (`b11734-f3fb2fcdb`, upstream Vulkan x64) behind the
 profile's rendered unit and presets, serving set A: gpt-oss-120b (agent), Gemma 4 26B-A4B
 (vision), gemma-4-E4B (audio), and EmbeddingGemma 2 (embedding). Set A's scores from two full
 evaluation runs set the bars every candidate is judged by

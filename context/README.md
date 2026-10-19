@@ -168,7 +168,7 @@ of the admin tooling.
 - **llama.cpp builds:** each build move on the Framework, with its release-note review and
   what was re-verified on the new build, and what the main-model candidates loaded (files,
   handlers, the CPU fallback), in
-  [`llama-cpp-builds.md`](../devices/strix-halo/llama-cpp-builds.md). The Framework runs b11715.
+  [`llama-cpp-builds.md`](../devices/strix-halo/llama-cpp-builds.md). The Framework runs b11734.
 - **Gateways:** none, agentgateway, and LiteLLM.
 - **Admin tool:** a CLI on go-cli-sdk over the profile, with personal-agents' `outpost` as its
   baseline.

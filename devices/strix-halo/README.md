@@ -71,9 +71,9 @@ packages trail upstream's model support. The profile holds llama.cpp to a minimu
   the build; a rollback points it back.
 - The previous build stays in its directory for diagnosis until the next move removes it.
 
-The Framework runs b11715 (`b11715-9d1878a43`). b11669 and the builds before it (b11529, b11565
-and b11572) are still in their directories; `screen`'s move to b11734 removes them, keeping
-b11715 as the previous build.
+The Framework runs b11734 (`b11734-f3fb2fcdb`), since 2026-10-19; b11715 stays in
+`/opt/llama.cpp/b11715`. `screen`'s move removed b11669 and the builds before it (b11529,
+b11565 and b11572).
 
 ## The rendered unit and presets
 

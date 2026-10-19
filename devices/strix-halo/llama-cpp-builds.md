@@ -551,4 +551,41 @@ The root commands, in the order the architect runs them in one sitting, are the 
 the deletions of "The models the host keeps". The rendered presets' sha256 is
 `9c983739f3142f01a92726b56d286150c3f21c3df50f8953c957a815401962ea`; the unit's is
 `83b0a95c16769d0ee7abb7f6b9e9aec9ccb61d7f57831f508465645e31c51554`, the installed one. The
-probe and every role's fitness on b11734 are recorded here once the sitting has run.
+architect ran steps a to d on 2026-10-19, with no output differing from the runbook's.
+
+- **The install.** b11734 is installed at `/opt/llama.cpp/b11734` (`llama-server --version`:
+  `version: 0.7.0-dev (build 11734, commit f3fb2fcdb)`). The rendered `models.ini` and the unit
+  are installed, so the installed presets are the committed render (`9c983739`). The b11715
+  files are kept as `/etc/llama-router/*.b11715`.
+- **The preset directory and the deletions.** `/etc/llama-router` is `drwxrwxr-x
+  root:<group>`, the service user's group, and `models.ini` is still `root:root` `0644`. The
+  cache's `hub` holds the five models' directories the profile keeps (set A's four and
+  Nemotron 3.5 Super, still unscreened), with no Mistral Small 4 directory and no retired
+  directory beside the cache; the models drive went from 356G used to 155G. `GET /models` still
+  lists Mistral Small 4, a preset, unloaded, now with no sidecars on disk. `/opt/llama.cpp` holds
+  b11715, b11734 and `current`.
+- **The switch.** `current` points at b11734 and `llama-router` restarted at 19:27:01 UTC. The
+  `evaluate coldload -set a` watch saw the router up in 0.5s and all four of set A's models
+  loaded in 16.5s (EmbeddingGemma 2 2.0s, gemma-4-E4B 3.3s, 26B-A4B 4.8s, gpt-oss-120b 16.5s),
+  with no manual load; `/props` reports `b11734-f3fb2fcdb`. The new build's files had just been
+  written, so this isn't a warm or cold measurement, and the move's cold-load pair (the
+  runbook's step e) waits for the deep stage's `-restart`.
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a: every package ok, in 8.8s.
+- **The idle pool.** With set A loaded and idle after the restart, `amdgpu_top -p --no-pc` read
+  `GTT 94798/98304 MiB` at 19:27:45 UTC: 3506 MiB free, above the 2816 MiB floor.
+- **Fitness, every role.** As at the OS update: each role's run started from a reload of set A
+  over the API (30 s idle, then a footprint reading of 3506 MiB free each time) with `TMPDIR` in
+  `.state/tmp`, and was interrupted once its quality stage had begun. Admission, fitness and
+  capacity passed for every role:
+
+  | Role | Fitness | Capacity | Measured against the floors |
+  |---|---|---|---|
+  | embedding | 0.7s | 0.5s | 17,657 tok/s; 32-token query 13 ms |
+  | audio | 0.5s | 2.0s | RTFx 12.4; slowest of 4 streams 3.18 |
+  | vision | 7.1s | 10.1s | one image question 1.8 s |
+  | agent | 15.2s | 5.0s | decode 50.5 tok/s; 8k prefill 1048 tok/s, TTFT 8.0 s; slowest of 4 streams 23.5 tok/s |
+
+  The idle pool read 3464 to 3491 MiB free at fitness, and the least free at capacity's peak was
+  3446 MiB (the agent's), against the 2816 MiB floor. The figures sit with the OS update's on
+  b11715; the embedding's throughput and query time read faster, from one run each.
