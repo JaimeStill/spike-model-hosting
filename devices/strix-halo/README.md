@@ -22,8 +22,12 @@ needs root. `<host>` is the Framework's name on the tailnet, which nothing commi
   bandwidth. The models live on a dedicated NVMe drive (ext4).
 - **OS:** Omarchy (Arch Linux). The OS install is the architect's and stays fixed; there is no
   restore point.
-  <!-- OS version: not recorded yet. Add the Omarchy release and kernel once the architect's OS
-  update lands. -->
+  Since 2026-10-19 it runs Omarchy 4.0.5, kernel `7.2.8-9-omarchy`, Mesa and `vulkan-radeon`
+  26.2.5, and `linux-firmware` 20260916. Set A's baseline ran on kernel `7.2.5-3-omarchy`, Mesa
+  26.2.2 and `linux-firmware` 20260810; the update's re-check is in
+  [`llama-cpp-builds.md`](llama-cpp-builds.md), "The OS update, 2026-10-19". An OS update
+  changes the Vulkan driver the router runs on, so each one gets the same re-check as a build
+  move: the probe, then fitness for every role.
 - **The memory pool:** the BIOS's GPU reservation is 512 MB, and the kernel's GTT pool is set
   to 96 GiB (98304 MiB) by `ttm pages_limit` and `amdgpu gttsize`, built into the boot image.
   The steps are personal-agents' `preparation/framework-desktop.md`. Every set is sized against

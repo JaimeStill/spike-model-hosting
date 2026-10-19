@@ -448,3 +448,44 @@ build" ([`README.md`](README.md)). The architect ran its steps a to d on 2026-10
   Cold is about 3s slower than warm for some 85 GB of weights. That gap is small enough that
   loading looks bound by the copy into device memory more than by reading the disk; this is an
   observation from two pairs, not a measured cause.
+
+## The OS update, 2026-10-19
+
+The architect updated the Framework's OS and rebooted it, with the router still on b11715
+(`b11715-9d1878a43`). The update changes the Vulkan driver under the router:
+
+| Package | Before (set A's baseline) | After |
+|---|---|---|
+| kernel | `7.2.5-3-omarchy` | `7.2.8-9-omarchy` |
+| `mesa`, `vulkan-radeon` | 26.2.2-1 | 26.2.5-1 |
+| `linux-firmware` | 20260810-2 | 20260916-1 |
+| Omarchy | not recorded | 4.0.5 |
+
+The router came back with set A loaded and 3656 MiB of the pool free. The re-check, from the
+laptop on 2026-10-19:
+
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed, every
+  package ok, in 12.1s.
+- **Fitness, every role.** Each role's run started from a reload of set A and was interrupted
+  five minutes in, once its quality stage had begun; the interrupted run still writes its report.
+  Every gate before quality passed, and fitness took seconds, well under the ~3 minutes the
+  stage is budgeted:
+
+  | Role | Fitness | Capacity | Measured against the floors |
+  |---|---|---|---|
+  | embedding | 0.9s | 0.5s | 12,945 tok/s; 32-token query 32 ms |
+  | audio | 0.5s | 2.0s | RTFx 12.4; slowest of 4 streams 3.19 |
+  | vision | 7.0s | 13.0s | one image question 1.8 s |
+  | agent | 15.5s | 5.4s | decode 49.5 tok/s; 8k prefill 1046 tok/s, TTFT 8.0 s; slowest of 4 streams 21.1 tok/s |
+
+  The idle pool read 3513 to 3642 MiB free after each reload, and the least free at capacity's
+  peak was 3495 MiB, against the 2816 MiB floor.
+- **Quality on the new driver.** The embedding run finished every stage inside the five
+  minutes and passed: STSBenchmark 0.875, Banking77 0.923, SciFact 0.852 and NFCorpus 0.366,
+  each at or above its bar, and the set stage held 3543 MiB free with no crossed answer. The
+  audio run's first two sets finished before the interrupt: LibriSpeech test-clean WER 0.022 and
+  test-other 0.061, each under its ceiling.
+- **A connection lapse.** Between the embedding and audio runs, the reload's requests to the
+  router failed to connect for 134 s (`curl: (28) Failed to connect`), then went through. The
+  router's unit stayed up throughout (active since the boot), and the reload completed. The
+  cause wasn't found.
