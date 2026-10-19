@@ -1,29 +1,41 @@
-// Package gatestep is evaluate's gated run, which takes one model through the evaluation
-// package gate's stages: admission, fitness, capacity, quality and set, then deep; or, as a set
-// run, takes a set through the set stage alone.
+// Package gatestep is evaluate's gated run, which takes one model, or a set, through the
+// evaluation package gate's stages: admission, fitness, capacity and quality, then set and deep.
 //
 // Usage:
 //
-//	evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-guidellm path] [-restart] [-state dir]
+//	evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-full] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-guidellm path] [-restart] [-state dir]
 //
 // The model is -model, by router ID, or the model the set assigns -role: agent (the profile's
 // chat role; chat is accepted), vision, audio or embedding. The set is -set, or SPIKE_SET, or
 // else the profile's startup set; with -model and no set named, it is the startup set when that
 // assigns the model a role, or else the first set that does. The run judges each role the set
-// assigns the model; its set stage runs the model's own tier 1 under load from the set's other
-// role models, taking the alone figure from its quality stage.
+// assigns the model.
 //
-// A set run names -set on the command line and neither -role nor -model: it takes the set stage
-// alone, every role's tier 1 on the model the set assigns it, alone and then at once, and needs
-// every model of the set loaded. -from may name only set, and it resumes nothing. Its report is
-// <state>/evaluate/<UTC time>-set-<name>/report.json.
+// A run is a screen by default: admission, fitness and capacity, each model's speed floors
+// measured alone, then the quality stage, each tier its screening fifth and on until its 95%
+// bound decides it, passed or failed, the roles' tiers at once, with the pool's least free memory
+// and the crossing rounds over that pass, which stand in for the set stage's concurrent phase. The
+// set and deep stages are left to the full run. A screen that passes every stage makes the model a
+// finalist, and the report says so. -full runs the full run: given -run, it continues the finalist
+// screen in that run directory, reusing its records and adding the rest of each tier the screen
+// stopped, the set stage's alone figures, concurrent phase and slowdowns, and the deep stage;
+// without -run it screens first, in a new run directory, and continues the screen when it makes a
+// finalist. Its report replaces the screen's, in the same directory, naming the screen it
+// continued.
+//
+// A set run names -set on the command line and neither -role nor -model: its screen takes every
+// model of the set through admission, fitness and capacity in turn, alone, each check naming its
+// model, then every role's quality tiers at once; its full run's set stage runs every role's
+// tier 1 alone and then at once, and its deep stage each model's part, then cold load once. It
+// needs every model of the set loaded. Its report is <state>/evaluate/<UTC time>-set-<name>/report.json.
 //
 // The run stops at the first stage that fails. -from starts it at a later stage, reusing the
-// results of the stages before it from an earlier run of the same model: the run directory -run
-// names, or else the model's newest under the state directory. Each stage before -from must
-// have passed there, and the resumed run's report replaces that run's, in the same directory.
-// -from set also needs that run's quality records of the model's tier 1, which the set stage
-// reuses as its alone figure.
+// results of the stages before it from an earlier run of the same model (or set run) and mode:
+// the run directory -run names, or else the newest under the state directory. Each stage before
+// -from must have passed there, and the resumed run's report replaces that run's, in the same
+// directory. A screen starts no later than quality; a full run (-full -from) resumes only at set
+// or deep, from a full run, and a model's from set also needs that run's quality records of the
+// model's tier 1, which the set stage reuses as its alone figure.
 //
 // The report is <state>/evaluate/<UTC time>-<model>/report.json, the state directory being
 // -state, or SPIKE_STATE_DIR, or else the module root's untracked .state/. A summary of it goes
@@ -40,14 +52,15 @@
 // vision tier's logs in its vision/<tier>/logs and each BFCL tier's in its agent/<tier>/logs; the
 // datasets download into the state directory's cache/. The set stage runs the same suites on
 // tier 1s, its output under the run directory's set/alone/ (a set run's) and set/concurrent/,
-// laid out as the quality stage's. The agent role's conform tier, harness fit, runs every pinned
+// laid out as the quality stage's. A full run's rest of a tier the screen stopped runs from the
+// tier's directory's rest/, its list there as list.txt. The agent role's conform tier, harness fit, runs every pinned
 // harness (Pi, Claude Code and OpenCode), each -pi, -claude and -opencode, or SPIKE_PI,
 // SPIKE_CLAUDE and SPIKE_OPENCODE, or else the consumers mise environment's pin, their state
 // under the state directory's conform/, Claude Code's login in its claude/ (as evaluate conform
 // keeps them), and the run's recordings and conform table, the fit profile, in the run
 // directory's conform/.
 //
-// The deep stage, reached once every gate passed, runs the agent role's τ2 airline and retail
+// The deep stage, reached in a full run once every gate passed, runs the agent role's τ2 airline and retail
 // through the same uv project, their simulated user the pinned Claude Code (-claude,
 // SPIKE_CLAUDE or the pin) on the state directory's claude/ login, each domain's Inspect log and
 // its summary in the run directory's deep/tau2/<domain>; then, for a generative model, the
@@ -56,20 +69,21 @@
 // run directory's deep/grid; then prefix reuse; then cold load. Cold load restarts the router
 // twice, root commands the run can't take: with -restart, the architect is at hand, and the run
 // asks for each restart on stderr, naming its command, and times it; without it, cold load is
-// recorded not run, naming the commands. -from deep runs the deep stage alone again on a run
-// whose gates all passed.
+// recorded not run, naming the commands. -full -from deep runs the deep stage alone again on a full
+// run whose gates all passed.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. The model must be loaded already, and, for a
 // run that resumes nothing, every model of the set: the run checks GET /models first, and refuses
 // an unloaded model before any stage; every request carries autoload=false, so it never loads
-// one. A run that resumes nothing starts from freshly loaded models: once admission passes (for a
-// set run, before the set stage) it unloads and loads the set's models over the router's API,
+// one. A run that resumes nothing starts from freshly loaded models: once admission passes it
+// unloads and loads the set's models over the router's API,
 // waits 30 s, reads the idle pool, sends each model its high-water requests (an 8192-token
 // prompt to each generative model, the vision role's largest image and the audio role's longest
 // clip in the tier lists, found through the suites project into the run directory's warm/, the
 // embedding role's largest input), and reads the pool at that warmed peak, which the pool's floor
 // is judged at. Each reading carries the host's system RAM: used and available, and each model
-// process's RSS. A run resumed with -from on the same run directory reloads nothing.
+// process's RSS. A run resumed with -from on the same run directory, or a full run continuing its
+// screen, reloads nothing.
 //
 // It exits 0 when every stage that ran passed, 1 when one failed or the run can't start, and 2
 // on a usage error.
@@ -97,7 +111,7 @@ import (
 )
 
 // Usage is the run's usage line, which evaluate's own usage lists.
-const Usage = "evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-guidellm path] [-restart] [-state dir]"
+const Usage = "evaluate [-router url] [-profile name|path] [-set name] [-role role | -model id] [-full] [-from stage] [-run dir] [-ssh dest] [-floors path] [-bars path] [-uv path] [-python path] [-pi path] [-claude path] [-opencode path] [-guidellm path] [-restart] [-state dir]"
 
 const usage = "usage:\n  " + Usage + "\n"
 
@@ -108,6 +122,9 @@ type options struct {
 	router, profile, set, role, model, from, run, ssh, floors, bars, uv, python, guidellm, state string
 	// restart says the architect is at hand to restart the router for the deep stage's cold load.
 	restart bool
+	// full makes the run a full run, a finalist's, continuing its screen; without it the run is a
+	// screen.
+	full bool
 	// consumers are the conform tier's consumer executables, by name; empty asks mise.
 	consumers map[string]string
 }
@@ -150,8 +167,9 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs.StringVar(&o.set, "set", getenv("SPIKE_SET"), "the profile's set (SPIKE_SET); empty is the startup set")
 	fs.StringVar(&o.role, "role", "", "the role whose model to evaluate: agent, vision, audio or embedding")
 	fs.StringVar(&o.model, "model", "", "the model to evaluate, by router ID")
+	fs.BoolVar(&o.full, "full", false, "run the full run, a finalist's: continue the screen -run names, or screen first")
 	fs.StringVar(&o.from, "from", "", "the stage to start at, reusing an earlier run's results before it")
-	fs.StringVar(&o.run, "run", "", "with -from, the run directory to resume; default the model's newest")
+	fs.StringVar(&o.run, "run", "", "with -from, the run directory to resume, default the newest; with -full, the screen to continue")
 	fs.StringVar(&o.ssh, "ssh", "", "the ssh destination the pool is read on; default the router's host")
 	fs.StringVar(&o.floors, "floors", "", "the floors file; default the module root's evaluation/floors.toml")
 	fs.StringVar(&o.bars, "bars", "", "the quality stage's bars file; default the module root's evaluation/bars.toml")
@@ -187,12 +205,14 @@ func parse(args []string, getenv func(string) string) (options, error) {
 		return o, fmt.Errorf("%w: name the model to evaluate with -role or -model, one of them", errUsage)
 	case o.role == "" && o.model == "" && !setNamed:
 		return o, fmt.Errorf("%w: name the model to evaluate with -role or -model, or a set run with -set alone", errUsage)
-	case o.role == "" && o.model == "" && o.from != "" && o.from != gate.StageSet:
-		return o, fmt.Errorf("%w: a set run takes the set stage alone; -from may name only set", errUsage)
 	case o.from != "" && !slices.Contains(gate.Stages, o.from):
 		return o, fmt.Errorf("%w: -from %q is not one of the stages %q", errUsage, o.from, gate.Stages)
-	case o.run != "" && o.from == "":
-		return o, fmt.Errorf("%w: -run names the run -from resumes; give -from too", errUsage)
+	case o.full && o.from != "" && o.from != gate.StageSet && o.from != gate.StageDeep:
+		return o, fmt.Errorf("%w: -full resumes only at set or deep; a full run before them continues its screen (-full -run)", errUsage)
+	case !o.full && (o.from == gate.StageSet || o.from == gate.StageDeep):
+		return o, fmt.Errorf("%w: a screen ends at quality; -from %s needs -full", errUsage, o.from)
+	case o.run != "" && o.from == "" && !o.full:
+		return o, fmt.Errorf("%w: -run names the run -from resumes or -full continues; give one of them too", errUsage)
 	}
 	if o.role != "" {
 		role, err := gate.ParseRole(o.role)
@@ -252,14 +272,15 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 	}
 	var prior *gate.Report
 	dir := ""
-	if !setRun && o.from != "" && o.from != gate.Stages[0] {
+	resumes := o.from != "" && o.from != gate.Stages[0]
+	if resumes || (o.full && o.run != "") {
 		dir = o.run
 		if dir == "" {
-			if dir, err = gate.LatestRun(state, model); err != nil {
+			if dir, err = gate.LatestRun(state, subject); err != nil {
 				return false, err
 			}
 			if dir == "" {
-				return false, fmt.Errorf("no earlier run of %s under %s to resume from %s", model, state, o.from)
+				return false, fmt.Errorf("no earlier run of %s under %s to resume from %s", subject, state, o.from)
 			}
 		}
 		if prior, err = gate.ReadReport(dir); err != nil {
@@ -273,7 +294,7 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 	}
 	r := &gate.Runner{
 		Router: o.router, Profile: p, Set: set, Model: model, Floors: floors,
-		Footprint: gate.SSH{Dest: o.ssh}, Media: media, Log: stderr, Bars: bars, Dir: dir, Restarts: o.restart,
+		Footprint: gate.SSH{Dest: o.ssh}, Media: media, Log: stderr, Bars: bars, Dir: dir, Restarts: o.restart, Full: o.full,
 	}
 	roles := r.Roles()
 	if len(roles) > 0 {
@@ -289,7 +310,7 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 			Exe: uv, Python: python, Project: filepath.Join(root, gate.SuitesDir),
 			Cache: filepath.Join(state, "cache"), Log: stderr,
 		}
-		if !setRun && slices.Contains(roles, gate.RoleAgent) {
+		if slices.Contains(roles, gate.RoleAgent) {
 			// τ2's simulated user is the pinned Claude Code on the login conform's Claude Code uses.
 			if suites.Claude, err = consumers.Executable(ctx, o.consumers["claude"], "claude"); err != nil {
 				return false, err
@@ -300,12 +321,18 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (passed bool,
 		}
 		r.MTEB, r.ASR, r.Vision, r.Agent, r.Tau2, r.Peaks, r.Tiers = suites, suites, suites, suites, suites, suites, filepath.Join(root, gate.TiersDir)
 	}
-	if !setRun && slices.Contains(roles, gate.RoleAgent) {
+	if slices.Contains(roles, gate.RoleAgent) {
 		if r.Conform, err = conformRunner(ctx, o, state, stderr); err != nil {
 			return false, err
 		}
 	}
-	if m := p.Model(model); !setRun && m != nil && m.Kind == profile.KindGenerative {
+	generative := false
+	for _, m := range set.Roles.Models() {
+		if pm := p.Model(m); (setRun || m == model) && pm != nil && pm.Kind == profile.KindGenerative {
+			generative = true
+		}
+	}
+	if generative {
 		exe, err := consumers.Executable(ctx, o.guidellm, "guidellm")
 		if err != nil {
 			return false, err

@@ -8,7 +8,10 @@ role the set gives it: agent, vision, audio, or embedding.
 
 The first five stages are gates. The deep stage records and judges nothing; it runs only once
 every gate has passed. Each run writes one report, which names the build, set, model, roles, the
-stage reached, the stages not run and why, and each stage's wall time.
+run's mode, screen or full, whether it made a finalist, the stage reached, the stages not run and
+why, and each stage's wall time.
+
+A run is a screen by default, and a full run is for finalists ("Screen and full run", below).
 
 The code is the `gate` package (the stages), the `tier` package (seeded lists and bars), the
 uv project `evaluation/suites` (the Inspect AI and MTEB runs, with their early stops), and
@@ -22,15 +25,27 @@ results are in [`findings/baseline.md`](findings/baseline.md), "Set A's baseline
 | Admission | Paper: the profile and the router's build. Licence and origin recorded, origin judged by `STANDARDS.md`, the set's roles declared, the profile's context within the card's, the set's memory budget leaving the pool floor free, the router's build at or above the profile's minimum. | Any check fails. Licence fails only when missing. Origin fails when missing, and for a model of Chinese origin (`origin = "China"`) whose profile entry records no `origin_reason`, why no alternative serves; `STANDARDS.md` chooses such a model only then. Validation refuses an `origin_reason` on any other origin. |
 | Fitness | Under ~3 minutes: a smoke per declared role (the probe's tool call, image, audio clip, or embedding), the role's single-stream floors, and the pool at the warmed peak (below). | A smoke fails, a single-stream floor is missed, or the pool at the warmed peak is under the floor. |
 | Capacity | The model's slots in the profile (4) of requests in flight on the model per role, through the `concurrent` package's run. | A nonce crosses, an embedding leaves its tolerance, the pool at the peak is under the floor, or a 4-stream floor is missed. |
-| Quality | Each role's tiers, cheapest first, each against its bar (below). | A tier misses its bar; the stage stops at that tier. |
-| Set | Each role's tier 1 alone, then every role's at once, all of the set's models loaded. | The pool at the concurrent peak is under the floor (and, in a set run, the pool at the warmed peak), or an answer carries another request's nonce. |
-| Deep | τ2 airline and retail for the agent role; the GuideLLM grid and prefix reuse for a generative model; then cold load. | Never on a score: only when a measurement can't be taken. |
+| Quality | Each role's tiers, cheapest first, each against its bar (below); every role of the run at once, each on its own model. In a screen, also the pool's least free memory and the crossing rounds over that pass. | A tier misses its bar; that role's tiers stop there. In a screen, also the set stage's two concurrent gates, below. |
+| Set | A full run's: each role's tier 1 alone, then every role's at once, all of the set's models loaded. | The pool at the concurrent peak is under the floor, or an answer carries another request's nonce. |
+| Deep | A full run's: τ2 airline and retail for the agent role; the GuideLLM grid and prefix reuse for a generative model; then cold load. | Never on a score: only when a measurement can't be taken. |
 
-In a model's run, the set stage takes the alone figure from the model's own quality tier 1, and
-runs only that model's tier 1s at once while the set's other role models carry load for exactly
-that window. A set run (`-set` with no model) runs every role's tier 1 alone, role after role,
-then all at once. An answer that errored, came back empty, or hit its `max_tokens` with no nonce
-is counted unanswered, not crossed; only an answer carrying a nonce not its own is crossed.
+The quality stage runs every role of the run at once, each role's tiers in order on its own
+model: a quality score doesn't depend on speed, and fitness and capacity have measured the speed
+floors alone. In a screen, that pass runs inside the set stage's concurrent window, which it
+stands in for: the pool's least free memory over it, against the pool's floor, and rounds of
+nonce requests to every role's model of the set while the tiers run, no answer crossed. A
+model run's pass is its own roles' tiers, with the set's other models loaded and answering only
+the crossing rounds; a set run's (`-set` with no model) is every role's.
+
+In a model's full run, the set stage takes the alone figure from the model's own quality tier 1,
+and runs only that model's tier 1s at once while the set's other role models carry load for
+exactly that window. A set run's full run runs every role's tier 1 alone, role after role, then
+all at once. An answer that errored, came back empty, or hit its `max_tokens` with no nonce is
+counted unanswered, not crossed; only an answer carrying a nonce not its own is crossed.
+
+A set run takes every model of the set through admission, fitness and capacity in turn, alone,
+each check naming its model, and, in a full run, each model's part of the deep stage, then cold
+load once.
 
 The quality tiers, by role:
 
@@ -114,17 +129,43 @@ with no bar runs whole, records its score, and never fails.
 ## Early stop
 
 Each tier runs a committed list of sample IDs ([`evaluation/tiers`](../evaluation/tiers)), drawn
-with seed 20261016 from its dataset's pinned revision, the same for every model. The list's
-first fifth, its screening fifth, always runs whole. After it:
+with seed 20261016 from its dataset's pinned revision, the same for every model. In a screen, the
+list's first fifth, its screening fifth, always runs whole. After it, before each further sample,
+the tier stops once its one-sided 95% bound falls on either side of its bar:
 
-- A pass-rate tier (BFCL, the vision benchmarks) stops, failed, once the one-sided 95% Wilson
-  upper bound on its pass rate falls below the bar.
-- An ASR set stops, failed, once the one-sided 95% lower bound on its WER rises above the
-  ceiling.
+- A pass-rate tier (BFCL, the vision benchmarks) stops, failed, once the Wilson upper bound on
+  its pass rate falls below the bar, and, passed, once the Wilson lower bound on its mean score
+  is at or over the bar. The pass side bounds the mean score because the bar judges the mean:
+  for a 0-or-1 score it is the pass rate, and for DocVQA's ANLS, a score in [0, 1] whose spread
+  is at most the pass rate's, the bound is conservative.
+- An ASR set stops, failed, once the lower bound on its WER rises above the ceiling, and,
+  passed, once the upper bound is at or under it: the corpus WER, a ratio, give or take 1.645
+  utterance-clustered standard errors.
+- A tier whose bounds still straddle the bar runs on, until one side decides it or its list ends;
+  a list that ends undecided is judged by its score.
 - MTEB tasks run whole; early stop doesn't apply to a continuous score.
 - In harness fit, a harness drops at its first failed trial.
 
-The record names the tier and the bound that stopped it.
+The record names the tier, its stop's side, the bound that decided it and its value, and the
+samples run of the list's (the check's `stop`). A full run sends the samples its screen stopped
+as a list of their own, without a bar, and judges the whole list.
+
+## Screen and full run
+
+A run is a screen unless `-full` is given. A screen takes admission, fitness, capacity and the
+quality stage, early stopped on either side and every role at once; it reports the set and deep
+stages not run, since its quality pass stands in for the set stage's concurrent phase and the
+deep stage is a finalist's. A screen that passes every stage makes its model, or a set run's
+models, a finalist, and the report says so.
+
+A full run continues a finalist's screen, given as the run directory `-run` names, and writes its
+report there in place of the screen's, naming when the screen started. It reuses the screen's
+admission, fitness and capacity, its warm-up (it reloads nothing), and each unit the screen ran
+whole: an MTEB task, the vision probe, harness fit, and a tier its bounds straddled to the end.
+It runs the rest of each tier the screen stopped (from the tier's `rest/`), judges each whole
+list, and carries the screen's pool and crossing gates. Then it runs the set stage, its alone
+figures, concurrent phase and slowdowns, and the deep stage. A full run given no screen screens
+first, in a new run directory, and continues only a finalist; a screen that fails is its report.
 
 ## Before each run
 
@@ -132,19 +173,19 @@ The record names the tier and the bound that stopped it.
   models. Each model keeps the largest working memory it has needed until it is reloaded, so
   without a reload one run's growth carries into the next, and a model's verdict would depend on
   where it ran in the day ([`findings/memory-budget.md`](findings/memory-budget.md), "The pool
-  over a day of runs"). evaluate does it itself, once admission has passed (a set run, before
-  the set stage): it unloads and loads the set's models over the router's API, waits 30 s, and
+  over a day of runs"). evaluate does it itself, once admission has passed: it unloads and loads the set's models over the router's API, waits 30 s, and
   records the idle pool. It then drives each of the set's models to its high-water mark: an
   8192-token prompt to each generative model (prefilled in full ubatches, as the deep stage's
   8192-token prompts are), the vision role's largest image and the audio role's longest clip in
   the committed tier lists (found by `vision_quality.py peak` and `asr_quality.py peak` into the
   run directory's `warm/`), and the embedding role's largest input, one that fills its physical
   batch. It reads the pool again at that warmed peak, and every pool floor is judged there:
-  fitness (the set stage, in a set run) judges the warmed reading, and capacity's and the set
-  stage's readings come after it. Each reading carries the host's system RAM beside it: used
+  fitness judges the warmed reading, and capacity's, the quality pass's and the set stage's
+  readings come after it. Each reading carries the host's system RAM beside it: used
   and available (`free -b`), and each model process's RSS (`ps`, by its `--alias`). The report's
   `warm` records the reload's steps, both readings and the warm-up's requests. A run resumed
-  with `-from` on the same run directory doesn't reload, and keeps that run's warm-up. The run
+  with `-from` on the same run directory, or a full run continuing its screen, doesn't reload,
+  and keeps that run's warm-up. The run
   needs every model of the set loaded, and never loads one it didn't find loaded.
 - **Point `TMPDIR` into `.state`.** inspect_evals' τ2 task writes one copy of the domain's
   database to `TMPDIR` per sample (airline 6.8 MB, retail 2.7 MB) and never removes it, about
@@ -162,21 +203,27 @@ The record names the tier and the bound that stopped it.
 From the repository root on the laptop, with `SPIKE_ROUTER_URL` set to the router:
 
 ```bash
-# One role's model of a set, admission through deep.
+# Screen one role's model of a set, admission through quality.
 go run ./evaluation/cmd/evaluate -set a -role agent
 
-# A model by router ID, in the set that assigns it a role.
+# Screen a model by router ID, in the set that assigns it a role.
 go run ./evaluation/cmd/evaluate -set a -model ggml-org/gemma-4-E4B-it-GGUF:Q8_0
 
-# A set run: every role's tier 1 alone, then all at once.
+# A set run's screen: every model's admission, fitness and capacity, then every role's
+# quality tiers at once.
 go run ./evaluation/cmd/evaluate -set a
 
-# Resume at a stage, reusing the passed stages before it from the model's newest run,
-# or from the run directory -run names.
-go run ./evaluation/cmd/evaluate -set a -role agent -from deep -run .state/evaluate/<run>
+# A finalist's full run, continuing its screen in the run directory -run names: the rest of
+# each tier, the set stage, then deep. Without -run it screens first.
+go run ./evaluation/cmd/evaluate -set a -role agent -full -run .state/evaluate/<run>
+
+# Resume at a stage, reusing the passed stages before it from the model's newest run, or from
+# the run directory -run names: a screen from admission to quality, a full run (-full) at set
+# or deep.
+go run ./evaluation/cmd/evaluate -set a -role agent -full -from deep -run .state/evaluate/<run>
 
 # The architect is at hand for the deep stage's two cold-load restarts.
-go run ./evaluation/cmd/evaluate -set a -role agent -restart
+go run ./evaluation/cmd/evaluate -set a -role agent -full -restart
 ```
 
 `-role` takes agent, vision, audio, or embedding. The set is `-set`, `SPIKE_SET`, or the
@@ -195,14 +242,11 @@ example `MISE_ENV=consumers mise run //evaluation:vision-tiers`; each rewrites t
 
 The goal record's Decisions plan these changes for `candidates`:
 
-- **A screen, not a full run.** A candidate gets a screen; the full run is for finalists. A tier
-  stops early on a pass as well as a fail, once the one-sided 95% lower bound clears the bar.
-  Every candidate runs each tier's screening fifth by default; only finalists, or models whose
-  bound still straddles the bar, run the full tier and the deep stage. The roles' quality tiers
-  run concurrently, while the speed floors are still measured alone. Results are kept by model,
-  build, and preset, so a changed profile reruns only its changed roles plus the set stage. The
-  estimate, 15 to 25 minutes a candidate, is extrapolated, not measured. Set A's baseline stays
-  two full runs, since its bars and spreads are what make a screen trustworthy.
+- **A screen, not a full run.** Built in `screen` ("Screen and full run", above). Still to come:
+  results kept by model, build, and preset, so a changed profile reruns only its changed roles
+  plus the set stage. The estimate, 15 to 25 minutes a candidate, is extrapolated, not measured.
+  Set A's baseline stays two full runs, since its bars and spreads are what make a screen
+  trustworthy.
 - **The concurrency count.** Every evaluated set reports the most agent sessions at once that
   still meet the per-stream floors with the pool floor held, even when it is one. The capacity
   stage checks a fixed 4 in flight.

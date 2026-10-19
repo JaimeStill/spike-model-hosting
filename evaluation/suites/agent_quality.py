@@ -41,9 +41,12 @@ allowed (GENERATE). Four requests in flight, the profile's slots; the early stop
 as they complete.
 
 Early stop (pass_stop.py's PassStop, with a bar): the tier's screening fifth runs whole, then,
-before each further sample, the tier stops once the one-sided 95% Wilson upper bound on its pass
-rate is below the bar. A BFCL sample scores 1 or 0, so the pass rate is the tier's accuracy. The
-tier's account of its early stop is written beside the log as early_stop.json.
+before each further sample, the tier stops failed once the one-sided 95% Wilson upper bound on
+its pass rate is below the bar, and passed once the lower bound is at or over it; between the
+two it runs on. A BFCL sample scores 1 or 0, so the pass rate is the tier's accuracy. The tier's
+account of its early stop, the side it stopped on with it, is written beside the log as
+early_stop.json. Without a bar the list runs whole: evaluate's full run sends the samples its
+screen didn't run as a list of their own, with no bar.
 """
 
 import argparse

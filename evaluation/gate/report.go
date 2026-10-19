@@ -35,6 +35,12 @@ type Check struct {
 	Values map[string]float64 `json:"values,omitempty"`
 	Detail string             `json:"detail,omitempty"`
 	Passed bool               `json:"passed"`
+	// Model is the model a set run's check judges, in a stage it runs model by model (admission,
+	// fitness, capacity, deep); empty in a model run, whose report names its model.
+	Model string `json:"model,omitempty"`
+	// Stop is a sampled tier's early stop in a screen, the side and bound that ended it; nil
+	// for a tier that ran its whole list.
+	Stop *Stop `json:"stop,omitempty"`
 }
 
 // measure returns a check of measured against floor by op.
@@ -103,7 +109,14 @@ type Report struct {
 	Model   string    `json:"model"`
 	Roles   []string  `json:"roles"`
 	Started time.Time `json:"started"`
-	// From is the stage a resumed run started at, empty for a run from the start.
+	// Mode is the run's: ModeScreen or ModeFull. Finalist says the model, or the set run's models,
+	// passed every gate of a screen: a passed screen, or a full run, which continues one.
+	Mode     string `json:"mode"`
+	Finalist bool   `json:"finalist"`
+	// Screened is when the screen a full run continues started, nil for a screen.
+	Screened *time.Time `json:"screened,omitempty"`
+	// From is the stage a resumed run started at, empty for a run from the start or a full run
+	// continuing its screen.
 	From string `json:"from,omitempty"`
 	// Reached is the last stage that ran; Passed, whether every stage that ran passed.
 	Reached string        `json:"reached"`
@@ -204,6 +217,16 @@ func WriteSummary(w io.Writer, r *Report) error {
 	}
 	fmt.Fprintf(&b, "%s on %s, build %s, set %s, roles %s\n", subject, r.Router, r.Build, r.Set, strings.Join(r.Roles, ", "))
 	fmt.Fprintf(&b, "reached %s: %s\n", r.Reached, verdict)
+	switch {
+	case r.Mode == ModeFull && r.Screened != nil:
+		fmt.Fprintf(&b, "full run of a finalist, continuing its screen of %s\n", r.Screened.Format(time.RFC3339))
+	case r.Mode == ModeFull:
+		fmt.Fprintln(&b, "full run of a finalist")
+	case r.Mode == ModeScreen && r.Finalist:
+		fmt.Fprintln(&b, "screen: passed every gate, a finalist; its full run adds the rest of each tier, the set stage and the deep stage")
+	case r.Mode == ModeScreen:
+		fmt.Fprintln(&b, "screen: no finalist")
+	}
 	if w := r.Warm; w != nil {
 		line := fmt.Sprintf("reload %.0fs", w.ReloadS)
 		if w.Reused {
@@ -242,6 +265,9 @@ func WriteSummary(w io.Writer, r *Report) error {
 			name := c.Name
 			if c.Role != "" {
 				name = c.Role + " " + name
+			}
+			if c.Model != "" {
+				name = c.Model + ": " + name
 			}
 			fmt.Fprintf(&b, "  %s %s", mark, name)
 			switch {

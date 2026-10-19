@@ -120,7 +120,9 @@ func TestGatedUsage(t *testing.T) {
 		"unknown stage": {[]string{"-router", "http://127.0.0.1:1", "-role", "agent", "-from", "nope"}, `-from "nope"`},
 		"trailing step": {[]string{"-router", "http://127.0.0.1:1", "prefix"}, "unexpected arguments"},
 		"no router":     {[]string{"-role", "agent"}, "no router"},
-		"set run from":  {[]string{"-router", "http://127.0.0.1:1", "-set", "a", "-from", "capacity"}, "-from may name only set"},
+		"full from":     {[]string{"-router", "http://127.0.0.1:1", "-role", "agent", "-full", "-from", "quality"}, "-full resumes only at set or deep"},
+		"screen from":   {[]string{"-router", "http://127.0.0.1:1", "-role", "agent", "-from", "deep"}, "-from deep needs -full"},
+		"run alone":     {[]string{"-router", "http://127.0.0.1:1", "-role", "agent", "-run", "dir"}, "-run names the run"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -175,8 +177,9 @@ func TestGatedSetRunRefusesUnloaded(t *testing.T) {
 	}))
 	defer srv.Close()
 	state := t.TempDir()
-	tools := []string{"-uv", "/nonexistent/uv", "-python", "/nonexistent/python"}
-	_, errOut, code := run(t, []string{"SPIKE_ROUTER_URL=" + srv.URL}, append([]string{"-set", "a", "-from", "set", "-state", state}, tools...)...)
+	tools := []string{"-uv", "/nonexistent/uv", "-python", "/nonexistent/python",
+		"-pi", "/nonexistent/pi", "-claude", "/nonexistent/claude", "-opencode", "/nonexistent/opencode", "-guidellm", "/nonexistent/guidellm"}
+	_, errOut, code := run(t, []string{"SPIKE_ROUTER_URL=" + srv.URL}, append([]string{"-set", "a", "-state", state}, tools...)...)
 	if code != 1 || !strings.Contains(errOut, "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0 as unlisted") {
 		t.Errorf("exit %d, stderr %q; want 1, naming set A's first model not loaded", code, errOut)
 	}

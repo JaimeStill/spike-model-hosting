@@ -36,10 +36,11 @@ from `context/README.md`.
 - **Consumers and instruments:** `evaluation/mise.consumers.toml` pins them, run from the root as
   `MISE_ENV=consumers mise -C evaluation exec -- <tool>` (mise loads that file only in
   `evaluation/`); their untracked state is under the root's `.state/`.
-- **Evaluation:** `go run ./evaluation/cmd/evaluate -set a -role <role>` takes a model through
-  the stages admission, fitness, capacity, quality, set, and deep, judged by
-  `evaluation/floors.toml` and `evaluation/bars.toml` (set A's two-run baseline); `-set a` alone
-  is a set run, `-from <stage>` resumes. The agent's tier 3 is harness fit: conform pass^5
+- **Evaluation:** `go run ./evaluation/cmd/evaluate -set a -role <role>` screens a model through
+  the stages admission, fitness, capacity, and quality (tiers early stopped on either side, the
+  roles at once), judged by `evaluation/floors.toml` and `evaluation/bars.toml` (set A's two-run
+  baseline); `-full -run <dir>` continues a finalist's screen with the rest of each tier, the set
+  stage, and deep; `-set a` alone is a set run, `-from <stage>` resumes. The agent's tier 3 is harness fit: conform pass^5
   through every pinned harness, one absolute bar. The instruments also run alone as steps
   (`conform`, `concurrent`, `prefix`, `coldload`; `-h` lists them). evaluate reloads the set over the
   router's API before each run and judges the pool at the warmed peak; set `TMPDIR` to

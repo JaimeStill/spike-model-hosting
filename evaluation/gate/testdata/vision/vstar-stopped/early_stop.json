@@ -11,5 +11,6 @@
   "134",
   "178"
  ],
- "reason": "the 95% upper bound 0.9217 on the pass rate (2/3) is below the bar 0.99"
+ "reason": "the 95% upper bound 0.9217 on the pass rate (2/3) is below the bar 0.99",
+ "side": "fail"
 }

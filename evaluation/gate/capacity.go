@@ -33,7 +33,14 @@ var capacityInputs = []string{
 // beside it; an embedding model's run is one embedding stream a slot. Each run passes when every answer carries its own
 // nonce and no other, every batched vector holds the embedding tolerance, the pool's least free
 // memory stays at the floor, and each stream meets the role's 4-stream floor.
+//
+// A set run puts each of the set's models through it alone, one after another (perModel).
 func (r *Runner) capacity(ctx context.Context, rep *Report) []Check {
+	return r.perModel(ctx, rep, (*Runner).capModel)
+}
+
+// capModel is capacity for the model, each role it takes.
+func (r *Runner) capModel(ctx context.Context, rep *Report) []Check {
 	c := &client{base: r.Router, hc: r.HTTP}
 	var checks []Check
 	for _, role := range rep.Roles {

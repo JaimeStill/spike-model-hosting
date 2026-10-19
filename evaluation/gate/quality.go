@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/suites"
@@ -212,33 +213,83 @@ func readJSON(path string, v any, python bool) error {
 // EmbeddingTasks through r.MTEB; the audio role, AudioSets through r.ASR; the vision role,
 // VisionTiers through r.Vision. The agent's and vision's tiers run cheapest first, stopping at
 // the first tier that fails.
+//
+// Every role of the run runs its tiers at once, each on its own model (roleQuality): a quality
+// score doesn't depend on speed, which fitness and capacity measured alone. In a screen the pass
+// runs inside the concurrent window the set stage's concurrent phase takes in a full run: the
+// pool's least free memory over it, against the pool's floor, and rounds of nonce requests to
+// every role's model of the set, no answer crossed. It stands in for that phase, so a screen ends
+// here. A model run's pass is its own roles' tiers, the set's other models loaded beside them and
+// answering only the crossing rounds; a set run's is every role's. A full run continues the
+// screen's pass (rep.Screen's quality): it reuses each unit the screen ran whole and runs the rest
+// of each one the screen stopped, the roles again at once, and carries the screen's two gates.
 func (r *Runner) quality(ctx context.Context, rep *Report) []Check {
-	t := target{model: r.Model, dir: r.Dir, judged: true}
-	var checks []Check
-	if slices.Contains(rep.Roles, RoleAgent) {
-		checks = append(checks, r.agentTiers(ctx, rep, t)...)
-		if ctx.Err() != nil {
-			return checks
+	full := rep.Mode == ModeFull
+	var screen *StageResult
+	if full {
+		if r.screen != nil {
+			screen = r.screen.Stage(StageQuality)
+		}
+		if screen == nil {
+			return []Check{broken("screen", "", errors.New("a full run continues a screen's quality stage, and has none"))}
 		}
 	}
-	if slices.Contains(rep.Roles, RoleEmbedding) {
+	var runs []assignment
+	for _, a := range r.assignments() {
+		if slices.Contains(rep.Roles, a.role) && (r.Model == "" || a.model == r.Model) {
+			runs = append(runs, a)
+		}
+	}
+	results := make([][]Check, len(runs))
+	pass := func() {
+		var wg sync.WaitGroup
+		for i, a := range runs {
+			t := target{model: a.model, dir: r.Dir, judged: true, full: full, screen: screen}
+			wg.Go(func() { results[i] = r.roleQuality(ctx, rep, t, a.role) })
+		}
+		wg.Wait()
+	}
+	if full {
+		pass()
+		checks := slices.Concat(results...)
+		for _, c := range screen.Checks {
+			if c.Role == "" {
+				checks = append(checks, reused(c))
+			}
+		}
+		return checks
+	}
+	what := "every role's quality tiers ran at once"
+	if r.Model != "" {
+		what = "the model's quality tiers ran, the set's other models loaded"
+	}
+	r.logf("evaluate: quality: %s\n", what)
+	w := r.window(ctx, r.assignments(), pass)
+	return append(slices.Concat(results...), w.gates(r.Floors.Pool.FreeMiB, what)...)
+}
+
+// roleQuality runs role's quality suite on t's model.
+func (r *Runner) roleQuality(ctx context.Context, rep *Report, t target, role string) []Check {
+	var checks []Check
+	switch role {
+	case RoleAgent:
+		return r.agentTiers(ctx, rep, t)
+	case RoleEmbedding:
 		for _, task := range EmbeddingTasks {
 			checks = append(checks, r.mtebTask(ctx, t, task))
 			if ctx.Err() != nil {
-				return checks
+				break
 			}
 		}
-	}
-	if slices.Contains(rep.Roles, RoleAudio) {
+	case RoleAudio:
 		for _, set := range AudioSets {
 			checks = append(checks, r.asrSet(ctx, t, set))
 			if ctx.Err() != nil {
-				return checks
+				break
 			}
 		}
-	}
-	if slices.Contains(rep.Roles, RoleVision) {
-		checks = append(checks, r.visionTiers(ctx, t)...)
+	case RoleVision:
+		return r.visionTiers(ctx, t)
 	}
 	return checks
 }
@@ -252,6 +303,13 @@ func (r *Runner) mtebTask(ctx context.Context, t target, task string) Check {
 	bar, hasBar := r.bar(t, task)
 	if hasBar && bar.AtMost {
 		return broken(task, RoleEmbedding, errors.New("a main score is higher-is-better, so its bar belongs under [bars], not [bars_at_most]"))
+	}
+	if t.full {
+		// An MTEB task runs whole in a screen, so its record is its full figure.
+		if c, ok := t.screenCheck(RoleEmbedding, task); ok && c.Passed {
+			return reused(c)
+		}
+		return broken(task, RoleEmbedding, errNoScreen(task))
 	}
 	out := filepath.Join(t.dir, "mteb", task)
 	// A rerun into the same run directory (a resumed run) must not read the last run's result.
@@ -312,9 +370,10 @@ func promptSet(prompts map[string]string) string {
 
 // judgeTier judges a sampled unit's score (a BFCL or vision tier's, an ASR set's) against its bar
 // and returns the check with a note saying how it was judged: without a bar, recorded and passed;
-// ended by its bar's early stop after ran samples, for stopReason, failed; otherwise run in full
-// and held to the bar, a floor or, AtMost, a ceiling.
-func judgeTier(t target, name, role string, score float64, unit string, bar tier.Bar, hasBar, stopped bool, ran int, stopReason string) (Check, string) {
+// in a screen, ended by its bar's early stop (stop) on either side, failed or passed, the stop
+// recorded; in a screen whose bounds straddled the bar to its list's end, or a full run, which
+// runs the list whole, held to the bar, a floor or, AtMost, a ceiling.
+func judgeTier(t target, name, role string, score float64, unit string, bar tier.Bar, hasBar bool, stop *Stop) (Check, string) {
 	op := AtLeast
 	if bar.AtMost {
 		op = AtMost
@@ -323,11 +382,19 @@ func judgeTier(t target, name, role string, score float64, unit string, bar tier
 	case !hasBar:
 		return Check{Name: name, Role: role, Measured: &score, Unit: unit, Passed: true},
 			t.unjudged("no bar: recorded, never fails; early stop needs a bar")
-	case stopped:
+	case stop != nil:
 		ch := measure(name, role, score, unit, op, bar.Value)
-		ch.Passed = false
-		return ch, fmt.Sprintf("early stop after %d: %s", ran, stopReason)
+		// The bound decides the tier, whatever the point estimate: a passed stop's bound clears
+		// the bar, so its score does too, and a failed stop's is out of reach.
+		ch.Passed, ch.Stop = stop.Side == StopPass, stop
+		verdict := "failed"
+		if ch.Passed {
+			verdict = "passed"
+		}
+		return ch, fmt.Sprintf("early stop, %s, after %d of %d: %s", verdict, stop.Ran, stop.Size, stop.Reason)
+	case t.full:
+		return measure(name, role, score, unit, op, bar.Value), "full run: the screen's samples and the rest, the whole list judged"
 	default:
-		return measure(name, role, score, unit, op, bar.Value), "early stop: ran in full"
+		return measure(name, role, score, unit, op, bar.Value), "early stop: undecided, its bounds straddling the bar through its whole list"
 	}
 }

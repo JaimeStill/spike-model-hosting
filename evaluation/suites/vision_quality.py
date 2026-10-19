@@ -53,13 +53,18 @@ sampling and the template's default reasoning, since pass^5 measures the served 
 reliability. Four requests in flight, the profile's slots; the early stop judges samples as they
 complete.
 
-Early stop (pass_stop.py's PassStop, shared with agent_quality.py, with a bar): the tier's screening fifth runs whole, then, before each
-further sample, the tier stops once the one-sided 95% Wilson upper bound on its pass rate is
-below the bar. A sample passes at a score of 0.5 or more: a correct choice, or an ANLS of 0.5 or more, which ANLS's own threshold makes any ANLS above 0.
-The bar judges the tier's mean score, the accuracy or the mean ANLS; a sample's ANLS is never
-above its pass, so the mean ANLS is never above the pass rate, and a bound that puts the pass
-rate under the bar puts the mean ANLS under it too. The tier's account of its early stop, the
-samples it stopped and why, is written beside the logs as early_stop.json.
+Early stop (pass_stop.py's PassStop, shared with agent_quality.py, with a bar): the tier's
+screening fifth runs whole, then, before each further sample, the tier stops failed once the
+one-sided 95% Wilson upper bound on its pass rate is below the bar, and passed once the Wilson
+lower bound on its mean score is at or over it; between the two it runs on. A sample passes at a
+score of 0.5 or more: a correct choice, or an ANLS of 0.5 or more, which ANLS's own threshold
+makes any ANLS above 0. The bar judges the tier's mean score, the accuracy or the mean ANLS; a
+sample's ANLS is never above its pass, so the mean ANLS is never above the pass rate, and a
+bound that puts the pass rate under the bar puts the mean ANLS under it too; the lower bound is
+on the mean score itself. The tier's account of its early stop, the samples it stopped, why, and
+the side it stopped on, is written beside the logs as early_stop.json. Without a bar the list
+runs whole: evaluate's full run sends the samples its screen didn't run as a list of their own,
+with no bar, and a task that holds none of them is left out.
 """
 
 import argparse
@@ -223,8 +228,11 @@ def main():
             raise SystemExit(f"{a.list} is drawn from {listed!r}, not the tier's {dataset!r}")
         stop = PassStop(a.bar, len(ids)) if a.bar is not None else None
         tasks = [task_with(make(), config=GENERATE, early_stopping=stop) for make in makers]
-        # Each ID scoped to the task that holds it, so no task warns of IDs that are another's.
+        # Each ID scoped to the task that holds it, so no task warns of IDs that are another's;
+        # a task holding none of the list's, as a full run's rest can leave V*Bench's, is left out.
         held = {t.name: {str(s.id) for s in t.dataset} for t in tasks}
+        tasks = [t for t in tasks if held[t.name] & set(ids)]
+        held = {t.name: held[t.name] for t in tasks}
         sample_id = [f"{name}:{i}" for name, owned in held.items() for i in ids if i in owned]
         if len(sample_id) != len(ids):
             missing = sorted(set(ids) - set().union(*held.values()))

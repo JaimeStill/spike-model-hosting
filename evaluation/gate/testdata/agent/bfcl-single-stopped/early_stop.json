@@ -12,5 +12,6 @@
   "multiple_19",
   "parallel_169"
  ],
- "reason": "the 95% upper bound 0.8791 on the pass rate (1/2) is below the bar 0.99"
+ "reason": "the 95% upper bound 0.8791 on the pass rate (1/2) is below the bar 0.99",
+ "side": "fail"
 }

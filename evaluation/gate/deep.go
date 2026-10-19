@@ -614,11 +614,24 @@ func (r *Runner) coldLoad(ctx context.Context) []Check {
 // prefix reuse; then cold load, which needs the architect's restart (coldLoad). Its scores are
 // recorded, never judged; a measurement that couldn't be taken fails it, as in every stage.
 // Its output is in the run's deep/.
+//
+// A set run takes each of the set's models' τ2, grid and prefix reuse in turn (perModel), each
+// model's output under the run directory's <Slug(model)>/deep, then cold load once, for the set.
 func (r *Runner) deep(ctx context.Context, rep *Report) []Check {
-	var checks []Check
 	if r.Dir == "" {
 		return []Check{broken("deep", "", errors.New("the runner has no run directory"))}
 	}
+	checks := r.perModel(ctx, rep, (*Runner).deepModel)
+	if ctx.Err() != nil {
+		return checks
+	}
+	return append(checks, r.coldLoad(ctx)...)
+}
+
+// deepModel is the deep stage's part for the model: τ2 for the agent role, and the grid and prefix
+// reuse for a generative model.
+func (r *Runner) deepModel(ctx context.Context, rep *Report) []Check {
+	var checks []Check
 	if slices.Contains(rep.Roles, RoleAgent) {
 		var results []Tau2Result
 		for _, d := range Tau2Domains {
@@ -658,5 +671,5 @@ func (r *Runner) deep(ctx context.Context, rep *Report) []Check {
 		r.logf("evaluate: deep: prefix reuse\n")
 		checks = append(checks, r.prefix(ctx, c))
 	}
-	return append(checks, r.coldLoad(ctx)...)
+	return checks
 }

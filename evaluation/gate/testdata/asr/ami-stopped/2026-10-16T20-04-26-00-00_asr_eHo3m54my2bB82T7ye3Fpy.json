@@ -149,6 +149,7 @@
         "screening": 2,
         "run": 4,
         "stopped": true,
+        "side": "fail",
         "lower_bound": 0.013800231626333731
       }
     },

@@ -8,10 +8,12 @@
 //	evaluate <step> [flags]
 //	evaluate <step> -h
 //
-// Called with flags first, evaluate takes one model through the gated stages, admission,
-// fitness, capacity, quality, set and deep, stopping at the first that fails, or, with -set and
-// no model, takes the set through the set stage alone, and writes the run's report under the
-// module root's .state/evaluate/ (package gatestep, over the evaluation package gate).
+// Called with flags first, evaluate screens one model, or, with -set and no model, a set: the gated
+// stages admission, fitness, capacity and quality, stopping at the first that fails, each tier
+// early stopped on either side of its bar and the roles' tiers at once. With -full it runs a
+// finalist's full run, the rest of each tier, the set stage and the deep stage, continuing its
+// screen. It writes the run's report under the module root's .state/evaluate/ (package gatestep,
+// over the evaluation package gate).
 //
 // A step is one instrument, named as the first argument; the flags after it are the step's own:
 //
@@ -71,7 +73,7 @@ func main() {
 func usage() string {
 	var b strings.Builder
 	b.WriteString("usage:\n  " + gatestep.Usage + "\n  evaluate <step> [flags]\n  evaluate <step> -h\n\n")
-	b.WriteString("Flags first run one model through the gated stages: admission, fitness, capacity,\nquality, set, then deep. -set with no model runs the set stage for the set\nalone.\n\nsteps:\n")
+	b.WriteString("Flags first screen one model through the gated stages: admission, fitness, capacity,\nthen quality. -full runs a finalist's full run: the rest of each tier, set, then deep.\n-set with no model runs the set's models together.\n\nsteps:\n")
 	for _, s := range steps {
 		fmt.Fprintf(&b, "  %-11s %s\n", s.name, s.summary)
 	}

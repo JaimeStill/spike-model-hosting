@@ -53,11 +53,24 @@ type ASRResult struct {
 	// AudioS is the scored utterances' audio, in seconds; RequestS, the time of their requests,
 	// each sent alone: Inspect's ModelOutput.time, the generate call's.
 	AudioS, RequestS float64
-	// Stopped are the utterances early stopping skipped, and StopReason why; LowerBound is the
-	// 95% lower bound on the WER when the run ended, recorded with a bar only.
-	Stopped    []string
-	StopReason string
-	LowerBound *float64
+	// Stopped are the utterances early stopping skipped, StopReason why, and StopSide the side it
+	// stopped the set on, StopFail or StopPass; LowerBound and UpperBound are the 95% bounds on the
+	// WER when the run ended (UpperBound nil while fewer than two utterances bound it), recorded
+	// with a bar only.
+	Stopped                []string
+	StopReason, StopSide   string
+	LowerBound, UpperBound *float64
+}
+
+// plus returns the run of a's utterances and then o's, the rest of a's tier a full run adds: the
+// utterances, counts and times of both, and no early stop, since together they run the tier whole.
+func (a ASRResult) plus(o ASRResult) ASRResult {
+	out := a
+	out.IDs = slices.Concat(a.IDs, o.IDs)
+	out.Errors, out.Words = a.Errors+o.Errors, a.Words+o.Words
+	out.AudioS, out.RequestS = a.AudioS+o.AudioS, a.RequestS+o.RequestS
+	out.Stopped, out.StopReason, out.StopSide, out.LowerBound, out.UpperBound = nil, "", "", nil, nil
+	return out
 }
 
 // WER is the corpus WER: every word error over every reference word.
@@ -101,7 +114,9 @@ func ReadASR(out string) (ASRResult, error) {
 					Reason string `json:"reason"`
 				} `json:"early_stops"`
 				Metadata struct {
+					Side       string   `json:"side"`
 					LowerBound *float64 `json:"lower_bound"`
+					UpperBound *float64 `json:"upper_bound"`
 				} `json:"metadata"`
 			} `json:"early_stopping"`
 		} `json:"results"`
@@ -154,21 +169,26 @@ func ReadASR(out string) (ASRResult, error) {
 	}
 	if raw.Results != nil && raw.Results.EarlyStopping != nil {
 		es := raw.Results.EarlyStopping
-		res.LowerBound = es.Metadata.LowerBound
+		res.LowerBound, res.UpperBound, res.StopSide = es.Metadata.LowerBound, es.Metadata.UpperBound, es.Metadata.Side
 		for _, s := range es.EarlyStops {
 			res.Stopped = append(res.Stopped, s.ID)
 			res.StopReason = s.Reason
 		}
 	}
+	if err := stopSide(len(res.Stopped), res.StopSide); err != nil {
+		return res, fmt.Errorf("%s: %w", path, err)
+	}
 	return res, nil
 }
 
 // asrSet runs one ASR set's tier on t's model into t's asr/<set>, and, when t is judged, judges its
-// WER against the tier's bar, which must be a ceiling, [bars_at_most]. A bar also stops the set
-// early (the screening fifth, then a 95% lower bound on the WER, asr_quality.py's WERStop); without
-// one the tier runs whole and its WER is recorded. The check records the RTFx, the counts, the wall
-// time, the dataset, normalizer and Inspect release, and the card's figure for the set beside the
-// WER where the model's card reports one.
+// WER against the tier's bar, which must be a ceiling, [bars_at_most]. In a screen a bar also stops
+// the set early on either side (the screening fifth, then a 95% lower bound on the WER above it,
+// failed, or the upper bound at or under it, passed, asr_quality.py's WERStop); without one the
+// tier runs whole and its WER is recorded. A full run reuses the screen's record of a set it ran
+// whole, and runs the rest of one it stopped, from asr/<set>/rest, judging the whole list. The
+// check records the RTFx, the counts, the wall time, the dataset, normalizer and Inspect release,
+// and the card's figure for the set beside the WER where the model's card reports one.
 func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
 	name := ASRTier(set)
 	if r.ASR == nil || t.dir == "" || r.Tiers == "" {
@@ -182,26 +202,44 @@ func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
 		}
 		ceiling = &bar.Value
 	}
+	var screen Check
+	if t.full {
+		c, ok := t.screenCheck(RoleAudio, name)
+		switch {
+		case !ok || !c.Passed:
+			return broken(name, RoleAudio, errNoScreen(name))
+		case c.Stop == nil:
+			return reused(c)
+		}
+		screen = c
+	}
 	listPath := filepath.Join(r.Tiers, name+".txt")
 	list, err := tier.ReadListFile(listPath)
 	if err != nil {
 		return broken(name, RoleAudio, err)
 	}
 	out := filepath.Join(t.dir, "asr", set)
-	// A rerun into the same run directory (a resumed run) must not read the last run's log.
-	if err := os.RemoveAll(out); err != nil {
-		return broken(name, RoleAudio, err)
+	// A rerun into the same run directory (a resumed run) must not read the last run's log; a
+	// full run reads the screen's.
+	if !t.full {
+		if err := os.RemoveAll(out); err != nil {
+			return broken(name, RoleAudio, err)
+		}
 	}
 	began := time.Now()
-	err = r.ASR.ASR(ctx, r.Router, t.model, set, listPath, r.asrPrompt(t.model), out, ceiling)
-	wall := time.Since(began).Seconds()
 	var res ASRResult
-	if err == nil {
-		res, err = ReadASR(out)
+	if t.full {
+		res, err = r.restASR(ctx, t, set, list, out)
+	} else {
+		err = r.ASR.ASR(ctx, r.Router, t.model, set, listPath, r.asrPrompt(t.model), out, ceiling)
+		if err == nil {
+			res, err = ReadASR(out)
+		}
+		if err == nil {
+			err = res.matches(set, list)
+		}
 	}
-	if err == nil {
-		err = res.matches(set, list)
-	}
+	wall := time.Since(began).Seconds() + screen.Values["wall_s"]
 	if err != nil {
 		ch := broken(name, RoleAudio, err)
 		ch.Values = map[string]float64{"wall_s": wall}
@@ -213,7 +251,7 @@ func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
 		fmt.Sprintf("%d of %d utterances", len(res.IDs), len(list.IDs)),
 		fmt.Sprintf("RTFx %.1f: %.0f s of audio over %.1f s of requests, sent one at a time", res.RTFx(), res.AudioS, res.RequestS),
 	}
-	ch, judged := judgeTier(t, name, RoleAudio, wer, "WER", bar, hasBar, len(res.Stopped) > 0, len(res.IDs), res.StopReason)
+	ch, judged := judgeTier(t, name, RoleAudio, wer, "WER", bar, hasBar, asrStop(res, len(list.IDs)))
 	notes = append(notes, judged)
 	ch.Values = map[string]float64{
 		"wall_s": wall, "rtfx": res.RTFx(), "audio_s": res.AudioS, "request_s": res.RequestS,
@@ -221,6 +259,12 @@ func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
 	}
 	if res.LowerBound != nil {
 		ch.Values["wer_lower_bound"] = *res.LowerBound
+	}
+	if res.UpperBound != nil {
+		ch.Values["wer_upper_bound"] = *res.UpperBound
+	}
+	if t.full {
+		notes = append(notes, continued(ch.Values, screen))
 	}
 	if m := r.Profile.Model(t.model); m != nil {
 		if card, ok := cardWERs[m.CardURL][set]; ok {
@@ -231,6 +275,39 @@ func (r *Runner) asrSet(ctx context.Context, t target, set string) Check {
 	notes = append(notes, "dataset "+res.Dataset, "normalizer "+res.Normalizer, "inspect "+res.Inspect)
 	ch.Detail = strings.Join(notes, "; ")
 	return ch
+}
+
+// restASR runs the rest of an ASR set's tier a full run continues: it reads the screen's run of
+// list from out, writes the utterances the screen stopped into out's rest/ as a list of their own,
+// runs that list whole, without a bar, into rest/, and returns the two runs together, checked to be
+// list's whole.
+func (r *Runner) restASR(ctx context.Context, t target, set string, list tier.List, out string) (ASRResult, error) {
+	screen, err := ReadASR(out)
+	if err == nil {
+		err = screen.matches(set, list)
+	}
+	if err != nil {
+		return screen, fmt.Errorf("the screen's run: %w", err)
+	}
+	dir := filepath.Join(out, restDir)
+	rest, path, err := writeRest(dir, list, screen.Stopped)
+	if err != nil {
+		return screen, err
+	}
+	if err := r.ASR.ASR(ctx, r.Router, t.model, set, path, r.asrPrompt(t.model), dir, nil); err != nil {
+		return screen, err
+	}
+	more, err := ReadASR(dir)
+	if err == nil {
+		err = more.matches(set, rest)
+	}
+	if err != nil {
+		return screen, fmt.Errorf("the rest: %w", err)
+	}
+	if len(more.Stopped) > 0 {
+		return screen, fmt.Errorf("the rest stopped %d utterances early; it runs without a bar", len(more.Stopped))
+	}
+	return screen.plus(more), nil
 }
 
 // matches checks the run is the set's tier as the list holds it: the pinned Inspect's, the

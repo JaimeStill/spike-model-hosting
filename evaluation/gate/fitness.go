@@ -31,7 +31,15 @@ const (
 // single-stream floors, and judges the pool at the warmed peak the run's warm-up read
 // (warmedCheck). Speeds come from llama.cpp's own timings in
 // each answer; a time is the client's, from sending to the answer.
+//
+// A set run measures each of the set's models alone, one after another (perModel), and judges the
+// warmed peak once.
 func (r *Runner) fitness(ctx context.Context, rep *Report) []Check {
+	return append(r.perModel(ctx, rep, (*Runner).fitRoles), r.warmedCheck(rep.Warm))
+}
+
+// fitRoles smokes each role the model takes and measures its single-stream floors.
+func (r *Runner) fitRoles(ctx context.Context, rep *Report) []Check {
 	c := &client{base: r.Router, hc: r.HTTP}
 	var checks []Check
 	for _, role := range rep.Roles {
@@ -46,7 +54,7 @@ func (r *Runner) fitness(ctx context.Context, rep *Report) []Check {
 			checks = append(checks, r.fitEmbedding(ctx, c)...)
 		}
 	}
-	return append(checks, r.warmedCheck(rep.Warm))
+	return checks
 }
 
 func (r *Runner) fitAgent(ctx context.Context, c *client) []Check {

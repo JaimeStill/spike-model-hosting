@@ -117,9 +117,21 @@ func check(t *testing.T, rep *gate.Report, stage, role, name string) gate.Check 
 
 func equal(a, b []string) bool { return strings.Join(a, "|") == strings.Join(b, "|") }
 
+// units returns s with its role's units' checks alone: a screen's quality stage without its
+// concurrent pass's two gates, no crossed answer and peak pool free, which judge no role.
+func units(s *gate.StageResult) *gate.StageResult {
+	if s == nil {
+		return nil
+	}
+	out := *s
+	out.Checks = slices.DeleteFunc(slices.Clone(s.Checks), func(c gate.Check) bool { return c.Role == "" })
+	return &out
+}
+
 // TestRunAgentPasses runs gpt-oss-120b, set A's agent, through every stage.
 func TestRunAgentPasses(t *testing.T) {
 	h := newHarness(t, gptOSS)
+	h.runner.Full = true
 	rep := h.run(t, "", nil)
 	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) {
@@ -142,6 +154,7 @@ func TestRunOtherRoles(t *testing.T) {
 	for model, role := range map[string]string{gemma26B: gate.RoleVision, gemmaE4B: gate.RoleAudio, embedding: gate.RoleEmbedding} {
 		t.Run(role, func(t *testing.T) {
 			h := newHarness(t, model)
+			h.runner.Full = true
 			rep := h.run(t, "", nil)
 			if !rep.Passed || !equal(rep.Roles, []string{role}) {
 				t.Errorf("passed %v roles %q; want passed, %s\n%+v", rep.Passed, rep.Roles, role, rep.Stages)
@@ -235,7 +248,7 @@ func TestRunResumes(t *testing.T) {
 	h.footprint.free, h.footprint.n = []int{3333}, 0
 	toolCalls := h.router.count("messages")
 	rep := h.run(t, gate.StageCapacity, first)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set not run", "deep not run"}
 	if got := statuses(rep); !equal(got, want) || !rep.Passed || rep.From != gate.StageCapacity {
 		t.Fatalf("resumed run %q, passed %v, from %q; want %q, passed, from capacity", got, rep.Passed, rep.From, want)
 	}
@@ -419,6 +432,7 @@ func TestAdmissionOrigin(t *testing.T) {
 // summarizes it.
 func TestReport(t *testing.T) {
 	h := newHarness(t, gptOSS)
+	h.runner.Full = true
 	rep := h.run(t, "", nil)
 	state := t.TempDir()
 	dir := gate.RunDir(state, rep.Model, rep.Started)
@@ -436,7 +450,8 @@ func TestReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.Build != "b11669-620d2225c" || got.Set != "a" || got.Model != gptOSS || !equal(got.Roles, []string{gate.RoleAgent}) ||
-		got.Reached != gate.StageDeep || !got.Passed || got.HostClass != "strix-halo" || got.Router != h.router.srv.URL {
+		got.Reached != gate.StageDeep || !got.Passed || got.HostClass != "strix-halo" || got.Router != h.router.srv.URL ||
+		got.Mode != gate.ModeFull || !got.Finalist || got.Screened == nil {
 		t.Errorf("report header %+v", got)
 	}
 	for _, s := range got.Stages {
@@ -462,7 +477,7 @@ func TestReport(t *testing.T) {
 	if err := gate.WriteSummary(&sum, got); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"build b11669-620d2225c, set a, roles agent", "reached deep: passed",
+	for _, want := range []string{"build b11669-620d2225c, set a, roles agent", "reached deep: passed", "full run of a finalist, continuing its screen of ",
 		"ok   agent decode: 50 tok/s, floor >= 20", "ok   agent agent-tau2-airline: 0.5 pass^1, no floor", "ceiling: decode 50.0 tok/s of 92.5"} {
 		if !strings.Contains(sum.String(), want) {
 			t.Errorf("summary lacks %q:\n%s", want, sum.String())

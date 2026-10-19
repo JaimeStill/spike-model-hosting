@@ -56,7 +56,7 @@ from kaldialign import edit_distance
 
 from asr_normalizer import SOURCE as NORMALIZER
 from asr_normalizer import EnglishTextNormalizer
-from pass_stop import Z95, read_list
+from pass_stop import FAIL, PASS, Z95, read_list
 
 ESB = ("hf-audio/esb-datasets-test-only-sorted", "de79e57adf9983993bcc72586d7313460825f5eb")
 FLEURS = ("google/fleurs", "70bb2e84b976b7e960aa89f1c648e09c59f894dd")
@@ -203,28 +203,43 @@ def wer():
     return score
 
 
-def wer_lower_bound(errors: list[int], words: list[int]) -> float:
-    """The one-sided 95% lower bound on a corpus WER from the utterances run so far.
+def wer_bounds(errors: list[int], words: list[int]) -> tuple[float, float]:
+    """The one-sided 95% lower and upper bounds on a corpus WER from the utterances run so far.
 
     The corpus WER is a ratio estimator, R = sum(e) / sum(w), over utterances sampled from the
     set; its standard error is the delta method's, utterance-clustered:
     SE^2 = sum((e_i - R w_i)^2) / (m (m - 1) wbar^2), wbar the mean reference length of the m
     utterances. Words within an utterance aren't independent, so a per-word binomial bound would
-    be too narrow; the clustered one isn't. The bound is R - z SE, normal-approximate."""
+    be too narrow; the clustered one isn't. The bounds are R - z SE, at least 0, and R + z SE,
+    normal-approximate. Under two utterances, or none of their words, there is no standard error,
+    and the bounds are 0 and infinity: nothing is decided."""
     m, words_total = len(errors), sum(words)
     if m < 2 or words_total == 0:
-        return 0.0
+        return 0.0, math.inf
     r = sum(errors) / words_total
     wbar = words_total / m
     var = sum((e - r * w) ** 2 for e, w in zip(errors, words)) / (m * (m - 1) * wbar * wbar)
-    return max(0.0, r - Z95 * math.sqrt(var))
+    se = math.sqrt(var)
+    return max(0.0, r - Z95 * se), r + Z95 * se
+
+
+def wer_lower_bound(errors: list[int], words: list[int]) -> float:
+    """The one-sided 95% lower bound on a corpus WER (wer_bounds)."""
+    return wer_bounds(errors, words)[0]
+
+
+def wer_upper_bound(errors: list[int], words: list[int]) -> float:
+    """The one-sided 95% upper bound on a corpus WER (wer_bounds)."""
+    return wer_bounds(errors, words)[1]
 
 
 class WERStop:
     """Inspect early stopping on a WER bar, lower being better: the screening fifth runs whole,
-    then, before each further utterance, the set stops once the lower bound on its corpus WER
-    (wer_lower_bound) is above the bar, since no utterance still to come could bring the WER to
-    the bar with that confidence. It needs the utterances sent one at a time, in order."""
+    then, before each further utterance, the set stops failed once the lower bound on its corpus
+    WER is above the bar, since no utterance still to come could bring the WER to the bar with
+    that confidence, and stops passed once the upper bound is at or under it (wer_bounds); a set
+    whose bounds still straddle the bar runs on until one decides it or its list ends. It needs
+    the utterances sent one at a time, in order."""
 
     def __init__(self, bar: float):
         self.bar = bar
@@ -232,21 +247,26 @@ class WERStop:
         self.words: list[int] = []
         self.size = self.screening = 0
         self.stopped_at: int | None = None
+        self.side = self.reason = ""
         self.bound = 0.0
 
     async def start_task(self, task, samples, epochs) -> str:
         self.size, self.screening = len(samples), math.ceil(len(samples) / 5)
-        return "wer_lower_bound"
+        return "wer_bounds"
 
     async def schedule_sample(self, id, epoch) -> EarlyStop | None:
         run = len(self.errors)
         if self.stopped_at is None and self.screening <= run < self.size:
-            self.bound = wer_lower_bound(self.errors, self.words)
-            if self.bound > self.bar:
-                self.stopped_at = run
+            lower, upper = wer_bounds(self.errors, self.words)
+            if lower > self.bar:
+                self.stopped_at, self.side, self.bound = run, FAIL, lower
+                self.reason = f"the 95% lower bound {lower:.4f} on the WER is above the bar {self.bar}"
+            elif upper <= self.bar:
+                self.stopped_at, self.side, self.bound = run, PASS, upper
+                self.reason = f"the 95% upper bound {upper:.4f} on the WER is at or under the bar {self.bar}"
         if self.stopped_at is None:
             return None
-        return EarlyStop(id=id, epoch=epoch, reason=f"the 95% lower bound {self.bound:.4f} on the WER is above the bar {self.bar}")
+        return EarlyStop(id=id, epoch=epoch, reason=self.reason)
 
     async def complete_sample(self, id, epoch, scores) -> None:
         md = scores["wer"].score.metadata
@@ -254,9 +274,12 @@ class WERStop:
         self.words.append(md["words"])
 
     async def complete_task(self) -> dict:
+        lower, upper = wer_bounds(self.errors, self.words)
         return {
             "bar": self.bar, "size": self.size, "screening": self.screening, "run": len(self.errors),
-            "stopped": self.stopped_at is not None, "lower_bound": wer_lower_bound(self.errors, self.words),
+            "stopped": self.stopped_at is not None, "side": self.side, "lower_bound": lower,
+            # JSON has no infinity: an upper bound nothing bounds yet is recorded as null.
+            "upper_bound": upper if math.isfinite(upper) else None,
         }
 
 

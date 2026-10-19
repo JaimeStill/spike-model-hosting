@@ -67,11 +67,7 @@ func TestRunReloads(t *testing.T) {
 					t.Errorf("reading %+v; want system RAM with each model's RSS", p)
 				}
 			}
-			stage := gate.StageFitness
-			if model == "" {
-				stage = gate.StageSet
-			}
-			c := check(t, rep, stage, "", "warmed pool free")
+			c := check(t, rep, gate.StageFitness, "", "warmed pool free")
 			if !c.Passed || *c.Measured != 3100 || c.Values["idle_pool_free_mib"] != 3509 || c.Values["warm_growth_mib"] != 409 ||
 				c.Values["ram_available_mib"] != 28000+3100 || c.Values["rss_mib "+gemma26B] != rssMiB {
 				t.Errorf("warmed pool free %+v; want 3100 judged, the idle 3509, the growth and RAM beside it", c)
@@ -168,8 +164,8 @@ func TestWarmUpRequests(t *testing.T) {
 }
 
 // TestWarmedPeakFloor shows the pool's floor is judged at the warmed peak, not the idle reading:
-// a set idle above the floor fails once its warm-up leaves it under, in fitness for a model run
-// and in the set stage for a set run; a warm-up request that fails makes it a measurement that
+// a set idle above the floor fails once its warm-up leaves it under, in fitness, for a model run
+// and a set run alike; a warm-up request that fails makes it a measurement that
 // couldn't be taken.
 func TestWarmedPeakFloor(t *testing.T) {
 	for name, model := range map[string]string{"model run": gemma26B, "set run": ""} {
@@ -178,9 +174,6 @@ func TestWarmedPeakFloor(t *testing.T) {
 			h.footprint.free = []int{3509, 2700}
 			rep := h.run(t, "", nil)
 			stage := gate.StageFitness
-			if model == "" {
-				stage = gate.StageSet
-			}
 			c := check(t, rep, stage, "", "warmed pool free")
 			if c.Passed || *c.Measured != 2700 || *c.Floor != 2816 || c.Values["idle_pool_free_mib"] != 3509 {
 				t.Errorf("warmed pool free %+v; want a failure at 2700 against 2816, idle 3509", c)

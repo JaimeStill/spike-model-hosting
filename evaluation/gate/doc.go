@@ -1,7 +1,16 @@
 // Package gate runs evaluate's gated stages for one model of a profile's set against the router:
 // admission, fitness, capacity, quality, set and deep, in that order, stopping at the first that
-// fails, so the deep stage runs only once every gate passed. A set run, with no model, takes the
-// set stage alone for the set.
+// fails, so the deep stage runs only once every gate passed. A set run, with no model, takes every
+// model of the set through them together.
+//
+// A run is a screen by default: admission, fitness and capacity, then the quality stage, every
+// sampled tier its screening fifth and on until its 95% bound decides it, the roles' tiers at once;
+// the set and deep stages are reported not run. A screen that passes every stage makes the model,
+// or the set run's models, a finalist. A full run (Runner.Full) continues a finalist's screen: it
+// reuses the screen's admission, fitness, capacity and warm-up and every unit the screen ran whole,
+// runs the rest of each tier the screen stopped and judges the whole list, then runs the set stage
+// and the deep stage. A full run given no screen screens first. A set run's admission, fitness,
+// capacity and deep run model by model (each check naming its model), the set's own checks once.
 //
 //   - Admission judges the model on paper, from the profile and the router's build: licence
 //     recorded (failing only when missing), origin recorded and judged by STANDARDS (a model of
@@ -9,13 +18,13 @@
 //     its origin_reason), the set's roles declared, the profile's context within the card's,
 //     the set's memory budget leaving the pool's floor free, and the router's build at or above
 //     the profile's minimum.
-//   - Before the first stage after admission (for a set run, the set stage), a run that resumes
-//     nothing starts from freshly loaded models (Warm): it reloads the set over the router's API
-//     (swap.Reload), waits Runner.Settle, reads the idle pool, drives each of the set's models to
-//     its high-water mark (an 8192-token prompt to each generative model, the vision role's
-//     largest image and the audio role's longest clip in the committed tier lists, which Peaks
-//     finds, and the embedding role's largest input, its c less embedReserve) and reads the pool
-//     at that warmed peak. Every pool floor is judged at the warmed peak.
+//   - Before the first stage after admission, a run that resumes nothing starts from freshly
+//     loaded models (Warm): it reloads the set over the router's API (swap.Reload), waits
+//     Runner.Settle, reads the idle pool, drives each of the set's models to its high-water mark
+//     (an 8192-token prompt to each generative model, the vision role's largest image and the
+//     audio role's longest clip in the committed tier lists, which Peaks finds, and the embedding
+//     role's largest input, its c less embedReserve) and reads the pool at that warmed peak. Every
+//     pool floor is judged at the warmed peak.
 //   - Fitness smokes each role the set assigns the model with the probe's request for it (a
 //     tool call, an image, an audio clip, an embedding), measures the role's single-stream
 //     floors from llama.cpp's timings or the client's clock, and judges the pool at the warmed
@@ -26,6 +35,19 @@
 //   - Capacity puts the model's slots, from the profile, of requests in flight on it per role,
 //     through the concurrent package's run: no crossed nonce, the embedding tolerance held, the pool's
 //     floor free at the peak, and the role's 4-stream floor.
+//   - Quality runs every role of the run at once, each on its own model, each role's tiers in
+//     order: a quality score doesn't depend on speed, which fitness and capacity measured alone.
+//     In a screen the pass runs inside the set stage's concurrent window, which it stands in for:
+//     the pool's least free memory over it, against the pool's floor, and rounds of nonce
+//     requests to every role's model of the set, no answer crossed (both as the set stage judges
+//     them, below). A model run's pass is its own roles' tiers, the set's other models loaded and
+//     answering only the crossing rounds. Early stop: a sampled tier (a BFCL or vision benchmark,
+//     an ASR set) runs its list's screening fifth whole, then stops failed once its one-sided 95%
+//     bound falls on the wrong side of its bar, or passed once the bound clears it, and runs on,
+//     to its list's end at most, while the bounds straddle the bar; the check records the stop
+//     (Stop): its side, its bound and the samples run. A full run sends the samples the screen
+//     stopped as a list of their own, the tier's rest/list.txt, without a bar, and judges the whole
+//     list.
 //   - Quality runs the agent role's tiers (AgentTiers), cheapest first, and stops at the first
 //     tier that fails. Tier 1 is BFCL's single-turn questions, 100 seeded across its 13
 //     leaderboard categories; tier 2 its multi-turn conversations, 20 seeded across its 4; both
@@ -34,7 +56,7 @@
 //     sampling, the template's reasoning) with parallel tool calls allowed. Each tier's accuracy
 //     is judged against its floor, by check name (agent-<tier>), under [bars] in
 //     evaluation/bars.toml, and recorded, never failing, without one; a floor stops the tier
-//     early as the vision tiers' does. Each check records the samples run and passed, their
+//     early on either side as the vision tiers' does. Each check records the samples run and passed, their
 //     model requests and working time, the wall time, the data's Gorilla commit, the task's
 //     inspect_evals version and Inspect's release. Tier 3 is harness fit: conform's pass^5
 //     through every pinned harness (passk.Harnesses: Pi, Claude Code, OpenCode) on the set's
@@ -61,8 +83,9 @@
 //     (every word error over every reference word, after the leaderboard's English normalizer)
 //     is judged against its ceiling, by tier name (asr-<set>), under [bars_at_most] in
 //     evaluation/bars.toml, and recorded, never failing, without one. A ceiling also stops the
-//     set early: after the screening fifth, once the one-sided 95% lower bound on the WER (a
-//     ratio estimator's, utterance-clustered) is above it. Each check records the RTFx (the
+//     set early: after the screening fifth, failed once the one-sided 95% lower bound on the WER
+//     (a ratio estimator's, utterance-clustered) is above it, or passed once the upper bound is at
+//     or under it. Each check records the RTFx (the
 //     audio's seconds over the requests'), the utterances, errors and words, the wall time, the
 //     dataset's revision, the normalizer's source and Inspect's release, and, for a set the
 //     model's card reports, the card's figure beside ours.
@@ -76,14 +99,14 @@
 //     filtering from the tier lists in evaluation/tiers, at temperature 0 with reasoning off.
 //     Each benchmark's score, the accuracy or DocVQA's mean ANLS, is judged against its floor,
 //     by check name (vision-<tier>), under [bars] in evaluation/bars.toml, and recorded, never
-//     failing, without one. A floor also stops the tier early: after the screening fifth, once
-//     the one-sided 95% Wilson upper bound on the pass rate is under it, a sample passing at a
-//     score of 0.5 or more (a mean ANLS is never above that pass rate, so the bound holds for
-//     it too). Each check records the samples run and passed, the request and wall time, the
+//     failing, without one. A floor also stops the tier early: after the screening fifth, failed
+//     once the one-sided 95% Wilson upper bound on the pass rate is under it, a sample passing at
+//     a score of 0.5 or more (a mean ANLS is never above that pass rate, so the bound holds for
+//     it too), or passed once the Wilson lower bound on the mean score is at or over it. Each check records the samples run and passed, the request and wall time, the
 //     dataset's revision, the tasks' inspect_evals versions and Inspect's release, and, for a
 //     tier the model's card reports, the card's figure beside ours.
-//   - Set runs tier 1s (TierOne) on the set's role models, all of them loaded (a set run judges the
-//     warmed peak first, having no fitness stage): the agent's BFCL
+//   - Set, a full run's alone, runs tier 1s (TierOne) on the set's role models, all of them
+//     loaded: the agent's BFCL
 //     single-turn, the vision probe and V*Bench, the audio role's LibriSpeech test-clean and the
 //     embedding role's STSBenchmark, the cheapest of its MTEB tasks, through the quality stage's
 //     suites, whole and without their bars. A set run runs each role's alone, role after role,
@@ -100,14 +123,15 @@
 //     concurrent phase: the pool's least free memory, read as capacity reads it, against the
 //     pool's floor, and no crossed answer, from rounds of capacity's nonce requests sent to every
 //     role's model at once, every Runner.CrossEvery, while the tiers run, each answer carrying
-//     its own nonce and no other and each embedding vector its own input's; a request that
+//     its own nonce and no other and each embedding vector its own input's (a screen's quality
+//     pass judges the same two over its tiers); a request that
 //     errored, came back empty, or hit its max_tokens (finish_reason "length") carrying no nonce
 //     at all is recorded unanswered, not crossed, so long as each role had one checked; only an
 //     answer carrying a nonce not its own is crossed. The vision role's nonce request allows 1024
 //     tokens. A load whose every finished request errored fails it too. Its output is in the
-//     run's set/alone and set/concurrent. A run resumed at the set stage needs the quality
-//     records it reuses, and is refused without them.
-//   - Deep records and never judges; a measurement that couldn't be taken fails it, as in every
+//     run's set/alone and set/concurrent. A model's full run resumed at the set stage needs the
+//     quality records it reuses, and is refused without them.
+//   - Deep, a full run's alone, records and never judges; a measurement that couldn't be taken fails it, as in every
 //     stage. For the agent role it runs τ2 airline and retail (Tau2Domains), 12 seeded tasks each
 //     (evaluation/tiers/agent-tau2-<domain>.txt), each task Tau2Trials times, through the suites
 //     project's tau2_quality.py: inspect_evals' stock τ2 tasks, unforked, the model under test
@@ -127,25 +151,31 @@
 //     Runner.Restarts, it asks for two restarts, ColdLoadWarm and then ColdLoadCold, root
 //     commands the architect runs on the router's host, and times each with the coldload
 //     package's Tracker until every model of the set (the startup set) is loaded again; without
-//     it, it is recorded not run, naming the commands. Its output is in the run's deep/.
+//     it, it is recorded not run, naming the commands. Its output is in the run's deep/. A set
+//     run takes each model's τ2, grid and prefix reuse in turn, under the run directory's
+//     <Slug(model)>/deep, then cold load once.
 //
 // Every request carries autoload=false; a run refuses a model the router doesn't list loaded
 // before any stage (a run that reloads, any model of the set), and loads only the set it reloads.
-// A run resumed from a later stage reloads nothing and keeps the warm-up of the run it resumes.
+// A run resumed from a later stage, or a full run continuing its screen, reloads nothing and keeps
+// the warm-up of the run it resumes.
 //
 // The API:
 //   - Runner runs the stages, judging quality by its Bars (package tier's) and the conform tier
 //     by harness fit, and keeping the suites' output in its Dir; Runner.Run returns the
-//     Report, and resumes from a named stage by reusing a prior run's passed results for the
-//     stages before it. Runner.Roles are the roles the set assigns the model, or every role for
+//     Report, a screen's or, with Runner.Full, a full run's (ModeScreen, ModeFull), continuing a
+//     prior screen that made a finalist, and resumes from a named stage by reusing a prior run's
+//     passed results for the stages before it. Runner.Roles are the roles the set assigns the model, or every role for
 //     a set run, a Runner with no Model, whose directory is named for SetSubject. ErrNotLoaded
 //     marks a refused run. TierOne names a role's tier 1 units, which the set stage runs.
 //   - Stages and the Stage* constants name the stages; Roles and the Role* constants name the
 //     roles, RoleAgent being the profile's chat role (ProfileRole, ParseRole).
 //   - Floors are the per-role floors, data in evaluation/floors.toml, which LoadFloors reads.
-//   - Report, StageResult and Check are a run's record, each check its measured value beside
-//     the floor it was judged against (AtLeast or AtMost), each stage ending StatusPass,
-//     StatusFail or StatusNotRun; Ceiling compares the measured decode with the speed the
+//   - Report, StageResult and Check are a run's record: the report its mode, whether it made a
+//     finalist and, for a full run, when its screen started; each check its measured value beside
+//     the floor it was judged against (AtLeast or AtMost), in a set run the model it judges, and,
+//     for a tier a screen stopped early, its Stop, the side (StopFail or StopPass), bound and
+//     samples run; each stage ending StatusPass, StatusFail or StatusNotRun; Ceiling compares the measured decode with the speed the
 //     host's memory bandwidth allows the model, recorded and never gated. WriteReport,
 //     ReadReport and WriteSummary write and read it; RunDir and LatestRun place it under the
 //     state root, as <state>/evaluate/<UTC time>-<Slug(model)>/ReportFile.

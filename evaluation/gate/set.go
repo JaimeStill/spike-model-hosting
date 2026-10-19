@@ -19,10 +19,14 @@ import (
 
 // target is where a quality unit (an MTEB task, an ASR set, a vision or BFCL tier) runs: the
 // model it runs on, the directory its output goes under, and whether its bar judges it and stops
-// it early, as in the quality stage, or it runs whole and is recorded, as in the set stage.
+// it early, as in the quality stage, or it runs whole and is recorded, as in the set stage. A
+// full run's quality stage (full) continues the screen's quality stage (screen): it reuses each
+// unit the screen ran whole and runs the rest of each one the screen stopped.
 type target struct {
 	model, dir string
 	judged     bool
+	full       bool
+	screen     *StageResult
 }
 
 // unjudgedNote is the note a unit the set stage runs carries in place of its bar's.
@@ -115,7 +119,9 @@ const (
 	phaseConcurrent = "concurrent"
 )
 
-// set runs the set stage against the set's loaded models, in one of two forms.
+// set runs the set stage against the set's loaded models, in a full run only: a screen's quality
+// stage runs its tiers at once inside the same concurrent window, which stands in for the stage's
+// concurrent phase. It takes one of two forms.
 //
 // A set run (no Model) runs each role's tier 1 (TierOne) on the model the set assigns it, first
 // alone, one role after another, then every role's at once (setRun).
@@ -146,8 +152,7 @@ func (r *Runner) set(ctx context.Context, rep *Report) []Check {
 		return []Check{broken("set loaded", "", errors.New("the runner has no run directory"))}
 	}
 	if r.Model == "" {
-		// A set run has no fitness stage, so its set stage judges the warmed peak.
-		return append([]Check{r.warmedCheck(rep.Warm)}, r.setRun(ctx, roles)...)
+		return r.setRun(ctx, roles)
 	}
 	return r.setModelRun(ctx, rep, roles)
 }
@@ -208,7 +213,9 @@ func (r *Runner) setRun(ctx context.Context, roles []assignment) []Check {
 
 // setModelRun is a model run's set stage. Its alone figures are the quality stage's tier 1
 // records, the same units on the same lists at the same settings, so it doesn't run them alone
-// again. Its own roles' tier 1s run at once while every other role of the set carries load
+// again: a model run's quality pass runs only the model's own roles, the set's other models idle
+// but for the crossing rounds, and its full run's records are each list whole, the screen's
+// samples and the rest together. Its own roles' tier 1s run at once while every other role of the set carries load
 // (load): the load starts with the tiers and stops when they finish, so the other models load
 // the pool for exactly the window the model's tiers run, and run no tier of their own.
 func (r *Runner) setModelRun(ctx context.Context, rep *Report, roles []assignment) []Check {

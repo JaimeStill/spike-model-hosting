@@ -28,9 +28,11 @@ import (
 // testdata/tiers/agent-<tier>.txt, or testdata/agent/<tier>-stopped given a bar; a τ2 domain with
 // testdata/tau2/<domain>, the summary (tau2.json) of a live run of gpt-oss-120b on the Framework,
 // its user simulated by Sonnet through Claude Code 2.1.301, trimmed to
-// testdata/tiers/agent-tau2-<domain>.txt's tasks, two trials each. Each result is stamped with the suites project's pin of MTEB, Inspect AI or
-// inspect_evals, since the check refuses another's and a pin moves on while the recording stays
-// the same.
+// testdata/tiers/agent-tau2-<domain>.txt's tasks, two trials each. A full run's rest of an ASR
+// set, vision tier or BFCL tier, a list under a rest/ directory, is answered with
+// <kind>/<unit>-rest, which a test builds beside the <unit>-stopped it screens with (variant).
+// Each result is stamped with the suites project's pin of MTEB, Inspect AI or inspect_evals,
+// since the check refuses another's and a pin moves on while the recording stays the same.
 type fakeUV struct {
 	dir string
 	// fail names a task, set, vision tier, BFCL tier or τ2 domain the fake exits 1 on, writing nothing; mteb, inspect
@@ -38,6 +40,10 @@ type fakeUV struct {
 	fail, mteb, inspect, evals string
 	// testdata, when set, is the directory the results are answered from in place of testdata.
 	testdata string
+	// barrier, when set, holds each quality call (not the warm-up's, the set stage's or the deep
+	// stage's) until that many kinds of suite (mteb, asr, vision, agent) have started one: the
+	// calls finish only if they run at once.
+	barrier int
 }
 
 func newFakeUV(t *testing.T) *fakeUV {
@@ -52,7 +58,7 @@ func (f *fakeUV) runner() gate.UV {
 	}
 	script := fmt.Sprintf(`#!/bin/sh
 printf '%%s|%%s|%%s|%%s|%%s\n' "$*" "$HF_HOME" "$MTEB_CACHE" "$ASR_CACHE" "$INSPECT_EVALS_CACHE_DIR" >> %[1]q
-kind= task= set= tier= out= bar= domain= peak=
+kind= task= set= tier= out= bar= domain= peak= list=
 while [ $# -gt 0 ]; do
 	case $1 in
 	peak) peak=1 ;;
@@ -64,6 +70,7 @@ while [ $# -gt 0 ]; do
 	*/agent_quality.py) kind=agent ;;
 	--task) task=$2; shift ;;
 	--tier) tier=$2; shift ;;
+	--list) list=$2; shift ;;
 	--set) set=$2; shift ;;
 	--output) out=$2; shift ;;
 	--bar) bar=$2; shift ;;
@@ -83,6 +90,20 @@ if [ -n "$peak" ]; then
 	esac
 	exit 0
 fi
+if [ %[7]d -gt 0 ]; then
+	case $out in
+	*/set/*|*/deep/*) ;;
+	*)
+		# Every kind of suite must start a call before any call finishes.
+		touch %[8]q/start-$kind
+		i=0
+		while [ "$(find %[8]q -name 'start-*' | wc -l)" -lt %[7]d ]; do
+			i=$((i+1))
+			[ $i -gt 1000 ] && exit 3
+			sleep 0.01
+		done ;;
+	esac
+fi
 case $kind in
 mteb)
 	[ "$task" = %[2]q ] && exit 1
@@ -91,13 +112,19 @@ mteb)
 asr)
 	[ "$set" = %[2]q ] && exit 1
 	src=%[3]q/asr/"$set"
-	[ -n "$bar" ] && [ -d "$src-stopped" ] && src=$src-stopped
+	case $tier in
+	*/rest/list.txt) src=$src-rest ;;
+	*) [ -n "$bar" ] && [ -d "$src-stopped" ] && src=$src-stopped ;;
+	esac
 	mkdir -p "$out" && cp "$src"/*.json "$out"/ || exit 1
 	sed -i 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' "$out"/*.json ;;
 vision|agent)
 	[ "$tier" = %[2]q ] && exit 1
 	src=%[3]q/$kind/"$tier"
-	[ -n "$bar" ] && [ -d "$src-stopped" ] && src=$src-stopped
+	case $list in
+	*/rest/list.txt) src=$src-rest ;;
+	*) [ -n "$bar" ] && [ -d "$src-stopped" ] && src=$src-stopped ;;
+	esac
 	mkdir -p "$out" && cp "$src"/*.json "$out"/ || exit 1
 	sed -i -e 's/"inspect_ai": "[^"]*"/"inspect_ai": "%[5]s"/' -e 's/"inspect_evals": "[^"]*"/"inspect_evals": "%[6]s"/' "$out"/*.json ;;
 tau2)
@@ -107,7 +134,7 @@ tau2)
 *) exit 2 ;;
 esac
 `, filepath.Join(f.dir, "calls"), f.fail, testdata, cmp.Or(f.mteb, gate.MTEBVersion), cmp.Or(f.inspect, gate.InspectVersion),
-		cmp.Or(f.evals, gate.InspectEvalsVersion))
+		cmp.Or(f.evals, gate.InspectEvalsVersion), f.barrier, f.dir)
 	exe := filepath.Join(f.dir, "uv")
 	if err := os.WriteFile(exe, []byte(script), 0o700); err != nil {
 		panic(err)
@@ -211,12 +238,13 @@ var recorded = map[string]struct {
 // time, and, with no bar, it passes.
 func TestQualityEmbedding(t *testing.T) {
 	h := newHarness(t, embedding)
+	h.runner.Full = true
 	rep := h.run(t, "", nil)
 	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}
-	q := rep.Stage(gate.StageQuality)
+	q := units(rep.Stage(gate.StageQuality))
 	if len(q.Checks) != len(gate.EmbeddingTasks) {
 		t.Fatalf("%d quality checks; want one a task, %d", len(q.Checks), len(gate.EmbeddingTasks))
 	}
@@ -321,7 +349,7 @@ func TestQualityBroken(t *testing.T) {
 			h.uv.fail, h.uv.mteb = tc.fail, tc.version
 			h.runner.MTEB, h.runner.Bars = h.uv.runner(), tc.bars
 			rep := h.run(t, "", nil)
-			if s := rep.Stage(gate.StageQuality); s.Status != gate.StatusFail || len(s.Checks) != len(gate.EmbeddingTasks) {
+			if s := units(rep.Stage(gate.StageQuality)); s.Status != gate.StatusFail || len(s.Checks) != len(gate.EmbeddingTasks) {
 				t.Fatalf("quality %+v; want failed, every task checked", s)
 			}
 			c := check(t, rep, gate.StageQuality, gate.RoleEmbedding, "SciFact")
@@ -396,12 +424,13 @@ func TestQualityAudio(t *testing.T) {
 	// The ASR task's prompt is the profile's: a changed one is the one passed.
 	const prompt = "Transcribe this clip, as the profile says."
 	h.runner.Profile.Model(gemmaE4B).Prompts.ASR = prompt
+	h.runner.Full = true
 	rep := h.run(t, "", nil)
 	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}
-	q := rep.Stage(gate.StageQuality)
+	q := units(rep.Stage(gate.StageQuality))
 	if len(q.Checks) != len(gate.AudioSets) {
 		t.Fatalf("%d quality checks; want one a set, %d", len(q.Checks), len(gate.AudioSets))
 	}
@@ -468,15 +497,16 @@ func TestQualityAudioBars(t *testing.T) {
 		t.Fatalf("stages %q; want %q", got, want)
 	}
 	ami := check(t, rep, gate.StageQuality, gate.RoleAudio, "asr-ami")
-	if ami.Passed || ami.Op != gate.AtMost || *ami.Floor != 0.001 || !strings.Contains(ami.Detail, "early stop after 4: the 95% lower bound") {
+	if ami.Passed || ami.Op != gate.AtMost || *ami.Floor != 0.001 || !strings.Contains(ami.Detail, "early stop, failed, after 4 of 10: the 95% lower bound") ||
+		ami.Stop == nil || ami.Stop.Side != gate.StopFail || ami.Stop.Bound != "WER lower bound" || ami.Stop.Ran != 4 || *ami.Stop.Value != ami.Values["wer_lower_bound"] {
 		t.Errorf("asr-ami %+v; want stopped early, failed against <= 0.001", ami)
 	}
 	if _, ok := ami.Values["wer_lower_bound"]; !ok || ami.Values["utterances"] != 4 {
 		t.Errorf("asr-ami values %v; want the bound and the 4 utterances run", ami.Values)
 	}
 	clean := check(t, rep, gate.StageQuality, gate.RoleAudio, "asr-librispeech-clean")
-	if !clean.Passed || clean.Op != gate.AtMost || *clean.Floor != 0.5 || !strings.Contains(clean.Detail, "early stop: ran in full") {
-		t.Errorf("asr-librispeech-clean %+v; want a pass against <= 0.5, run in full", clean)
+	if !clean.Passed || clean.Op != gate.AtMost || *clean.Floor != 0.5 || !strings.Contains(clean.Detail, "early stop: undecided") || clean.Stop != nil {
+		t.Errorf("asr-librispeech-clean %+v; want a pass against <= 0.5, its whole list run undecided", clean)
 	}
 	if c := check(t, rep, gate.StageQuality, gate.RoleAudio, "asr-voxpopuli"); !c.Passed || c.Floor != nil {
 		t.Errorf("asr-voxpopuli %+v; want recorded with no bar", c)
@@ -516,7 +546,7 @@ func TestQualityAudioBroken(t *testing.T) {
 				h.runner.Tiers = withExtraID(t, h.runner.Tiers, "asr-ami")
 			}
 			rep := h.run(t, "", nil)
-			if s := rep.Stage(gate.StageQuality); s.Status != gate.StatusFail || len(s.Checks) != len(gate.AudioSets) {
+			if s := units(rep.Stage(gate.StageQuality)); s.Status != gate.StatusFail || len(s.Checks) != len(gate.AudioSets) {
 				t.Fatalf("quality %+v; want failed, every set checked", s)
 			}
 			c := check(t, rep, gate.StageQuality, gate.RoleAudio, "asr-ami")
