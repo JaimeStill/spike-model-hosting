@@ -188,7 +188,7 @@ with four requests in flight on each left 2.61GiB of the pool free, under the 2.
 so this c, the first to drop, is 32768.
 """
 # The flag is --mtmd-batch-max-tokens in common/arg.cpp from b11452 (the minimum build) through
-# b11715; its default is 1024.
+# b11734; its default is 1024.
 mtmd_batch_max_tokens = 512
 mtmd_batch_max_tokens_reason = """
 mtmd-batch-max-tokens = 512 encodes each image in a batch of its own: the server caps an image

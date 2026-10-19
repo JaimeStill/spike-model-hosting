@@ -489,3 +489,66 @@ laptop on 2026-10-19:
   router failed to connect for 134 s (`curl: (28) Failed to connect`), then went through. The
   router's unit stayed up throughout (active since the boot), and the reload completed. The
   cause wasn't found.
+
+## b11715 to b11734, 2026-10-19
+
+- **From:** b11715 (`b11715-9d1878a43`), installed by `evaluation`, on the OS update's driver.
+- **To:** b11734 (`b11734-f3fb2fcdb`), the newest b-tag when `screen`'s BUILD began. Its Vulkan
+  x64 asset is `llama-b11734-bin-ubuntu-vulkan-x64.tar.gz`, sha256
+  `2c8b590c325960eb474c08c7a3b02b3c8eda054aa03352ed864948dc4ae1668d`.
+- **Reviewed:** the 19 commits in `b11715...b11734` (`gh api
+  repos/ggml-org/llama.cpp/compare/b11715...b11734`), read for Vulkan on gfx1151, the router
+  (`server-models`, the presets and their reload), tool-call parsing, mtmd's vision and audio,
+  and the embeddings endpoint. Where a question needed the source, the review read it at the
+  `b11734` tag. No commit in the range touches `tools/server/`, `tools/mtmd/`, `common/` (so
+  neither `common/arg.cpp`, `common/preset.cpp` nor `common/parsers/`), `src/llama-graph.cpp`,
+  or the Gemma 4, gpt-oss and EmbeddingGemma graphs. 32 of the range's 55 changed files are in
+  the Hexagon, CUDA, SYCL, CANN and WebGPU backends; most of the rest are tests, CI, scripts,
+  conversion and the web UI.
+
+### What the notes change for set A
+
+- **Vulkan.** One line, from [#28851](https://github.com/ggml-org/llama.cpp/pull/28851)
+  (non-contiguous `SUM` on CPU, CUDA, Vulkan and WebGPU): Vulkan's `supports_op` takes `SUM`
+  over any contiguously allocated F32 tensor, where it shared `SUM_ROWS`'s contiguous-rows test
+  before. No graph set A runs calls `ggml_sum`: `src/models/gemma4.cpp`, `openai-moe.cpp`,
+  `gemma-embedding2.cpp`, `src/llama-graph.cpp`, `tools/mtmd/clip.cpp`, and the four Gemma 4
+  projectors under `tools/mtmd/models/` have none at `b11734`. Nothing else in the Vulkan
+  backend changes.
+- **The router.** Unchanged: no commit touches `tools/server/`. Loading, unloading, the presets,
+  `load-on-startup`, `--models-max`, `GET /models?reload=1` and `DELETE /models` behave as on
+  b11715. A reload re-reads the file `--models-preset` names, unloads a running model whose
+  section changed, and never loads one (`server-models.cpp`, `load_models`); `DELETE /models`
+  removes only a model whose source is the cache, and refuses a preset's model ("not removable
+  (not from cache)").
+- **Tool-call parsing.** Unchanged: `common/parsers/` and the chat code have no commit. The
+  `<|constrain|>` final that fails gpt-oss's peg-native parse (`tool-reliability.md`) fails the
+  same way; [#25332](https://github.com/ggml-org/llama.cpp/pull/25332) is open and unchanged
+  since 2026-07-06.
+- **mtmd, vision and audio.** Unchanged: no commit touches `tools/mtmd/`. Gemma 4's image
+  warm-up reservation, `--mtmd-batch-max-tokens` and the `GEMMA4UA` audio path are as on b11715.
+- **The embeddings endpoint.** Unchanged. [#30607](https://github.com/ggml-org/llama.cpp/pull/30607)
+  adds bidirectional attention and a `dense_2` output projection to the Qwen3 graph, for Qwen3
+  embedding GGUFs that carry them; EmbeddingGemma 2's graph is untouched.
+- **The RAM prompt cache.** Unchanged; [#27624](https://github.com/ggml-org/llama.cpp/pull/27624)
+  is open and unchanged since 2026-10-10.
+- **Graphs and CPU.** [#30791](https://github.com/ggml-org/llama.cpp/pull/30791) vectorizes the
+  CPU's SiLU and `expf`; set A runs every layer on the GPU, so only a CPU fallback would see it.
+  [#30105](https://github.com/ggml-org/llama.cpp/pull/30105), Vulkan's F32 expert down-projection,
+  is open and unchanged since 2026-10-08, so Mistral Small 4's disqualification stands.
+- **Tools.** [#30497](https://github.com/ggml-org/llama.cpp/pull/30497) makes `gguf-split` and
+  `export-lora` refuse a truncated GGUF; the router uses neither.
+- **Sampling defaults, flags and preset keys.** Unchanged: `common/` has no commit in the range,
+  so no flag or preset key is added, renamed or removed. No note requires a preset change or a
+  higher minimum build. The presets the move installs differ from the installed ones only in two
+  reason comments that `evaluation`'s editor rewrote after b11715's install (the 26B-A4B's c and
+  Mistral Small 4's c); the unit is unchanged.
+
+### The move
+
+The root commands, in the order the architect runs them in one sitting, are the runbook's
+"Moving to a new build" ([`README.md`](README.md)), with the preset directory's write access and
+the deletions of "The models the host keeps". The rendered presets' sha256 is
+`9c983739f3142f01a92726b56d286150c3f21c3df50f8953c957a815401962ea`; the unit's is
+`83b0a95c16769d0ee7abb7f6b9e9aec9ccb61d7f57831f508465645e31c51554`, the installed one. The
+probe and every role's fitness on b11734 are recorded here once the sitting has run.

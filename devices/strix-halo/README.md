@@ -71,7 +71,9 @@ packages trail upstream's model support. The profile holds llama.cpp to a minimu
   the build; a rollback points it back.
 - The previous build stays in its directory for diagnosis until the next move removes it.
 
-The Framework runs b11715 (`b11715-9d1878a43`); b11669 stays in `/opt/llama.cpp/b11669`.
+The Framework runs b11715 (`b11715-9d1878a43`). b11669 and the builds before it (b11529, b11565
+and b11572) are still in their directories; `screen`'s move to b11734 removes them, keeping
+b11715 as the previous build.
 
 ## The rendered unit and presets
 
@@ -95,11 +97,13 @@ command's `-user`, `-hf-home`, and `-models-dir`).
 
 ## Moving to a new build
 
-The root commands for one build move, in the order the architect runs them in one session. The
-values shown are the last move's, b11669 to b11715; a new move replaces the tags, the asset's
+The root commands for one build move, in the order the architect runs them in one session: a
+to d in one sitting, then the cold-load pair (e) when the evaluation asks for it. The values
+shown are the current move's, b11715 to b11734; a new move replaces the tags, the asset's
 sha256, and the rendered files' sums, and records itself in
 [`llama-cpp-builds.md`](llama-cpp-builds.md): the release-note review before, and what was
-re-verified after.
+re-verified after. Step c is the b11734 sitting's own: the preset directory's write access and
+the deletions; a later move keeps only its removal of the builds before the previous one.
 
 ### Before the session: render the files
 
@@ -113,23 +117,24 @@ mise run //devices/strix-halo:render:presets > /tmp/models.ini
 SPIKE_SERVICE_USER=<user> SPIKE_HF_HOME=<hf cache> SPIKE_MODELS_DIR=<models dir> \
   mise run //devices/strix-halo:render:unit > /tmp/llama-router.service
 sha256sum /tmp/models.ini /tmp/llama-router.service
-scp /tmp/models.ini <host>:models.ini.039c5fa7
+scp /tmp/models.ini <host>:models.ini.9c983739
 scp /tmp/llama-router.service <host>:llama-router.service.83b0a95c
 ```
 
-For b11715 the sums were `039c5fa7decb312629cfe89e2982510d34d68d5dca01754fdcdcdb6182edfb93`
+For b11734 the sums are `9c983739f3142f01a92726b56d286150c3f21c3df50f8953c957a815401962ea`
 (presets) and `83b0a95c16769d0ee7abb7f6b9e9aec9ccb61d7f57831f508465645e31c51554` (unit). The
-presets differed from the installed ones only in Gemma 4 26B-A4B's section: its
-`mtmd-batch-max-tokens = 512` and the comment giving its reason. The unit was unchanged, and
-installed anyway, so the installed pair is the rendered pair.
+presets differ from the installed ones (b11715's, `039c5fa7`) only in two reason comments, the
+26B-A4B's c and Mistral Small 4's c, which `evaluation`'s editor rewrote after b11715's
+install. The unit is unchanged, and installed anyway, so the installed pair is the rendered
+pair.
 
 ### a. Install the new build beside the old
 
 ```bash
 # Framework
-tag=b11715
+tag=b11734
 asset="llama-${tag}-bin-ubuntu-vulkan-x64.tar.gz"
-sha=b3405b06ab9b56975d0b1bc8dcdd15a8bace74fc5e4cf1e66c1677a99e590364
+sha=2c8b590c325960eb474c08c7a3b02b3c8eda054aa03352ed864948dc4ae1668d
 work=$(mktemp -d)
 curl -fsSL -o "$work/$asset" "https://github.com/ggml-org/llama.cpp/releases/download/${tag}/${asset}"
 echo "${sha}  $work/$asset" | sha256sum -c
@@ -142,37 +147,65 @@ rm -rf "$work"
 readlink /opt/llama.cpp/current
 ```
 
-Expect `...: OK` from `sha256sum`; the new build's version (`version: 11715 (9d1878a43)`); a
+Expect `...: OK` from `sha256sum`; the new build's version (build 11734, commit `f3fb2fcdb`); a
 `Vulkan0` device, the Radeon 8060S (RADV STRIX_HALO); and `current` still the old build.
 `mkdir` without `-p` stops the step if the directory already exists. The router keeps running
 the old build throughout. When the new presets add a key, check that the new build knows its
 flag: for b11715, `llama-server --help | grep -A1 -- '--mtmd-batch-max-tokens'` printed the
-flag's help line, default 1024.
+flag's help line, default 1024. b11734's presets add none.
 
 ### b. Install the presets and the unit, keeping the old ones
 
 ```bash
 # Framework
-old=b11669
+old=b11715
 sudo cp -p /etc/llama-router/models.ini "/etc/llama-router/models.ini.${old}"
 sudo cp -p /etc/systemd/system/llama-router.service "/etc/llama-router/llama-router.service.${old}"
-echo "039c5fa7decb312629cfe89e2982510d34d68d5dca01754fdcdcdb6182edfb93  $HOME/models.ini.039c5fa7" | sha256sum -c
+echo "9c983739f3142f01a92726b56d286150c3f21c3df50f8953c957a815401962ea  $HOME/models.ini.9c983739" | sha256sum -c
 echo "83b0a95c16769d0ee7abb7f6b9e9aec9ccb61d7f57831f508465645e31c51554  $HOME/llama-router.service.83b0a95c" | sha256sum -c
-sudo install -m 0644 -o root -g root "$HOME/models.ini.039c5fa7" /etc/llama-router/models.ini
+sudo install -m 0644 -o root -g root "$HOME/models.ini.9c983739" /etc/llama-router/models.ini
 sudo install -m 0644 -o root -g root "$HOME/llama-router.service.83b0a95c" /etc/systemd/system/llama-router.service
 sudo systemctl daemon-reload
 diff "/etc/llama-router/models.ini.${old}" /etc/llama-router/models.ini
 cmp "/etc/llama-router/llama-router.service.${old}" /etc/systemd/system/llama-router.service && echo unit unchanged
 ```
 
-Expect two `OK`s and the diff the session predicted; for b11715, nine added lines in the
-26B-A4B's section, the reason's comment and `mtmd-batch-max-tokens = 512`, and `unit
-unchanged`. The unit's backup is kept beside the presets, not in `/etc/systemd/system`. The
-running router read its presets when it started, so a load before the restart uses the old
-presets' values; check that the old build knows any new key (b11669 had known
-`mtmd-batch-max-tokens` since b11452).
+Expect two `OK`s and the diff the session predicted; for b11734, two comment hunks (lines 41-42,
+the 26B-A4B's c, "under the 2.75GiB pool floor"; line 113, Mistral Small 4's c, "under
+main-model's 3GiB floor") and no value changed, and `unit unchanged`. The unit's backup is kept
+beside the presets, not in `/etc/systemd/system`. The running router read its presets when it
+started, so a load before the restart uses the old presets' values; check that the old build
+knows any new key (b11669 had known `mtmd-batch-max-tokens` since b11452).
 
-### c. Repoint `current` and restart the router
+### c. Open the preset directory, and delete what the host doesn't keep
+
+The b11734 sitting's own step, before the restart: the preset directory's write access
+("The preset file's write access", below), the deletions ("The models the host keeps", below),
+and the builds before the previous one. Run it as the service user, the architect's account on
+the Framework: `id -gn` names the service user's group, and the unit's environment names the
+cache, so nothing here names a host value.
+
+```bash
+# Framework
+sudo chgrp "$(id -gn)" /etc/llama-router && sudo chmod 0775 /etc/llama-router
+stat -c '%A %U:%G %n' /etc/llama-router /etc/llama-router/models.ini
+hf=$(systemctl show llama-router -p Environment --value | tr ' ' '\n' | sed -n 's/^HF_HOME=//p')
+du -sh "$hf/hub/models--unsloth--Mistral-Small-4-119B-2603-GGUF" "${hf}-retired"
+[ -d "$hf/hub" ] && rm -rf -- "$hf/hub/models--unsloth--Mistral-Small-4-119B-2603-GGUF" "${hf}-retired"
+ls "$hf/hub" "$(dirname "$hf")"
+sudo rm -rf /opt/llama.cpp/b11529 /opt/llama.cpp/b11565 /opt/llama.cpp/b11572 /opt/llama.cpp/b11669
+ls /opt/llama.cpp
+```
+
+Expect `drwxrwxr-x root:<group> /etc/llama-router` and `-rw-r--r-- root:root` for
+`models.ini`; `du` near 70G for Mistral Small 4 and 132G for the retired directory (2026-10-19);
+the cache's `hub` holding the five other models' directories and no Mistral one, and no
+retired directory beside the cache; and `/opt/llama.cpp` holding b11715, b11734 and `current`.
+The cache and the retired directory belong to the service user, so their deletion needs no
+`sudo`; the `[ -d ]` test stops it if the cache wasn't found. Mistral Small 4 is unloaded, so
+no process holds its files.
+
+### d. Repoint `current` and restart the router
 
 Start the watch on the laptop first, with the startup set loaded; it waits for the restart and
 times it:
@@ -184,12 +217,12 @@ go run ./evaluation/cmd/evaluate coldload -set a
 
 ```bash
 # Framework, once the watch is waiting
-sudo ln -sfn b11715 /opt/llama.cpp/current && sudo systemctl restart llama-router
+sudo ln -sfn b11734 /opt/llama.cpp/current && sudo systemctl restart llama-router
 ```
 
 Expect the watch to print when the router answered again and when each of set A's four models
-was loaded again, then the build before and after: `b11669-620d2225c`, then
-`b11715-9d1878a43`. This restart is the move's own; it isn't a warm measurement, since the new
+was loaded again, then the build before and after: `b11715-9d1878a43`, then
+`b11734-f3fb2fcdb`. This restart is the move's own; it isn't a warm measurement, since the new
 build's files were just written. Then probe the new build:
 
 ```bash
@@ -197,9 +230,9 @@ build's files were just written. Then probe the new build:
 mise run integration
 ```
 
-Expect every probe to pass. If one fails, roll back (e) before anything else.
+Expect every probe to pass. If one fails, roll back (f) before anything else.
 
-### d. The cold-load pair, on the new build
+### e. The cold-load pair, on the new build
 
 The cold-load figures are measured on the build the evaluation runs on. Run each watch on the
 laptop, then its restart on the Framework once the watch is waiting:
@@ -225,11 +258,11 @@ The same pair is the deep stage's last step: `go run ./evaluation/cmd/evaluate -
 not run. b11715's pair is in
 [`llama-cpp-builds.md`](llama-cpp-builds.md), "b11669 to b11715".
 
-### e. Roll back
+### f. Roll back
 
 ```bash
 # Framework
-old=b11669
+old=b11715
 sudo ln -sfn "$old" /opt/llama.cpp/current
 sudo install -m 0644 -o root -g root "/etc/llama-router/models.ini.${old}" /etc/llama-router/models.ini
 sudo install -m 0644 -o root -g root "/etc/llama-router/llama-router.service.${old}" /etc/systemd/system/llama-router.service
@@ -243,8 +276,55 @@ curl -s "$SPIKE_ROUTER_URL/props" | jq -r .build_info
 mise run integration
 ```
 
-Expect the old build (`b11669-620d2225c`) and a passing probe. The new build's directory stays
-for diagnosis until the next move removes it.
+Expect the old build (`b11715-9d1878a43`) and a passing probe. The new build's directory stays
+for diagnosis until the next move removes it. A rollback leaves the preset directory's write
+access and the deletions as they are; each has its own revert below.
+
+## The preset file's write access
+
+A sweep step (`screen`'s behavior 10) rewrites the router's presets and applies them with
+`GET /models?reload=1`, with no restart: the reload re-reads the file `--models-preset` names,
+unloads a running model whose section changed, and loads none. So the service user may write
+the preset file's directory, `/etc/llama-router`: root keeps the directory and the files, and
+the directory's group is the service user's, with group write (`0775`). It is the one root grant
+the spike makes to a session, by the goal record's decision `screen` (r2).
+
+The grant is on the directory, not the file, because it survives the normal install: `install`
+replaces `models.ini` with a new root-owned `0644` file, which drops any group or ACL set on the
+old one, and leaves the directory as it is. So a session writes the presets by rename: it writes
+the new file beside `models.ini` in `/etc/llama-router` and moves it over `models.ini`, and the
+router never reads a half-written file. A file a sweep left there is the service user's until the
+sweep restores the committed render (checked by its SHA-256) or the next install replaces it.
+The write access also lets the service user remove the backups kept beside the presets.
+
+It reverts by one root command, which also hands back a `models.ini` a sweep left behind:
+
+```bash
+# Framework
+sudo chown root:root /etc/llama-router /etc/llama-router/models.ini && sudo chmod 0755 /etc/llama-router && sudo chmod 0644 /etc/llama-router/models.ini
+```
+
+## The models the host keeps
+
+The Framework keeps only models that passed on it (the goal record's decision `screen` (r1)).
+On 2026-10-19 that removes two things:
+
+- **Mistral Small 4's cached files** (`unsloth/Mistral-Small-4-119B-2603-GGUF`, its three
+  UD-Q4_K_XL splits and `mmproj-BF16.gguf`, about 70G), disqualified at fitness on b11669
+  ([`docs/findings/tool-reliability.md`](../../docs/findings/tool-reliability.md)). The router's
+  API can't delete them: `DELETE /models?model=unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL`
+  answered 500, "not removable (not from cache)", since the router deletes only a model whose
+  source is the cache, and every model the profile holds is a preset (`GET /models` lists each
+  with `source` `preset` and `can_remove` false). So step c deletes its directory from the
+  cache. The profile keeps its entry, the record of the candidate; the router still lists it,
+  and a load would download it again, in about 35 minutes.
+- **align's retired-model directory**, the cache's sibling on the models drive (`<hf
+  cache>-retired`, about 132G), where `align` moved the models it retired out of the router's
+  cache rather than delete them (Qwen3-Embedding-4B, gemma-4-31B-it, Qwen3-Coder-Next,
+  Qwen3.8-27B, and unsloth's gpt-oss-120b). The router never read it.
+
+Both belong to the service user. Neither deletion reverts on the host; the Hugging Face files
+can be downloaded again.
 
 ## The router's state, without root
 
