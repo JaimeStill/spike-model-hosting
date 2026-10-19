@@ -1,0 +1,2259 @@
+{
+ "version": 2,
+ "status": "success",
+ "eval": {
+  "eval_id": "Rj4DnXxzYdrnSmUAGmEstK",
+  "run_id": "aPHCZ5NBFDcbnqm7ov7mba",
+  "created": "2026-10-17T12:53:17+00:00",
+  "task": "inspect_evals/bfcl",
+  "task_id": "H5YxW74Gyt6UVjQahB6pxz",
+  "task_version": 8,
+  "task_display_name": "bfcl",
+  "task_registry_name": "inspect_evals/bfcl",
+  "task_attribs": {},
+  "task_args": {
+   "categories": [
+    "multi_turn_base",
+    "multi_turn_miss_func",
+    "multi_turn_miss_param",
+    "multi_turn_long_context"
+   ],
+   "snapshot_id": null
+  },
+  "task_args_passed": {
+   "categories": [
+    "multi_turn_base",
+    "multi_turn_miss_func",
+    "multi_turn_miss_param",
+    "multi_turn_long_context"
+   ]
+  },
+  "dataset": {
+   "name": "BFCL",
+   "location": ".state/cache/inspect_evals/BFCL",
+   "samples": 800,
+   "sample_ids": [
+    "multi_turn_base_109",
+    "multi_turn_base_140",
+    "multi_turn_base_28",
+    "multi_turn_base_74",
+    "multi_turn_base_9",
+    "multi_turn_long_context_121",
+    "multi_turn_long_context_56",
+    "multi_turn_miss_func_117",
+    "multi_turn_miss_func_134",
+    "multi_turn_miss_func_165",
+    "multi_turn_miss_func_197",
+    "multi_turn_miss_func_20",
+    "multi_turn_miss_func_44",
+    "multi_turn_miss_func_45",
+    "multi_turn_miss_func_49",
+    "multi_turn_miss_func_99",
+    "multi_turn_miss_param_29",
+    "multi_turn_miss_param_46",
+    "multi_turn_miss_param_49",
+    "multi_turn_miss_param_72"
+   ],
+   "shuffled": false
+  },
+  "model": "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4",
+  "model_generate_config": {},
+  "model_base_url": "http://framework:8080/v1",
+  "model_args": {
+   "default_query": {
+    "autoload": "false"
+   }
+  },
+  "config": {
+   "sample_id": [
+    "multi_turn_miss_param_72",
+    "multi_turn_base_28",
+    "multi_turn_miss_param_49",
+    "multi_turn_miss_func_197",
+    "multi_turn_miss_param_29",
+    "multi_turn_base_109",
+    "multi_turn_miss_func_99",
+    "multi_turn_miss_func_20",
+    "multi_turn_miss_func_49",
+    "multi_turn_long_context_56",
+    "multi_turn_miss_func_134",
+    "multi_turn_miss_param_46",
+    "multi_turn_base_74",
+    "multi_turn_base_140",
+    "multi_turn_miss_func_45",
+    "multi_turn_miss_func_44",
+    "multi_turn_long_context_121",
+    "multi_turn_base_9",
+    "multi_turn_miss_func_165",
+    "multi_turn_miss_func_117"
+   ],
+   "epochs": 1,
+   "fail_on_error": true,
+   "continue_on_fail": false,
+   "score_on_error": false,
+   "max_samples": 4,
+   "sandbox_cleanup": true,
+   "sandbox_prebuilt": false,
+   "log_samples": true,
+   "log_realtime": true,
+   "log_images": true,
+   "score_display": true
+  },
+  "revision": {
+   "type": "git",
+   "origin": "https://github.com/JaimeStill/spike-model-hosting.git",
+   "commit": "a9ee256",
+   "dirty": true
+  },
+  "packages": {
+   "inspect_ai": "0.3.281",
+   "inspect_evals": "0.24.0"
+  },
+  "metadata": {
+   "tier": "bfcl-multi",
+   "dataset": "ShishirPatil/gorilla@dac44e7ac9db5ff26a01ab0c1ec5de5a1e703b7a BFCL multi-turn: multi_turn_base,multi_turn_miss_func,multi_turn_miss_param,multi_turn_long_context",
+   "full_task_version": "8-B",
+   "task_interface_version": "B",
+   "task_comparability_version": 8
+  },
+  "scorers": [
+   {
+    "name": "bfcl_scorer",
+    "options": {},
+    "metrics": [
+     {
+      "name": "inspect_ai/accuracy",
+      "options": {}
+     },
+     {
+      "name": "inspect_ai/stderr",
+      "options": {}
+     },
+     {
+      "name": "inspect_ai/grouped",
+      "options": {
+       "metric": {
+        "type": "metric",
+        "name": "accuracy",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_acc"
+      }
+     },
+     {
+      "name": "inspect_ai/grouped",
+      "options": {
+       "metric": {
+        "type": "metric",
+        "name": "stderr",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_sterr"
+      }
+     }
+    ],
+    "metadata": {}
+   }
+  ]
+ },
+ "plan": {
+  "name": "plan",
+  "steps": [
+   {
+    "solver": "inspect_evals/bfcl_solver",
+    "params": {},
+    "params_passed": {}
+   }
+  ],
+  "config": {
+   "max_connections": 4,
+   "parallel_tool_calls": true
+  }
+ },
+ "results": {
+  "total_samples": 20,
+  "completed_samples": 20,
+  "scores": [
+   {
+    "name": "bfcl_scorer",
+    "scorer": "bfcl_scorer",
+    "scored_samples": 20,
+    "unscored_samples": 0,
+    "params": {},
+    "metrics": {
+     "accuracy": {
+      "name": "accuracy",
+      "value": 0.4,
+      "params": {}
+     },
+     "stderr": {
+      "name": "stderr",
+      "value": 0.11239029738980327,
+      "params": {}
+     },
+     "multi_turn_base_acc": {
+      "name": "multi_turn_base_acc",
+      "group": "grouped",
+      "value": 0.4,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "accuracy",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_acc"
+      }
+     },
+     "multi_turn_long_context_acc": {
+      "name": "multi_turn_long_context_acc",
+      "group": "grouped",
+      "value": 0.0,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "accuracy",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_acc"
+      }
+     },
+     "multi_turn_miss_func_acc": {
+      "name": "multi_turn_miss_func_acc",
+      "group": "grouped",
+      "value": 0.5555555555555556,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "accuracy",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_acc"
+      }
+     },
+     "multi_turn_miss_param_acc": {
+      "name": "multi_turn_miss_param_acc",
+      "group": "grouped",
+      "value": 0.25,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "accuracy",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_acc"
+      }
+     },
+     "all": {
+      "name": "all",
+      "group": "grouped",
+      "value": 0.4,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "accuracy",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_acc"
+      }
+     },
+     "multi_turn_base_sterr": {
+      "name": "multi_turn_base_sterr",
+      "group": "grouped",
+      "value": 0.24494897427831783,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "stderr",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_sterr"
+      }
+     },
+     "multi_turn_long_context_sterr": {
+      "name": "multi_turn_long_context_sterr",
+      "group": "grouped",
+      "value": 0.0,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "stderr",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_sterr"
+      }
+     },
+     "multi_turn_miss_func_sterr": {
+      "name": "multi_turn_miss_func_sterr",
+      "group": "grouped",
+      "value": 0.17568209223157663,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "stderr",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_sterr"
+      }
+     },
+     "multi_turn_miss_param_sterr": {
+      "name": "multi_turn_miss_param_sterr",
+      "group": "grouped",
+      "value": 0.25,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "stderr",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_sterr"
+      }
+     },
+     "all2": {
+      "name": "all",
+      "group": "grouped",
+      "value": 0.11239029738980327,
+      "params": {
+       "metric": {
+        "type": "metric",
+        "name": "stderr",
+        "params": {}
+       },
+       "group_key": "category_name",
+       "name_template": "{group_name}_sterr"
+      }
+     }
+    }
+   }
+  ],
+  "headline": {
+   "scorer": "bfcl_scorer",
+   "score": "bfcl_scorer",
+   "metric": "accuracy"
+  }
+ },
+ "stats": {
+  "started_at": "2026-10-17T12:53:17+00:00",
+  "completed_at": "2026-10-17T13:03:43+00:00",
+  "model_usage": {
+   "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+    "input_tokens": 128402,
+    "output_tokens": 27203,
+    "total_tokens": 984485,
+    "input_tokens_cache_read": 828880
+   }
+  },
+  "role_usage": {},
+  "connection_limit_history": []
+ },
+ "invalidated": false,
+ "tags": [],
+ "metadata": {
+  "tier": "bfcl-multi",
+  "dataset": "ShishirPatil/gorilla@dac44e7ac9db5ff26a01ab0c1ec5de5a1e703b7a BFCL multi-turn: multi_turn_base,multi_turn_miss_func,multi_turn_miss_param,multi_turn_long_context",
+  "full_task_version": "8-B",
+  "task_interface_version": "B",
+  "task_comparability_version": 8
+ },
+ "samples": [
+  {
+   "id": "multi_turn_base_28",
+   "epoch": 1,
+   "input": [],
+   "target": "[[\"find(path='.', name='analysis')\"], [\"cd(folder='data')\", \"grep(file_name='analysis_report.txt',pattern='error')\"], ['du(human_readable=True)', \"touch(file_name='usage.txt')\", \"echo(content='205 bytes',file_name='usage.txt')\"]]",
+   "output": {
+    "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+    "choices": [
+     {
+      "message": {
+       "id": "U6w6d9WyCFAzwrzavx7g8N",
+       "content": "The storage usage has been logged as requested.\n\n**File created:** `usage.txt` (located in the current directory)  \n**Content of the file:**  \n\n```\n205 bytes\n```",
+       "source": "generate",
+       "role": "assistant",
+       "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "The storage usage has been logged as requested.\n\n**File created:** `usage.txt` (located in the current directory)  \n**Content of the file:**  \n\n```\n205 bytes\n```",
+    "usage": {
+     "input_tokens": 57,
+     "output_tokens": 42,
+     "total_tokens": 4403,
+     "input_tokens_cache_read": 4304
+    },
+    "time": 7.173206044011749,
+    "response_id": "chatcmpl-Rv6gR2HsmZPzeX1U5AAu7zPD879EYYiT"
+   },
+   "scores": {
+    "bfcl_scorer": {
+     "value": 0,
+     "answer": "[[\"find(path='.', name='analysis')\", \"cat(file_name='analysis_report.txt')\", \"cd(folder='data')\", \"cat(file_name='analysis_report.txt')\"], [\"grep(file_name='analysis_report.txt', pattern='error')\", \"cat(file_name='analysis_report.txt')\"], ['du(human_readable=False)', \"echo(content='205 bytes', file_name='usage.txt')\", \"touch(file_name='usage.txt')\", \"echo(content='205 bytes', file_name='usage.txt')\", \"cat(file_name='usage.txt')\"]]",
+     "explanation": "Response mismatch at turn 2\n  expected calls: ['du(human_readable=True)', \"touch(file_name='usage.txt')\", \"echo(content='205 bytes',file_name='usage.txt')\"]\n  missing results: [\"{'disk_usage': '205.00 B'}\"]",
+     "history": []
+    }
+   },
+   "metadata": {
+    "category_name": "multi_turn_base",
+    "scorer": "multi_turn",
+    "language": "python"
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+     "input_tokens": 4652,
+     "output_tokens": 951,
+     "total_tokens": 55100,
+     "input_tokens_cache_read": 49497
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-17T12:53:17.789118+00:00",
+   "completed_at": "2026-10-17T12:54:50.996930+00:00",
+   "total_time": 93.208,
+   "working_time": 93.011,
+   "uuid": "Fm6vgJiqLbBWnMgiAwJHfV",
+   "error_retries": [],
+   "events_data": {
+    "messages": [
+     {
+      "id": "b8jfUCCgXXGmjJxmQmoC7E",
+      "content": "Where is my analysis? Locate any file with analysis in it.",
+      "role": "user"
+     },
+     {
+      "id": "7hzvEPQK6Ap5qpjX5jNpo9",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://76a552bc8da234d46c7338d1c5c7ca5d",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "UzX1dxSWcCPRVGF8LdndRCDRhW7p9JeT",
+        "function": "find",
+        "arguments": {
+         "path": ".",
+         "name": "analysis"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "KNnaxDZY4YSDGrsRk6cfoe",
+      "content": "{'matches': ['./data/analysis_report.txt']}",
+      "role": "tool",
+      "tool_call_id": "UzX1dxSWcCPRVGF8LdndRCDRhW7p9JeT",
+      "function": "find"
+     },
+     {
+      "id": "Ja8RFroCQh8VnwhPVHumfP",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://e44105edcc77bb61b5ef534932205887",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "YWFpsOWrbZrJlyayj7AUyUNgsKwxQh5x",
+        "function": "cat",
+        "arguments": {
+         "file_name": "analysis_report.txt"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "TYk8FAUPiMGxC5jggThqwV",
+      "content": "{'error': \"cat: 'analysis_report.txt': No such file or directory\"}",
+      "role": "tool",
+      "tool_call_id": "YWFpsOWrbZrJlyayj7AUyUNgsKwxQh5x",
+      "function": "cat"
+     },
+     {
+      "id": "USPcrpWMfSkK82RrrWAqRY",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://2b4f0c17e72223fb38aa1e5028c35995",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "RM1RXCf6tl2Czycl1TsbBLcrc9FmexWY",
+        "function": "cd",
+        "arguments": {
+         "folder": "data"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "cytkzeGkwVRxpuedTkvZAz",
+      "content": "{'current_working_directory': 'data'}",
+      "role": "tool",
+      "tool_call_id": "RM1RXCf6tl2Czycl1TsbBLcrc9FmexWY",
+      "function": "cd"
+     },
+     {
+      "id": "KhF6XRhzkmaU28fF9R2gsn",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "Now cat the file.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "sFmNp9ahLl3fgYEC85unsvf9EGaCHdZS",
+        "function": "cat",
+        "arguments": {
+         "file_name": "analysis_report.txt"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "NpqURi5Az3xA3qZwo6NJmk",
+      "content": "attachment://ac2bc8e1451886bed80d7420276698a5",
+      "role": "tool",
+      "tool_call_id": "sFmNp9ahLl3fgYEC85unsvf9EGaCHdZS",
+      "function": "cat"
+     },
+     {
+      "id": "W4MEum2iudFXsbePB5VkEg",
+      "content": "attachment://015bfd4adacb69d3e4279d750531825a",
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "5WPzXRw4CWaLSQyRmfdA28",
+      "content": "Naviagte to that first analysis and identify any line with error in it.",
+      "role": "user"
+     },
+     {
+      "id": "6w5orh2PZkyw6h9KZ3yoyh",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "We need to identify lines with \"error\" in it. Use grep.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "ljZV1lPKaG3cazwIhRpOs2SJcBf6x8tC",
+        "function": "grep",
+        "arguments": {
+         "file_name": "analysis_report.txt",
+         "pattern": "error"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "Vfi3ss75RN9mrhwVk5VgxT",
+      "content": "attachment://d0ab5107caddd0db2c8ed41a046e9b8b",
+      "role": "tool",
+      "tool_call_id": "ljZV1lPKaG3cazwIhRpOs2SJcBf6x8tC",
+      "function": "grep"
+     },
+     {
+      "id": "m4bEWhvdHJpgvGoVCqhm3A",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://ad37d8cf659adbb9b291ccd3bb74e8cc",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "zeUXequrKY4NC3Cs63SsVLl87bVtEZSJ",
+        "function": "cat",
+        "arguments": {
+         "file_name": "analysis_report.txt"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "WwB23VuzL2auFSkiW9qoB2",
+      "content": "attachment://ac2bc8e1451886bed80d7420276698a5",
+      "role": "tool",
+      "tool_call_id": "zeUXequrKY4NC3Cs63SsVLl87bVtEZSJ",
+      "function": "cat"
+     },
+     {
+      "id": "ezYPJg3F73mnzqvCHNA2LX",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://156dc42cc11426dbe8c26626eb60dee1",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": "attachment://7788fead957a1dbdb45f00f17c17581e"
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "nbUYC8Hg3Ru787UrA86bxt",
+      "content": "attachment://dd775fb6e95b8352a33f1bcaa7d12192",
+      "role": "user"
+     },
+     {
+      "id": "i5iQRgyXPbNNcCcBQgtDVr",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://ddfa795ad2b71f419155866c031f36e4",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "9vAejBVPYcW9aUWWoSKQr2RzndCpacGr",
+        "function": "du",
+        "arguments": {
+         "human_readable": false
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "kayHodKZoSw9xm96K5QPbY",
+      "content": "{'disk_usage': '205 bytes'}",
+      "role": "tool",
+      "tool_call_id": "9vAejBVPYcW9aUWWoSKQr2RzndCpacGr",
+      "function": "du"
+     },
+     {
+      "id": "AvsxtpWQC9Zfrwcd8RQE7X",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://c907afbe7f7cc39e8d2063a88bd406a8",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "1E0COhPkKdmyALQwUjA6mXfOtl02Sd9i",
+        "function": "echo",
+        "arguments": {
+         "content": "205 bytes",
+         "file_name": "usage.txt"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "Ws27vP3ye4yDQUNnoeDfeY",
+      "content": "{'error': \"echo: cannot write to 'usage.txt': No such file\"}",
+      "role": "tool",
+      "tool_call_id": "1E0COhPkKdmyALQwUjA6mXfOtl02Sd9i",
+      "function": "echo"
+     },
+     {
+      "id": "8kYq9vnybfv7kyd2DcF4MW",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://d02951ee2966c32b09f5511c28ec72ea",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "uzP4zKIIrb8jOcTsd8dtdOed20r2pkBX",
+        "function": "touch",
+        "arguments": {
+         "file_name": "usage.txt"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "C6w4xv2ik3MduquYPpT9b6",
+      "content": "None",
+      "role": "tool",
+      "tool_call_id": "uzP4zKIIrb8jOcTsd8dtdOed20r2pkBX",
+      "function": "touch"
+     },
+     {
+      "id": "5Dckt8jkiLsYMXL2q69Uim",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "Now write content.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "mxZWfz6JiAhHWrh0Wh29IQ7vXbuVEX4y",
+        "function": "echo",
+        "arguments": {
+         "content": "205 bytes",
+         "file_name": "usage.txt"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "mc9nxtdrW2d6AoWFG7V2Jp",
+      "content": "None",
+      "role": "tool",
+      "tool_call_id": "mxZWfz6JiAhHWrh0Wh29IQ7vXbuVEX4y",
+      "function": "echo"
+     },
+     {
+      "id": "TxZc9piAoNzQSB5p8d6ndu",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "Now verify file content.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "qFsGRNciIFpV9KTdKda5t8KotEy1QDr3",
+        "function": "cat",
+        "arguments": {
+         "file_name": "usage.txt"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "QT4yiKxgjeNoTQ44XAsT2Y",
+      "content": "{'file_content': '205 bytes'}",
+      "role": "tool",
+      "tool_call_id": "qFsGRNciIFpV9KTdKda5t8KotEy1QDr3",
+      "function": "cat"
+     }
+    ],
+    "calls": [
+     {
+      "role": "user",
+      "content": "Where is my analysis? Locate any file with analysis in it."
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "UzX1dxSWcCPRVGF8LdndRCDRhW7p9JeT",
+        "function": {
+         "name": "find",
+         "arguments": "{\"path\": \".\", \"name\": \"analysis\"}"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "attachment://76a552bc8da234d46c7338d1c5c7ca5d"
+     },
+     {
+      "role": "tool",
+      "content": "{'matches': ['./data/analysis_report.txt']}",
+      "tool_call_id": "UzX1dxSWcCPRVGF8LdndRCDRhW7p9JeT"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "YWFpsOWrbZrJlyayj7AUyUNgsKwxQh5x",
+        "function": {
+         "name": "cat",
+         "arguments": "{\"file_name\": \"analysis_report.txt\"}"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "attachment://e44105edcc77bb61b5ef534932205887"
+     },
+     {
+      "role": "tool",
+      "content": "{'error': \"cat: 'analysis_report.txt': No such file or directory\"}",
+      "tool_call_id": "YWFpsOWrbZrJlyayj7AUyUNgsKwxQh5x"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "RM1RXCf6tl2Czycl1TsbBLcrc9FmexWY",
+        "function": {
+         "name": "cd",
+         "arguments": "{\"folder\": \"data\"}"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "attachment://2b4f0c17e72223fb38aa1e5028c35995"
+     },
+     {
+      "role": "tool",
+      "content": "{'current_working_directory': 'data'}",
+      "tool_call_id": "RM1RXCf6tl2Czycl1TsbBLcrc9FmexWY"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "sFmNp9ahLl3fgYEC85unsvf9EGaCHdZS",
+        "function": {
+         "name": "cat",
+         "arguments": "{\"file_name\": \"analysis_report.txt\"}"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "Now cat the file."
+     },
+     {
+      "role": "tool",
+      "content": "attachment://ac2bc8e1451886bed80d7420276698a5",
+      "tool_call_id": "sFmNp9ahLl3fgYEC85unsvf9EGaCHdZS"
+     }
+    ]
+   },
+   "turn_count": 14
+  },
+  {
+   "id": "multi_turn_miss_func_197",
+   "epoch": 1,
+   "input": [],
+   "target": "[[\"register_credit_card(access_token='abc123xyz456', card_number='1432-7890-6543-9876', expiration_date='12/2025', card_verification_number=321, cardholder_name='Michael Thompson')\", \"purchase_insurance(access_token='abc123xyz456', insurance_type='comprehensive', insurance_cost=2000.0, booking_id='insurance_12345',card_id='262919693687')\"], [], [\"retrieve_invoice(access_token='abc123xyz456', booking_id='insurance_12345')\"], [\"contact_customer_support(booking_id='insurance_12345', message='Unexpected hiccup during travel. Please prioritize our case for immediate attention.')\"]]",
+   "output": {
+    "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+    "choices": [
+     {
+      "message": {
+       "id": "kiqcojA2H4g3ZDFvST5kdd",
+       "content": "Your request has been sent to the travel\u2011booking support team.\n\n**Message sent:**  \n*\u201cUrgent: An unexpected issue occurred during the travel insurance process for booking ID\u202finsurance_12345. Please prioritize this case and provide immediate assistance.\u201d*\n\nThe support team has acknowledged receipt and will get back to you shortly. If you need any further help meanwhile, just let me know!",
+       "source": "generate",
+       "role": "assistant",
+       "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "Your request has been sent to the travel\u2011booking support team.\n\n**Message sent:**  \n*\u201cUrgent: An unexpected issue occurred during the travel insurance process for booking ID\u202finsurance_12345. Please prioritize this case and provide immediate assistance.\u201d*\n\nThe support team has acknowledged receipt and will get back to you shortly. If you need any further help meanwhile, just let me know!",
+    "usage": {
+     "input_tokens": 176,
+     "output_tokens": 82,
+     "total_tokens": 4023,
+     "input_tokens_cache_read": 3765
+    },
+    "time": 10.119355718954466,
+    "response_id": "chatcmpl-2bwDWtMZ6Blmsg5DgXiRMq2qyMzYKSV4"
+   },
+   "scores": {
+    "bfcl_scorer": {
+     "value": 0,
+     "answer": "[[\"register_credit_card(access_token='abc123xyz456', card_number='1432-7890-6543-9876', expiration_date='12/2026', cardholder_name='Michael Thompson', card_verification_number=321)\", \"purchase_insurance(access_token='abc123xyz456', insurance_type='family', booking_id='insurance_12345', insurance_cost=2000.0, card_id='262919693687')\"], [], [\"retrieve_invoice(access_token='abc123xyz456', booking_id=None, insurance_id='498276044')\", \"retrieve_invoice(access_token='abc123xyz456', booking_id='insurance_12345', insurance_id=None)\"], [\"contact_customer_support(booking_id='insurance_12345', message='Urgent: An unexpected issue occurred during the travel insurance process for booking ID insurance_12345. Please prioritize this case and provide immediate assistance.')\"]]",
+     "explanation": "State mismatch\n  credit_card_list: model=\"{'262919693687': {'card_number': '1432-7890-6543-9876', 'expiration_date': '12/2026', 'cardholder_name': 'Michael Thompson', 'card_verification_number': 321, 'balance': 42620.0}}\", expected=\"{'262919693687': {'card_number': '1432-7890-6543-9876', 'expiration_date': '12/2025', 'cardholder_name': 'Michael Thompson', 'card_verification_number': 321, 'balance': 42620.0}}\"",
+     "history": []
+    }
+   },
+   "metadata": {
+    "category_name": "multi_turn_miss_func",
+    "scorer": "multi_turn",
+    "language": "python"
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+     "input_tokens": 5450,
+     "output_tokens": 1395,
+     "total_tokens": 31429,
+     "input_tokens_cache_read": 24584
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-17T12:57:57.050178+00:00",
+   "completed_at": "2026-10-17T12:59:54.258622+00:00",
+   "total_time": 117.208,
+   "working_time": 117.173,
+   "uuid": "QER9kvQdyX3vtWrBVbCkC9",
+   "error_retries": [],
+   "events_data": {
+    "messages": [
+     {
+      "id": "4dffK5YQEoLoVCpBTaUuV4",
+      "content": "attachment://8c0f055b43d2213e6010c99fbd7c468a",
+      "role": "user"
+     },
+     {
+      "id": "MTj5dEWBv45D2XfWpe4BGN",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://3e012e44cf898c4a9297a8b4580c5091",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "FTMQ2nL4QMn2Ohpre6YC5mA9kqY9Reuw",
+        "function": "register_credit_card",
+        "arguments": {
+         "access_token": "abc123xyz456",
+         "card_number": "1432-7890-6543-9876",
+         "expiration_date": "12/2026",
+         "cardholder_name": "Michael Thompson",
+         "card_verification_number": 321
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "SxbzLxpD8CuX32GFEYH3Qx",
+      "content": "{'card_id': '262919693687'}",
+      "role": "tool",
+      "tool_call_id": "FTMQ2nL4QMn2Ohpre6YC5mA9kqY9Reuw",
+      "function": "register_credit_card"
+     },
+     {
+      "id": "dgnSmvZ67aLNRw855Hm9Ep",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://dcca63f704590387deeb53c9eec1eed7",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "lkL0zSHs1ZDUdiwIzNAuiPvMPQJRLqQD",
+        "function": "purchase_insurance",
+        "arguments": {
+         "access_token": "abc123xyz456",
+         "insurance_type": "family",
+         "booking_id": "insurance_12345",
+         "insurance_cost": 2000,
+         "card_id": "262919693687"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "VeyFVU59gSCnuUHXfmhWVd",
+      "content": "{'insurance_id': '498276044', 'insurance_status': True}",
+      "role": "tool",
+      "tool_call_id": "lkL0zSHs1ZDUdiwIzNAuiPvMPQJRLqQD",
+      "function": "purchase_insurance"
+     },
+     {
+      "id": "8c68bBYVgizmQWUqdfwUcp",
+      "content": "attachment://492fc973ed9dc4a9b095a66f24ecdeee",
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "do24F2H6TFtFLHYVhpvNj2",
+      "content": "attachment://a6b2d58c1ddce7bc47f49fa957d53dca",
+      "role": "user"
+     },
+     {
+      "id": "egkceRyHdDpbmTVsMRzUo9",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://f9751c20f87d16995ece3733ff664b4b",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": "attachment://758248ea57765aa38509e025ef5fe1d1"
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "7e6TnoCsxpezBUm3Yx4o9V",
+      "content": "I have updated some more functions you can choose from. What about now?",
+      "role": "user"
+     },
+     {
+      "id": "TzHM9QZw7UgkvVprnsdT5f",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://67e055881c9214bfd7386d38e143b58e",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "tVJdtQNufMLNHF4OeZn20X8wWwk6PcoH",
+        "function": "retrieve_invoice",
+        "arguments": {
+         "access_token": "abc123xyz456",
+         "insurance_id": "498276044"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "FdJENHQmhii9n8ujkoNHc7",
+      "content": "{'error': 'Booking not found'}",
+      "role": "tool",
+      "tool_call_id": "tVJdtQNufMLNHF4OeZn20X8wWwk6PcoH",
+      "function": "retrieve_invoice"
+     },
+     {
+      "id": "muHrnbyRhjcjc96hJ5h6yY",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://f2cd81c5df65305d58f95adbb9fa6553",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "CxHTrX9UJOVDcVTz4QaqRtFG7tCCUFie",
+        "function": "retrieve_invoice",
+        "arguments": {
+         "access_token": "abc123xyz456",
+         "booking_id": "insurance_12345"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "YuAWbhQTQkWZtSy95mzzaY",
+      "content": "attachment://d6510003e32a7d9f0591a98756391dd1",
+      "role": "tool",
+      "tool_call_id": "CxHTrX9UJOVDcVTz4QaqRtFG7tCCUFie",
+      "function": "retrieve_invoice"
+     },
+     {
+      "id": "64bjZc3yaNek5LhT6yfM5v",
+      "content": "attachment://b3cb4040f0270ef255d2ddf5bddbfb2c",
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "afFQTbSXYdynAkWNq8wq4q",
+      "content": "attachment://7985d35ad9053748980bc1d388e04118",
+      "role": "user"
+     },
+     {
+      "id": "5etgvzhyoYw759GKGuWCS8",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://d9fdd6efaae9bbdad478d07cc4b79a9d",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "ESynBzsvGEk8RZSUWxE7JpVDrxiS52M7",
+        "function": "contact_customer_support",
+        "arguments": {
+         "booking_id": "insurance_12345",
+         "message": "attachment://23359e7a65845e1a8f9e8aa64963fc1a"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "bKTiX5tvSYu4Ex4CTgGCmD",
+      "content": "attachment://50dc87b2c893d5ce33a1f76cb785d91e",
+      "role": "tool",
+      "tool_call_id": "ESynBzsvGEk8RZSUWxE7JpVDrxiS52M7",
+      "function": "contact_customer_support"
+     }
+    ],
+    "calls": [
+     {
+      "role": "user",
+      "content": "attachment://8c0f055b43d2213e6010c99fbd7c468a"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "FTMQ2nL4QMn2Ohpre6YC5mA9kqY9Reuw",
+        "function": {
+         "name": "register_credit_card",
+         "arguments": "attachment://a74ef3b78b3f207ee93a964440bdeae6"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "attachment://3e012e44cf898c4a9297a8b4580c5091"
+     },
+     {
+      "role": "tool",
+      "content": "{'card_id': '262919693687'}",
+      "tool_call_id": "FTMQ2nL4QMn2Ohpre6YC5mA9kqY9Reuw"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "lkL0zSHs1ZDUdiwIzNAuiPvMPQJRLqQD",
+        "function": {
+         "name": "purchase_insurance",
+         "arguments": "attachment://c6dc85356b6d8803989a825b1c3af635"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "attachment://dcca63f704590387deeb53c9eec1eed7"
+     },
+     {
+      "role": "tool",
+      "content": "{'insurance_id': '498276044', 'insurance_status': True}",
+      "tool_call_id": "lkL0zSHs1ZDUdiwIzNAuiPvMPQJRLqQD"
+     },
+     {
+      "role": "assistant",
+      "content": "attachment://492fc973ed9dc4a9b095a66f24ecdeee"
+     },
+     {
+      "role": "user",
+      "content": "attachment://a6b2d58c1ddce7bc47f49fa957d53dca"
+     },
+     {
+      "role": "assistant",
+      "content": "attachment://78afc71d5164e438ecb7ca9095de2826",
+      "reasoning_content": "attachment://f9751c20f87d16995ece3733ff664b4b"
+     },
+     {
+      "role": "user",
+      "content": "I have updated some more functions you can choose from. What about now?"
+     }
+    ]
+   },
+   "turn_count": 9
+  },
+  {
+   "id": "multi_turn_miss_param_49",
+   "epoch": 1,
+   "input": [],
+   "target": "[['ls(a=True)'], [\"sort(file_name='file3.txt')\", \"tail(file_name='file3.txt')\"], [], [\"wc(file_name='file3.txt',mode='l')\"], ['logarithm(value=20,base=10,precision=2)']]",
+   "output": {
+    "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+    "choices": [
+     {
+      "message": {
+       "id": "VGoGJ767WyQt4RyidQPwyz",
+       "content": "The base\u201110 logarithm of the line count (20) is:\n\n**\u2248\u202f1.30103** (rounded to five decimal places).",
+       "source": "generate",
+       "role": "assistant",
+       "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "The base\u201110 logarithm of the line count (20) is:\n\n**\u2248\u202f1.30103** (rounded to five decimal places).",
+    "usage": {
+     "input_tokens": 60,
+     "output_tokens": 34,
+     "total_tokens": 4113,
+     "input_tokens_cache_read": 4019
+    },
+    "time": 2.6952403849572875,
+    "response_id": "chatcmpl-uZcWeELjeBZP6s6lScP1H3SkD0zvCXl5"
+   },
+   "scores": {
+    "bfcl_scorer": {
+     "value": 0,
+     "answer": "[['ls(a=True)'], [\"sort(file_name='file3.txt')\", \"tail(file_name='file3.txt', lines=10)\"], [], [\"wc(file_name='file3.txt', mode='l')\"], ['logarithm(value=20.0, base=10.0, precision=10)']]",
+     "explanation": "Response mismatch at turn 4\n  expected calls: ['logarithm(value=20,base=10,precision=2)']\n  missing results: [\"{'result': mpf('1.302734375')}\"]",
+     "history": []
+    }
+   },
+   "metadata": {
+    "category_name": "multi_turn_miss_param",
+    "scorer": "multi_turn",
+    "language": "python"
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+     "input_tokens": 2647,
+     "output_tokens": 627,
+     "total_tokens": 38205,
+     "input_tokens_cache_read": 34931
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-17T13:02:13.276452+00:00",
+   "completed_at": "2026-10-17T13:03:05.979221+00:00",
+   "total_time": 52.703,
+   "working_time": 52.65,
+   "uuid": "CVXAXxCP4L5KP9KmT8qJ9a",
+   "error_retries": [],
+   "events_data": {
+    "messages": [
+     {
+      "id": "mQmqptAyDRrwi9PSGKgi39",
+      "content": "attachment://7ff7a3f00fda2cab4866511bb0960c13",
+      "role": "user"
+     },
+     {
+      "id": "Y5SPVQoyhaGDoSfk4Rru7i",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "We need to list files in current directory (temp?). Need to run ls with a:true. Use ls tool.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "yiGRsHpq96FTmmY9cwFf4dhi29wTkCEz",
+        "function": "ls",
+        "arguments": {
+         "a": true
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "bwcGUjNqXacUPZxQ5vLerG",
+      "content": "{'current_directory_content': ['file1.txt', 'file2.txt', 'file3.txt']}",
+      "role": "tool",
+      "tool_call_id": "yiGRsHpq96FTmmY9cwFf4dhi29wTkCEz",
+      "function": "ls"
+     },
+     {
+      "id": "fmwvYJkZiD5sHEVyaDVUui",
+      "content": "attachment://dfa552ba3034f6e95bea45987d37ae2d",
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "F7sYnBAnx7HaKckykmJ3iD",
+      "content": "attachment://e70c4fd4ae02c3613ceb78f5809c1d50",
+      "role": "user"
+     },
+     {
+      "id": "3SF8ygKRE96QD6mUKrcFKD",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://3550f168883f82c5b62d056cf786d0e5",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "qwO6hraYNv513J1tOQEtJWlc10jgYV0e",
+        "function": "sort",
+        "arguments": {
+         "file_name": "file3.txt"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "NjYCy2wVxsMk2VmqGA9hqi",
+      "content": "attachment://65e4931b7bd2dbc31cd0599268dd817d",
+      "role": "tool",
+      "tool_call_id": "qwO6hraYNv513J1tOQEtJWlc10jgYV0e",
+      "function": "sort"
+     },
+     {
+      "id": "dmt4kvh8a2nsrv6fGoBEjS",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "Now tail last 10 lines.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "nRKRaEXcDDZyHLh6RVZhEl1RtNZWlVhV",
+        "function": "tail",
+        "arguments": {
+         "file_name": "file3.txt",
+         "lines": 10
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "EtoMLZSh9JiYAKexLf6UWT",
+      "content": "{'last_lines': 'Kiwi\\nPlum\\nPear\\nFig\\nDate\\nCoconut\\nPineapple\\nPapaya\\nGuava\\nLychee'}",
+      "role": "tool",
+      "tool_call_id": "nRKRaEXcDDZyHLh6RVZhEl1RtNZWlVhV",
+      "function": "tail"
+     },
+     {
+      "id": "frz235WHjJeZZvfEsurzrz",
+      "content": "attachment://7299e18154270f15eb80dd860ce58d70",
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "ShosikNPKKrwf5eLgFLq2y",
+      "content": "For a different file, could you determine the total number of lines it holds?",
+      "role": "user"
+     },
+     {
+      "id": "UsGVpLvwE29PscA2Dz35V7",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://7f1b5489dc57db223aa4ec9cebcfe1de",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": "attachment://a2ac1489a94ba798afe0a575b453d198"
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "4LdBaaSuFyFahhMcFeVuzx",
+      "content": "Sorry it should be that same third file",
+      "role": "user"
+     },
+     {
+      "id": "DEvWcTvUxBApswEpFsL7fY",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "We need to count lines in file3.txt. Use wc with mode \"l\".",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "3WfsZDL2vxxtJurVrY6uhXNTE4cPwtWk",
+        "function": "wc",
+        "arguments": {
+         "file_name": "file3.txt",
+         "mode": "l"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "2maPa3for2PsnMXt7jUuCE",
+      "content": "{'count': 20, 'type': 'lines'}",
+      "role": "tool",
+      "tool_call_id": "3WfsZDL2vxxtJurVrY6uhXNTE4cPwtWk",
+      "function": "wc"
+     },
+     {
+      "id": "mb5BtHKMXnButCDF9xbRFo",
+      "content": "The third file (**file3.txt**) contains **20 lines** in total.",
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "3mtoc7yBD3WHrNPRVWJ8qB",
+      "content": "attachment://643a51df9430cd95ea76de592b6e0136",
+      "role": "user"
+     },
+     {
+      "id": "Ytys5bPN3Lvs9T7zwhcXoS",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://456510b29ccdd1a6452606eea2b10f4e",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "5IsfrZqbEQlv8qKpgMn8sWwgXbENeETP",
+        "function": "logarithm",
+        "arguments": {
+         "value": 20,
+         "base": 10,
+         "precision": 10
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "5RDaWpBa2LzqBnrBzVRCQi",
+      "content": "{'result': mpf('1.301029995666')}",
+      "role": "tool",
+      "tool_call_id": "5IsfrZqbEQlv8qKpgMn8sWwgXbENeETP",
+      "function": "logarithm"
+     }
+    ],
+    "calls": [
+     {
+      "role": "user",
+      "content": "attachment://7ff7a3f00fda2cab4866511bb0960c13"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "yiGRsHpq96FTmmY9cwFf4dhi29wTkCEz",
+        "function": {
+         "name": "ls",
+         "arguments": "{\"a\": true}"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "We need to list files in current directory (temp?). Need to run ls with a:true. Use ls tool."
+     },
+     {
+      "role": "tool",
+      "content": "{'current_directory_content': ['file1.txt', 'file2.txt', 'file3.txt']}",
+      "tool_call_id": "yiGRsHpq96FTmmY9cwFf4dhi29wTkCEz"
+     },
+     {
+      "role": "assistant",
+      "content": "attachment://dfa552ba3034f6e95bea45987d37ae2d"
+     },
+     {
+      "role": "user",
+      "content": "attachment://e70c4fd4ae02c3613ceb78f5809c1d50"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "qwO6hraYNv513J1tOQEtJWlc10jgYV0e",
+        "function": {
+         "name": "sort",
+         "arguments": "{\"file_name\": \"file3.txt\"}"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "attachment://3550f168883f82c5b62d056cf786d0e5"
+     },
+     {
+      "role": "tool",
+      "content": "attachment://65e4931b7bd2dbc31cd0599268dd817d",
+      "tool_call_id": "qwO6hraYNv513J1tOQEtJWlc10jgYV0e"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "nRKRaEXcDDZyHLh6RVZhEl1RtNZWlVhV",
+        "function": {
+         "name": "tail",
+         "arguments": "{\"file_name\": \"file3.txt\", \"lines\": 10}"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "Now tail last 10 lines."
+     },
+     {
+      "role": "tool",
+      "content": "{'last_lines': 'Kiwi\\nPlum\\nPear\\nFig\\nDate\\nCoconut\\nPineapple\\nPapaya\\nGuava\\nLychee'}",
+      "tool_call_id": "nRKRaEXcDDZyHLh6RVZhEl1RtNZWlVhV"
+     }
+    ]
+   },
+   "turn_count": 10
+  },
+  {
+   "id": "multi_turn_miss_param_72",
+   "epoch": 1,
+   "input": [],
+   "target": "[['fillFuelTank(fuelAmount=10.0)'], [\"lockDoors(unlock=False, door=['driver', 'passenger', 'rear_left', 'rear_right'])\", 'pressBrakePedal(pedalPosition=1.0)', \"startEngine(ignitionMode='START')\"], ['check_tire_pressure()'], [], [\"message_login(user_id='USR005')\", \"send_message(receiver_id='USR007', message='Road trip itinerary update.')\"], ['view_messages_sent()']]",
+   "output": {
+    "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+    "choices": [
+     {
+      "message": {
+       "id": "7gETbrZSjRZiPav65KHSzp",
+       "content": "Here are the messages you\u2019ve sent so far, grouped by recipient ID:\n\n**USR005**\n- \u201cHey Sarah, are you ready for the trip?\u201d  \n- \u201cRoad trip itinerary update.\u201d\n\n**USR007**\n- \u201cI'll be there soon.\u201d\n\n**USR008**\n- \u201cGot the snacks!\u201d\n\nIf you notice any missing contacts or need to send additional updates, just let me know!",
+       "source": "generate",
+       "role": "assistant",
+       "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "Here are the messages you\u2019ve sent so far, grouped by recipient ID:\n\n**USR005**\n- \u201cHey Sarah, are you ready for the trip?\u201d  \n- \u201cRoad trip itinerary update.\u201d\n\n**USR007**\n- \u201cI'll be there soon.\u201d\n\n**USR008**\n- \u201cGot the snacks!\u201d\n\nIf you notice any missing contacts or need to send additional updates, just let me know!",
+    "usage": {
+     "input_tokens": 79,
+     "output_tokens": 82,
+     "total_tokens": 3925,
+     "input_tokens_cache_read": 3764
+    },
+    "time": 2.390410000050906,
+    "response_id": "chatcmpl-GoRXRHPmx97u970fPziW9tR8uGbUqhub"
+   },
+   "scores": {
+    "bfcl_scorer": {
+     "value": 0,
+     "answer": "[[], [\"startEngine(ignitionMode='START')\", \"lockDoors(unlock=False, door=['driver', 'passenger', 'rear_left', 'rear_right'])\", \"startEngine(ignitionMode='START')\", 'pressBrakePedal(pedalPosition=1.0)', \"startEngine(ignitionMode='START')\", \"displayCarStatus(option='battery')\"], ['check_tire_pressure()'], [\"send_message(receiver_id='USR005', message='Road trip itinerary update.')\"], [\"add_contact(user_name='David')\"], ['view_messages_sent()']]",
+     "explanation": "State mismatch\n  inbox: model='[{\\'USR005\\': [\\'Hey Sarah, are you ready for the trip?\\']}, {\\'USR007\\': [\"I\\'ll be there soon.\"]}, {\\'USR008\\': [\\'Got the snacks!\\']}, {\\'USR005\\': \\'Road trip itinerary update.\\'}]', expected='[{\\'USR005\\': [\\'Hey Sarah, are you ready for the trip?\\']}, {\\'USR007\\': [\"I\\'ll be there soon.\"]}, {\\'USR008\\': [\\'Got the snacks!\\']}, {\\'USR007\\': \\'Road trip itinerary update.\\'}]'",
+     "history": []
+    }
+   },
+   "metadata": {
+    "category_name": "multi_turn_miss_param",
+    "scorer": "multi_turn",
+    "language": "python"
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gpt-oss-120b-GGUF:MXFP4": {
+     "input_tokens": 4451,
+     "output_tokens": 1095,
+     "total_tokens": 53988,
+     "input_tokens_cache_read": 48442
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-17T13:02:35.507932+00:00",
+   "completed_at": "2026-10-17T13:03:43.342124+00:00",
+   "total_time": 67.834,
+   "working_time": 67.408,
+   "uuid": "YJCRvo7kzZPinyPJLtZnTB",
+   "error_retries": [],
+   "events_data": {
+    "messages": [
+     {
+      "id": "a4WKQWjeccMsfP9xMo77vq",
+      "content": "Would you be able to increase my current fuel reserve to twice its size?",
+      "role": "user"
+     },
+     {
+      "id": "LAptDJm5jgfDmA2KZXJDeH",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://0818349dfd8104bef5186444ebbe3bda",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": "attachment://e2e6d2449560fdd10c1a4449033095dc"
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "GVYFNtqTkwbrHSALnpECyW",
+      "content": "attachment://89d617e4c2eedad4938483d97786e10e",
+      "role": "user"
+     },
+     {
+      "id": "VerrQet2ECKFWnqPJ8qXrw",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://7b64a3e6c222d851bee21df945645593",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "4rdzWnRPON7geI75HPItxtnJ8pwjDcfz",
+        "function": "startEngine",
+        "arguments": {
+         "ignitionMode": "START"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "fAUEno96WZiLaw84mPKvg4",
+      "content": "attachment://8511866af90c3544be653c16f14858ea",
+      "role": "tool",
+      "tool_call_id": "4rdzWnRPON7geI75HPItxtnJ8pwjDcfz",
+      "function": "startEngine"
+     },
+     {
+      "id": "A2KAygxro2o9cuHPMvoTgH",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://c62cdffdab7872b1e054baaea7e0ad11",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "WMW4VQFB7qS8ntQWfKpyM7M74O2LnMv0",
+        "function": "lockDoors",
+        "arguments": {
+         "unlock": false,
+         "door": [
+          "driver",
+          "passenger",
+          "rear_left",
+          "rear_right"
+         ]
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "fgqZU3xpgQYPM6L4KkFvN7",
+      "content": "{'lockStatus': 'locked', 'remainingUnlockedDoors': 0}",
+      "role": "tool",
+      "tool_call_id": "WMW4VQFB7qS8ntQWfKpyM7M74O2LnMv0",
+      "function": "lockDoors"
+     },
+     {
+      "id": "Q8k9NZWEyjqEGBpLKQ9NSV",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "Now start engine.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "sbrieSDmmMPxo8RTXC6IHAtlRM1ddMnJ",
+        "function": "startEngine",
+        "arguments": {
+         "ignitionMode": "START"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "QQXMMowBUR234QQpiQKw37",
+      "content": "{'error': 'Brake pedal needs to be pressed when starting the engine.'}",
+      "role": "tool",
+      "tool_call_id": "sbrieSDmmMPxo8RTXC6IHAtlRM1ddMnJ",
+      "function": "startEngine"
+     },
+     {
+      "id": "FiVbDx7mPRrvzhG8C933DB",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "We need to press brake pedal. Use pressBrakePedal with pedalPosition 1 (fully pressed).",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "Rssv3wOJwsM7ti8zYMO3Hbx7nEahF2KZ",
+        "function": "pressBrakePedal",
+        "arguments": {
+         "pedalPosition": 1
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "dkjHA57D4FPWoTzZHWj445",
+      "content": "{'brakePedalStatus': 'pressed', 'brakePedalForce': 1000.0}",
+      "role": "tool",
+      "tool_call_id": "Rssv3wOJwsM7ti8zYMO3Hbx7nEahF2KZ",
+      "function": "pressBrakePedal"
+     },
+     {
+      "id": "KXdAcF8dS3ZxyEoDTTALU7",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "Now start engine again.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "vPPOoionE972l0KXmGGORtCETWYA5aL1",
+        "function": "startEngine",
+        "arguments": {
+         "ignitionMode": "START"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "k2QuGXkTVFFDtsktcPf4Ma",
+      "content": "{'engineState': 'running', 'fuelLevel': 10.0, 'batteryVoltage': 12.6}",
+      "role": "tool",
+      "tool_call_id": "vPPOoionE972l0KXmGGORtCETWYA5aL1",
+      "function": "startEngine"
+     },
+     {
+      "id": "jirya7sh2P2qCteBqDzKum",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "Now display battery status.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "JBjxeP2DTcaashyl05sYD5VMKkJzCvWE",
+        "function": "displayCarStatus",
+        "arguments": {
+         "option": "battery"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "fmHdrnRHLHmWr5Nt62Lh5P",
+      "content": "{'batteryVoltage': 12.6}",
+      "role": "tool",
+      "tool_call_id": "JBjxeP2DTcaashyl05sYD5VMKkJzCvWE",
+      "function": "displayCarStatus"
+     },
+     {
+      "id": "Le2AZHzGrRr9szWA4paGgc",
+      "content": "attachment://7dd496bdad53a618a915bdb4a1800e1e",
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "Msa5JYvqT84kondperSNzQ",
+      "content": "Verify the tire pressure to guarantee they're accurately inflated for our lengthy expedition.",
+      "role": "user"
+     },
+     {
+      "id": "7bZaJWmdxhpHCMzJrrzfEN",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "We need to call check_tire_pressure.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "6BCANNL0AETUYjP2BwoofnoSWJbKDeCT",
+        "function": "check_tire_pressure",
+        "arguments": {},
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "kN4KQWv5aEfq9769wRmTnv",
+      "content": "attachment://3b406eec5e17a7b1d73172662ec09ecd",
+      "role": "tool",
+      "tool_call_id": "6BCANNL0AETUYjP2BwoofnoSWJbKDeCT",
+      "function": "check_tire_pressure"
+     },
+     {
+      "id": "Rf2Negxv638TmK5LNEw5W3",
+      "content": "attachment://735fcc2fdc6004f4a284fac87e4bd9ac",
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "XdQkTnqapxcXX9guqvFoiP",
+      "content": "attachment://cef3501cfdc4b5a635411e403d171598",
+      "role": "user"
+     },
+     {
+      "id": "WBPgcHsCYPuui3UQJsRVbs",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "We need to send a message to a user. We have user ID USR005. Use send_message.",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "qYSCkuafPn1uGxopb3zUrntuPilrS2PX",
+        "function": "send_message",
+        "arguments": {
+         "receiver_id": "USR005",
+         "message": "Road trip itinerary update."
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "aSypXTD8RGWK7M6bp47HHe",
+      "content": "attachment://d45222fd12dc5f92576cc54f7b5c569c",
+      "role": "tool",
+      "tool_call_id": "qYSCkuafPn1uGxopb3zUrntuPilrS2PX",
+      "function": "send_message"
+     },
+     {
+      "id": "M8WETTiD6pVPna4TM7NZxG",
+      "content": "attachment://df6de22f9dd3160a16d7ccc43593e3b1",
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "G2wQs5GtZyRusAK5LgSDyv",
+      "content": "My friend's name is David.",
+      "role": "user"
+     },
+     {
+      "id": "FTWyES8PGTYbVcstymYBBu",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://2cf9a18f8f3bcf36ca8b399e00962f10",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "epFJ6IRwDAIzjilcs1tnEnwGGz3XnCLM",
+        "function": "add_contact",
+        "arguments": {
+         "user_name": "David"
+        },
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "hzRHBAjdQoTrmv2KeexYgG",
+      "content": "{'error': \"User name 'David' already exists.\"}",
+      "role": "tool",
+      "tool_call_id": "epFJ6IRwDAIzjilcs1tnEnwGGz3XnCLM",
+      "function": "add_contact"
+     },
+     {
+      "id": "6moNyAj2fudJgjoZ3pt62W",
+      "content": "attachment://a786d6e9e5d557a0f772e1ca0aabc482",
+      "source": "generate",
+      "role": "assistant",
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "9vcrKofqpXCyu3CfW2oK7B",
+      "content": "attachment://3564a41eb6d217d80b840e329feb04a2",
+      "role": "user"
+     },
+     {
+      "id": "cPy5SCMyEUqwYB8TSkSp4k",
+      "content": [
+       {
+        "internal": "reasoning_content",
+        "type": "reasoning",
+        "reasoning": "attachment://0e6ac4ffd738b02a9879afc5630751e9",
+        "redacted": false
+       },
+       {
+        "type": "text",
+        "text": ""
+       }
+      ],
+      "source": "generate",
+      "role": "assistant",
+      "tool_calls": [
+       {
+        "id": "2eC8xp6WA3QQcugZR3lAmVWOWAZOxaWA",
+        "function": "view_messages_sent",
+        "arguments": {},
+        "type": "function"
+       }
+      ],
+      "model": "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+     },
+     {
+      "id": "LAwbLS2y3LVPyJG9f6YNYJ",
+      "content": "attachment://3bd7158647350bbb8385aa53473c66da",
+      "role": "tool",
+      "tool_call_id": "2eC8xp6WA3QQcugZR3lAmVWOWAZOxaWA",
+      "function": "view_messages_sent"
+     }
+    ],
+    "calls": [
+     {
+      "role": "user",
+      "content": "Would you be able to increase my current fuel reserve to twice its size?"
+     },
+     {
+      "role": "assistant",
+      "content": "attachment://23781c926bfe75a99dd3c933eba97b48",
+      "reasoning_content": "attachment://0818349dfd8104bef5186444ebbe3bda"
+     },
+     {
+      "role": "user",
+      "content": "attachment://89d617e4c2eedad4938483d97786e10e"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "4rdzWnRPON7geI75HPItxtnJ8pwjDcfz",
+        "function": {
+         "name": "startEngine",
+         "arguments": "{\"ignitionMode\": \"START\"}"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "attachment://7b64a3e6c222d851bee21df945645593"
+     },
+     {
+      "role": "tool",
+      "content": "attachment://8511866af90c3544be653c16f14858ea",
+      "tool_call_id": "4rdzWnRPON7geI75HPItxtnJ8pwjDcfz"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "WMW4VQFB7qS8ntQWfKpyM7M74O2LnMv0",
+        "function": {
+         "name": "lockDoors",
+         "arguments": "{\"unlock\": false, \"door\": [\"driver\", \"passenger\", \"rear_left\", \"rear_right\"]}"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "attachment://c62cdffdab7872b1e054baaea7e0ad11"
+     },
+     {
+      "role": "tool",
+      "content": "{'lockStatus': 'locked', 'remainingUnlockedDoors': 0}",
+      "tool_call_id": "WMW4VQFB7qS8ntQWfKpyM7M74O2LnMv0"
+     },
+     {
+      "role": "assistant",
+      "content": "\n",
+      "tool_calls": [
+       {
+        "id": "sbrieSDmmMPxo8RTXC6IHAtlRM1ddMnJ",
+        "function": {
+         "name": "startEngine",
+         "arguments": "{\"ignitionMode\": \"START\"}"
+        },
+        "type": "function"
+       }
+      ],
+      "reasoning_content": "Now start engine."
+     },
+     {
+      "role": "tool",
+      "content": "{'error': 'Brake pedal needs to be pressed when starting the engine.'}",
+      "tool_call_id": "sbrieSDmmMPxo8RTXC6IHAtlRM1ddMnJ"
+     }
+    ]
+   },
+   "turn_count": 16
+  }
+ ]
+}

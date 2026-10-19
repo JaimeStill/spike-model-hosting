@@ -1,0 +1,132 @@
+# The profile the gate tests judge runs by: devices/strix-halo/profile.toml's set A, its four
+# models and their values as the gate tests were written against, held here so that tuning the
+# committed profile (a set, a model, a build floor) moves no test. The reasons are the schema's
+# required fields, shortened; the live profile's say why each value is what it is.
+host_class = "strix-halo"
+bind = "tailnet"
+slots = 4
+kv = "unified"
+memory_bandwidth_gb_s = 256
+
+[engine]
+name = "llama.cpp"
+backend = "vulkan"
+min_build = "b11452"
+
+[defaults]
+c = 32768
+gpu_layers = 999
+checkpoint_min_step = 4096
+
+[[sets]]
+name = "a"
+startup = true
+models = [
+  "ggml-org/gpt-oss-120b-GGUF:MXFP4",
+  "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0",
+  "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+  "ggml-org/embeddinggemma-2-GGUF:Q8_0",
+]
+
+[sets.roles]
+chat = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+vision = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+audio = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+
+[sets.memory_budget]
+pool_mib = 98304
+measured_mib = 94926
+build = "b11565"
+source = "docs/findings/memory-budget.md"
+
+[[models]]
+id = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+publisher = "OpenAI"
+origin = "United States"
+licence = "Apache-2.0"
+roles = ["chat"]
+card_url = "https://huggingface.co/openai/gpt-oss-120b"
+card_context = 131072
+active_params_b = 5.1
+bits_per_weight = 4.34
+kind = "generative"
+c = 131072
+c_reason = "The harness model, at its trained context."
+
+[models.sampling]
+source = "https://github.com/openai/gpt-oss"
+temperature = 1.0
+top_p = 1.0
+top_k = 0
+min_p = 0.0
+reason = "The card's recommended sampling."
+
+[[models]]
+id = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+publisher = "Google"
+origin = "United States"
+licence = "Apache-2.0"
+roles = ["chat", "vision"]
+card_url = "https://huggingface.co/google/gemma-4-26B-A4B-it"
+card_context = 262144
+active_params_b = 3.8
+bits_per_weight = 4.63
+kind = "generative"
+c = 32768
+c_reason = "The vision model, at the context the shared budget allows."
+mtmd_batch_max_tokens = 512
+mtmd_batch_max_tokens_reason = "One image to an encoder batch."
+
+[models.sampling]
+source = "https://huggingface.co/google/gemma-4-26B-A4B-it"
+temperature = 1.0
+top_p = 0.95
+top_k = 64
+min_p = 0.0
+reason = "The card's recommended sampling."
+
+[[models]]
+id = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+publisher = "Google"
+origin = "United States"
+licence = "Apache-2.0"
+roles = ["chat", "vision", "audio"]
+card_url = "https://huggingface.co/google/gemma-4-E4B-it"
+card_context = 131072
+active_params_b = 4.5
+bits_per_weight = 8.53
+kind = "generative"
+c = 32768
+c_reason = "The audio model, at a quarter of its trained context."
+
+[models.sampling]
+source = "https://huggingface.co/google/gemma-4-E4B-it"
+temperature = 1.0
+top_p = 0.95
+top_k = 64
+min_p = 0.0
+reason = "The card's recommended sampling."
+
+[[models]]
+id = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+publisher = "Google"
+origin = "United States"
+licence = "Apache-2.0"
+roles = ["embedding"]
+card_url = "https://huggingface.co/google/embeddinggemma-2"
+card_context = 8192
+active_params_b = 0.271
+bits_per_weight = 8.68
+kind = "embedding"
+dims = 768
+c = 8192
+c_reason = "The context window its card states."
+args_reason = "An embedding model, mean pooled, its encoders kept out, one batch an input."
+
+[models.args]
+embeddings = true
+pooling = "mean"
+no-mmproj = true
+b = 8192
+ub = 8192

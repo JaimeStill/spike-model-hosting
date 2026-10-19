@@ -1,10 +1,18 @@
+# The repository is a mise monorepo: each area under config_roots keeps its own tasks, run from
+# here as //<area>:<task> (mise run //evaluation:baseline), with these tools and env beside the
+# area's own. The Go module is one, at the root, so the Go steps of check run module-wide here.
+monorepo_root = true
+
+[monorepo]
+config_roots = ["hosting", "evaluation", "devices/strix-halo"]
+
 [tools]
 go = "1.27.2"
 golangci-lint = "2.15.0"
 jq = "1.8.2"
 shellcheck = "0.11.0"
 
-# mise.consumers.toml's tools would otherwise get shims in mise's shared shims directory, ahead of
+# evaluation/mise.consumers.toml's tools would otherwise get shims in mise's shared shims directory, ahead of
 # the architect's own claude and the system Python on PATH; a reshim run here removes them.
 [settings.shims]
 exclude = ["claude", "guidellm", "uv", "uvx", "python", "python3", "python3-config", "pip", "pip3", "pydoc3", "idle3"]
@@ -15,12 +23,15 @@ GO_MODULES = "."
 # The integration probes read the router to probe from SPIKE_ROUTER_URL, set in the shell that
 # runs `mise run integration`; it is never committed, since it names a host.
 
+# check also runs every area's own check, when the area declares one.
 [tasks.check]
-description = "Build, vet, format, fix, tidy, test, and lint every module and script; writes nothing"
+description = "Build, vet, format, fix, tidy, test, and lint every module and script, and run every area's check; writes nothing"
+depends = ["//...:check"]
 run = '''
 set -eu
 export GOWORK=off
-shellcheck "$MISE_PROJECT_ROOT"/scripts/*.sh
+cd "$MISE_PROJECT_ROOT"
+git ls-files -z '*.sh' | xargs -0 shellcheck
 for mod in $GO_MODULES; do
   echo "check: $mod"
   cd "$MISE_PROJECT_ROOT/$mod"
@@ -36,20 +47,12 @@ for mod in $GO_MODULES; do
 done
 '''
 
-# The integration tier probes a running router over HTTP. It never starts a server on this
-# machine: SPIKE_ROUTER_URL names a router on the Framework or the workstation.
+# The integration tier probes a running router over HTTP: the hosting area's probe. It never
+# starts a server on this machine: SPIKE_ROUTER_URL names a router on the Framework or the
+# workstation.
 [tasks.integration]
-description = "Run the integration-tagged HTTP probes against SPIKE_ROUTER_URL"
-run = '''
-set -eu
-export GOWORK=off
-: "${SPIKE_ROUTER_URL:?set SPIKE_ROUTER_URL to the router to probe}"
-for mod in $GO_MODULES; do
-  echo "integration: $mod"
-  cd "$MISE_PROJECT_ROOT/$mod"
-  go test -race -tags integration -count=1 ./...
-done
-'''
+description = "Run the hosting area's integration-tagged HTTP probes against SPIKE_ROUTER_URL"
+depends = ["//hosting:integration"]
 
 [tasks.currency]
 description = "Report every requirement, Go version, and tool behind its latest; writes nothing"

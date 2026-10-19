@@ -1,0 +1,73 @@
+{
+ "benchmarks": [
+  {
+   "requests": {
+    "successful": [
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {},
+     {}
+    ],
+    "errored": [],
+    "incomplete": []
+   },
+   "metrics": {
+    "time_to_first_token_ms": {
+     "successful": {
+      "mean": 2973.311021924019,
+      "median": 3578.094720840454,
+      "percentiles": {
+       "p95": 3660.6714725494385
+      }
+     }
+    },
+    "inter_token_latency_ms": {
+     "successful": {
+      "mean": 46.8745275163183,
+      "median": 47.18829790751139,
+      "percentiles": {
+       "p95": 47.83392420002058
+      }
+     }
+    },
+    "output_tokens_per_second": {
+     "successful": {
+      "mean": 68.2252252320765,
+      "median": 52.887239031985494,
+      "percentiles": {
+       "p95": 191.22775098264705
+      }
+     }
+    }
+   }
+  }
+ ]
+}

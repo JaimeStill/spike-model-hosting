@@ -1,0 +1,16 @@
+{
+ "bar": 0.99,
+ "size": 10,
+ "screening": 2,
+ "run": 5,
+ "passes": 3,
+ "upper_bound": 0.8572935279807868,
+ "stopped": [
+  "live_multiple_548-152-10",
+  "live_multiple_912-191-0",
+  "live_simple_159-95-16",
+  "multiple_19",
+  "parallel_169"
+ ],
+ "reason": "the 95% upper bound 0.8791 on the pass rate (1/2) is below the bar 0.99"
+}

@@ -1,0 +1,7 @@
+# tier vision-mmmu
+# dataset MMMU/MMMU@171b0ef74cd1704464e6940860968009d8cdd59a validation multiple-choice
+# seed 20261016
+validation_Accounting_13
+validation_Accounting_14
+validation_Accounting_22
+validation_Accounting_23

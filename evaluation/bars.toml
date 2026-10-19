@@ -1,0 +1,47 @@
+# Each quality tier's bar: the pass rate a model must reach on the tier, set A's score less set A's
+# two-run spread (package evaluation/tier). The baseline fills them, one key a tier:
+#
+#   <tier> = <bar in [0, 1]>
+#
+# The embedding role's MTEB tasks take a bar the same way, keyed by the MTEB task's name, the
+# bar being the task's main score in MTEB's [0, 1] scale (package evaluation/gate):
+#
+#   SciFact = <ndcg_at_10 in [0, 1]>
+#
+# A lower-is-better measure takes a ceiling instead, under [bars_at_most]: the audio role's ASR
+# sets, keyed by their tier's name, the bar being the set's corpus WER as a fraction, set A's WER
+# plus its two-run spread. A ceiling also stops the set early, once the WER's 95% lower bound is
+# above it:
+#
+#   asr-librispeech-clean = <WER in [0, 1]>
+#
+# A tier, task or set with no bar here runs to completion and records its rate, score or WER;
+# it never fails.
+#
+# The values are set A's baseline on b11715-9d1878a43, 2026-10-17 and 2026-10-18
+# (docs/findings/baseline.md, "Set A's baseline"): each the mean of the role model's two quality
+# stage scores less their spread (the two runs' difference), a floor rounded down and a ceiling
+# rounded up to three places. A score both runs measured the same has no spread, so its bar is
+# the score itself, to that rounding.
+[bars]
+# gpt-oss-120b: BFCL single-turn 0.65 and 0.69; multi-turn 0.40 and 0.35.
+agent-bfcl-single = 0.630
+agent-bfcl-multi = 0.325
+# Gemma 4 26B-A4B: V*Bench 0.62 and 0.61; DocVQA mean ANLS 0.9040 and 0.9037; MMMU 0.715 and 0.720.
+vision-vstar = 0.605
+vision-docvqa = 0.903
+vision-mmmu = 0.712
+# EmbeddingGemma 2, each MTEB task's main score, the same in both runs.
+STSBenchmark = 0.874
+Banking77Classification = 0.922
+SciFact = 0.851
+NFCorpus = 0.365
+
+[bars_at_most]
+# gemma-4-E4B, each set's corpus WER, the same in both runs.
+asr-librispeech-clean = 0.023
+asr-librispeech-other = 0.062
+asr-voxpopuli = 0.079
+asr-ami = 0.151
+asr-earnings22 = 0.136
+asr-fleurs-en = 0.075

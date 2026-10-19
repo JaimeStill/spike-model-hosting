@@ -1,0 +1,6 @@
+# tier asr-librispeech-other
+# dataset hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb librispeech/test.other-*.parquet
+# seed 20261016
+6432-63722-0010
+5484-24317-0003
+3331-159609-0014

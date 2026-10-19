@@ -1,0 +1,13 @@
+# tier vision-vstar
+# dataset craigwu/vstar_bench@d9ae62c903da0c98336e85c5ee89cd863b04b4da test
+# seed 20261016
+83
+22
+107
+17
+103
+134
+66
+178
+99
+45

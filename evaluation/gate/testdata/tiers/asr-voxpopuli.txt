@@ -1,0 +1,6 @@
+# tier asr-voxpopuli
+# dataset hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb voxpopuli/test-*.parquet
+# seed 20261016
+20150708-0900-PLENARY-12-en_20150708-19:27:47_3
+20171116-0900-PLENARY-4-en_20171116-10:04:11_6
+20180613-0900-PLENARY-6-en_20180613-11:56:15_2

@@ -1,0 +1,763 @@
+{
+ "version": 2,
+ "status": "success",
+ "eval": {
+  "eval_id": "BR4mFf4hisrpCUPFG9DqdM",
+  "run_id": "GtVVa39qBrotiPadxgKQjo",
+  "created": "2026-10-16T22:11:01+00:00",
+  "task": "inspect_evals/docvqa",
+  "task_id": "mQpnRtfZrSiyj5Auy4VsXN",
+  "task_version": 2,
+  "task_display_name": "docvqa",
+  "task_registry_name": "inspect_evals/docvqa",
+  "task_attribs": {},
+  "task_args": {
+   "shuffle": false
+  },
+  "task_args_passed": {
+   "shuffle": false
+  },
+  "dataset": {
+   "name": "lmms-lab-encoder/DocVQA",
+   "location": "lmms-lab-encoder/DocVQA",
+   "samples": 5349,
+   "sample_ids": [
+    "57375",
+    "24437",
+    "32894",
+    "49279",
+    "49292",
+    "16553",
+    "57526",
+    "16574",
+    "49400",
+    "347",
+    "361",
+    "8560",
+    "57800",
+    "17140",
+    "41750",
+    "815",
+    "52297",
+    "58322",
+    "58408",
+    "58451",
+    "50266",
+    "60473",
+    "58504",
+    "58540",
+    "57254",
+    "50516",
+    "50532",
+    "58826",
+    "58876",
+    "58903",
+    "50716",
+    "50725",
+    "58937",
+    "42565",
+    "57307",
+    "1623",
+    "57320",
+    "50961",
+    "1886",
+    "32949",
+    "51230",
+    "59420",
+    "59492",
+    "2215",
+    "59614",
+    "43244",
+    "59631",
+    "457",
+    "474",
+    "59802",
+    "59858",
+    "51694",
+    "51727",
+    "46125",
+    "43777",
+    "3047",
+    "60433",
+    "60434",
+    "60470",
+    "60495",
+    "44136",
+    "44141",
+    "60722",
+    "60735",
+    "60815",
+    "3547",
+    "60962",
+    "60974",
+    "61131",
+    "61162",
+    "61165",
+    "36591",
+    "51242",
+    "61237",
+    "36889",
+    "36997",
+    "59475",
+    "53479",
+    "59481",
+    "61773",
+    "4461",
+    "37333",
+    "45717",
+    "62134",
+    "53989",
+    "5855",
+    "37663",
+    "62299",
+    "4956",
+    "62304",
+    "62499",
+    "62525",
+    "54353",
+    "5213",
+    "46233",
+    "21703",
+    "54490",
+    "46363",
+    "5412",
+    "62757",
+    "46447",
+    "36928",
+    "5604",
+    "63135",
+    "54970",
+    "63164",
+    "63180",
+    "22319",
+    "63318",
+    "55144",
+    "55188",
+    "55197",
+    "55210",
+    "38936",
+    "65046",
+    "63586",
+    "55431",
+    "39049",
+    "55471",
+    "63755",
+    "47544",
+    "47727",
+    "55947",
+    "64216",
+    "64209",
+    "56096",
+    "47983",
+    "47992",
+    "56291",
+    "64547",
+    "56412",
+    "56523",
+    "56558",
+    "56577",
+    "23830",
+    "64886",
+    "1167",
+    "64897",
+    "64899",
+    "32148",
+    "7590",
+    "64943",
+    "65151",
+    "56977",
+    "65201",
+    "57168",
+    "57173",
+    "65381",
+    "8074",
+    "57249"
+   ],
+   "shuffled": false
+  },
+  "model": "openai-api/router/ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0",
+  "model_generate_config": {},
+  "model_base_url": "http://framework:8080/v1",
+  "model_args": {
+   "default_query": {
+    "autoload": "false"
+   }
+  },
+  "config": {
+   "sample_id": [
+    "44141",
+    "60434",
+    "64897",
+    "361",
+    "59420",
+    "46363",
+    "56558",
+    "57526",
+    "32148",
+    "58504",
+    "57800",
+    "4956",
+    "50725",
+    "53479",
+    "64216",
+    "55947",
+    "56977",
+    "474",
+    "4461",
+    "43777",
+    "17140",
+    "61165",
+    "5855",
+    "60722",
+    "62299",
+    "60815",
+    "3047",
+    "58903",
+    "46233",
+    "2215",
+    "58322",
+    "60470",
+    "37333",
+    "56412",
+    "57173",
+    "36889",
+    "63180",
+    "63586",
+    "62757",
+    "60433",
+    "65381",
+    "46125",
+    "42565",
+    "55210",
+    "55144",
+    "59858",
+    "54353",
+    "21703",
+    "64899",
+    "65201",
+    "5213",
+    "32949",
+    "50961",
+    "60473",
+    "49292",
+    "59481",
+    "62525",
+    "57320",
+    "63135",
+    "59475",
+    "50716",
+    "56577",
+    "55188",
+    "51242",
+    "5412",
+    "61131",
+    "63755",
+    "60495",
+    "32894",
+    "44136",
+    "49279",
+    "59802",
+    "54970",
+    "1623",
+    "61237",
+    "41750",
+    "43244",
+    "58408",
+    "58451",
+    "347",
+    "56096",
+    "1167",
+    "63318",
+    "47544",
+    "8074",
+    "16574",
+    "49400",
+    "59631",
+    "56523",
+    "1886",
+    "65151",
+    "62499",
+    "64886",
+    "16553",
+    "58876",
+    "50266",
+    "59614",
+    "38936",
+    "7590",
+    "53989",
+    "8560",
+    "60974",
+    "55431",
+    "46447",
+    "62134",
+    "55197",
+    "51727",
+    "62304",
+    "54490",
+    "39049",
+    "57168",
+    "59492",
+    "36997",
+    "457",
+    "60962",
+    "45717",
+    "58937",
+    "61773",
+    "815",
+    "64209",
+    "57375",
+    "50516",
+    "51230",
+    "47983",
+    "50532",
+    "64547",
+    "47992",
+    "60735",
+    "56291",
+    "37663",
+    "36591",
+    "61162",
+    "65046",
+    "57307",
+    "36928",
+    "47727",
+    "24437",
+    "58540",
+    "57249",
+    "55471",
+    "5604",
+    "3547",
+    "23830",
+    "63164",
+    "52297",
+    "22319",
+    "58826",
+    "64943",
+    "57254",
+    "51694"
+   ],
+   "epochs": 1,
+   "fail_on_error": true,
+   "continue_on_fail": false,
+   "score_on_error": false,
+   "max_samples": 4,
+   "max_tasks": 1,
+   "sandbox_cleanup": true,
+   "sandbox_prebuilt": false,
+   "log_samples": true,
+   "log_realtime": true,
+   "log_images": false,
+   "score_display": true
+  },
+  "revision": {
+   "type": "git",
+   "origin": "https://github.com/JaimeStill/spike-model-hosting.git",
+   "commit": "0d621fc",
+   "dirty": true
+  },
+  "packages": {
+   "inspect_ai": "0.3.281",
+   "inspect_evals": "0.24.0"
+  },
+  "metadata": {
+   "tier": "docvqa",
+   "dataset": "lmms-lab-encoder/DocVQA@539088ef8a8ada01ac8e2e6d4e372586748a265e DocVQA validation",
+   "full_task_version": "2-A",
+   "task_interface_version": "A",
+   "task_comparability_version": 2
+  },
+  "scorers": [
+   {
+    "name": "docvqa_scorer",
+    "options": {},
+    "metrics": [
+     {
+      "name": "inspect_ai/accuracy",
+      "options": {}
+     },
+     {
+      "name": "inspect_ai/stderr",
+      "options": {
+       "cluster": "document_id"
+      }
+     }
+    ],
+    "metadata": {}
+   }
+  ]
+ },
+ "plan": {
+  "name": "plan",
+  "steps": [
+   {
+    "solver": "inspect_evals/docvqa_solver",
+    "params": {},
+    "params_passed": {}
+   }
+  ],
+  "config": {
+   "max_connections": 4,
+   "max_tokens": 4096,
+   "temperature": 0.0,
+   "extra_body": {
+    "chat_template_kwargs": {
+     "enable_thinking": false
+    }
+   }
+  }
+ },
+ "results": {
+  "total_samples": 150,
+  "completed_samples": 150,
+  "scores": [
+   {
+    "name": "docvqa_scorer",
+    "scorer": "docvqa_scorer",
+    "scored_samples": 150,
+    "unscored_samples": 0,
+    "params": {},
+    "metrics": {
+     "accuracy": {
+      "name": "accuracy",
+      "value": 0.8855026608388927,
+      "params": {}
+     },
+     "stderr": {
+      "name": "stderr",
+      "value": 0.026064470512318288,
+      "params": {
+       "cluster": "document_id"
+      }
+     }
+    }
+   }
+  ],
+  "headline": {
+   "scorer": "docvqa_scorer",
+   "score": "docvqa_scorer",
+   "metric": "accuracy"
+  }
+ },
+ "stats": {
+  "started_at": "2026-10-16T22:11:01+00:00",
+  "completed_at": "2026-10-16T22:15:21+00:00",
+  "model_usage": {
+   "openai-api/router/ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0": {
+    "input_tokens": 59984,
+    "output_tokens": 9199,
+    "total_tokens": 69315,
+    "input_tokens_cache_read": 132
+   }
+  },
+  "role_usage": {},
+  "connection_limit_history": []
+ },
+ "invalidated": false,
+ "tags": [],
+ "metadata": {
+  "tier": "docvqa",
+  "dataset": "lmms-lab-encoder/DocVQA@539088ef8a8ada01ac8e2e6d4e372586748a265e DocVQA validation",
+  "full_task_version": "2-A",
+  "task_interface_version": "A",
+  "task_comparability_version": 2
+ },
+ "samples": [
+  {
+   "id": "1167",
+   "epoch": 1,
+   "input": [
+    {
+     "id": "jjwSfD4rQnFr2x6PZNbkSC",
+     "content": [
+      {
+       "type": "text",
+       "text": "what is the mortality of group 1?"
+      },
+      {
+       "type": "image",
+       "image": "<base64-data-removed>",
+       "detail": "auto"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   "target": [
+    "36/60"
+   ],
+   "output": {
+    "model": "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0",
+    "choices": [
+     {
+      "message": {
+       "id": "2piPXK6NvidH8oyVJ3fUH9",
+       "content": "Based on the provided table, for Group 1, the mortality is listed as 36/60 (60.0%).\n\nANSWER: 36/60 (60.0%)",
+       "source": "generate",
+       "role": "assistant",
+       "model": "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "Based on the provided table, for Group 1, the mortality is listed as 36/60 (60.0%).\n\nANSWER: 36/60 (60.0%)",
+    "usage": {
+     "input_tokens": 397,
+     "output_tokens": 44,
+     "total_tokens": 441,
+     "input_tokens_cache_read": 0
+    },
+    "time": 6.746669679007027,
+    "response_id": "chatcmpl-gyD3ma87S06g88lPt5EJGFOJIbYy2Dfl"
+   },
+   "scores": {
+    "docvqa_scorer": {
+     "value": 0.0,
+     "answer": "36/60 (60.0%)",
+     "history": []
+    }
+   },
+   "metadata": {
+    "document_id": 533
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0": {
+     "input_tokens": 397,
+     "output_tokens": 44,
+     "total_tokens": 441,
+     "input_tokens_cache_read": 0
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-16T22:14:52.845600+00:00",
+   "completed_at": "2026-10-16T22:14:59.604442+00:00",
+   "total_time": 6.759,
+   "working_time": 6.755,
+   "uuid": "Kf5UZc2wXnveBsdVhgyrp7",
+   "error_retries": [],
+   "turn_count": 1
+  },
+  {
+   "id": "1623",
+   "epoch": 1,
+   "input": [
+    {
+     "id": "KjywuuqdgdVAtw95jDU3jN",
+     "content": [
+      {
+       "type": "text",
+       "text": "Is Michael the corresponding author?"
+      },
+      {
+       "type": "image",
+       "image": "<base64-data-removed>",
+       "detail": "auto"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   "target": [
+    "No"
+   ],
+   "output": {
+    "model": "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0",
+    "choices": [
+     {
+      "message": {
+       "id": "Kqa74GQAZLZDCW3y4Z5CN6",
+       "content": "Based on the provided document, under Section 1, question 4 (\"Are you the corresponding author?\"), the box for \"No\" is checked.\n\nANSWER: No",
+       "source": "generate",
+       "role": "assistant",
+       "model": "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "Based on the provided document, under Section 1, question 4 (\"Are you the corresponding author?\"), the box for \"No\" is checked.\n\nANSWER: No",
+    "usage": {
+     "input_tokens": 393,
+     "output_tokens": 36,
+     "total_tokens": 430,
+     "input_tokens_cache_read": 1
+    },
+    "time": 2.30592005798826,
+    "response_id": "chatcmpl-TSobSBXXrFOHSkhY2kUOm2VAbBBsW4ma"
+   },
+   "scores": {
+    "docvqa_scorer": {
+     "value": 1.0,
+     "answer": "No",
+     "history": []
+    }
+   },
+   "metadata": {
+    "document_id": 693
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0": {
+     "input_tokens": 393,
+     "output_tokens": 36,
+     "total_tokens": 430,
+     "input_tokens_cache_read": 1
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-16T22:11:59.608858+00:00",
+   "completed_at": "2026-10-16T22:12:01.920790+00:00",
+   "total_time": 2.312,
+   "working_time": 2.31,
+   "uuid": "QYJNbmhVTdXWefmG8CB8o6",
+   "error_retries": [],
+   "turn_count": 1
+  },
+  {
+   "id": "16553",
+   "epoch": 1,
+   "input": [
+    {
+     "id": "H9USxLzbZrgsewV6C7re88",
+     "content": [
+      {
+       "type": "text",
+       "text": "What is the Date Assigned as per the document?"
+      },
+      {
+       "type": "image",
+       "image": "<base64-data-removed>",
+       "detail": "auto"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   "target": [
+    "January 18, 2005"
+   ],
+   "output": {
+    "model": "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0",
+    "choices": [
+     {
+      "message": {
+       "id": "Qn48xcSLcAtiuTXiMt74Bo",
+       "content": "To find the Date Assigned, look for the \"DATE ASSIGNED:\" field in the document.\n\nDATE ASSIGNED: January 18, 2005\n\nANSWER: January 18, 2005",
+       "source": "generate",
+       "role": "assistant",
+       "model": "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "To find the Date Assigned, look for the \"DATE ASSIGNED:\" field in the document.\n\nDATE ASSIGNED: January 18, 2005\n\nANSWER: January 18, 2005",
+    "usage": {
+     "input_tokens": 418,
+     "output_tokens": 48,
+     "total_tokens": 467,
+     "input_tokens_cache_read": 1
+    },
+    "time": 5.773354832024779,
+    "response_id": "chatcmpl-2mxcJDvtOdNicNL1nVHJ6ksNxqZFvCML"
+   },
+   "scores": {
+    "docvqa_scorer": {
+     "value": 1.0,
+     "answer": "January 18, 2005",
+     "history": []
+    }
+   },
+   "metadata": {
+    "document_id": 5238
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0": {
+     "input_tokens": 418,
+     "output_tokens": 48,
+     "total_tokens": 467,
+     "input_tokens_cache_read": 1
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-16T22:11:10.966376+00:00",
+   "completed_at": "2026-10-16T22:11:16.745615+00:00",
+   "total_time": 5.779,
+   "working_time": 5.778,
+   "uuid": "aZggi9c7hRwkeu4MhyAJR6",
+   "error_retries": [],
+   "turn_count": 1
+  },
+  {
+   "id": "457",
+   "epoch": 1,
+   "input": [
+    {
+     "id": "AtyUKGvV33F48yDf3UgdT9",
+     "content": [
+      {
+       "type": "text",
+       "text": "which study was done to evaluate the MUL blend with 50% expanded"
+      },
+      {
+       "type": "image",
+       "image": "<base64-data-removed>",
+       "detail": "auto"
+      }
+     ],
+     "role": "user"
+    }
+   ],
+   "target": [
+    "RTD study",
+    "RTD"
+   ],
+   "output": {
+    "model": "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0",
+    "choices": [
+     {
+      "message": {
+       "id": "AQYn9rErzFProJ3xje3pAs",
+       "content": "Based on the text provided under \"Project BOLD:\", an RTD study was done to evaluate the MUL blend with 50% expanded at RTD levels of approximately 75, 100 and 130 mm.\n\nANSWER: An RTD study",
+       "source": "generate",
+       "role": "assistant",
+       "model": "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
+      },
+      "stop_reason": "stop"
+     }
+    ],
+    "completion": "Based on the text provided under \"Project BOLD:\", an RTD study was done to evaluate the MUL blend with 50% expanded at RTD levels of approximately 75, 100 and 130 mm.\n\nANSWER: An RTD study",
+    "usage": {
+     "input_tokens": 423,
+     "output_tokens": 57,
+     "total_tokens": 481,
+     "input_tokens_cache_read": 1
+    },
+    "time": 4.586102183966432,
+    "response_id": "chatcmpl-8qlMqlO88S6BCWrk8wkKQpYrvigJF7Hs"
+   },
+   "scores": {
+    "docvqa_scorer": {
+     "value": 0.75,
+     "answer": "An RTD study",
+     "history": []
+    }
+   },
+   "metadata": {
+    "document_id": 306
+   },
+   "model_usage": {
+    "openai-api/router/ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0": {
+     "input_tokens": 423,
+     "output_tokens": 57,
+     "total_tokens": 481,
+     "input_tokens_cache_read": 1
+    }
+   },
+   "role_usage": {},
+   "started_at": "2026-10-16T22:12:21.176040+00:00",
+   "completed_at": "2026-10-16T22:12:25.769685+00:00",
+   "total_time": 4.594,
+   "working_time": 4.592,
+   "uuid": "KHEaUAjF5dKrv6URFRjjce",
+   "error_retries": [],
+   "turn_count": 1
+  }
+ ]
+}

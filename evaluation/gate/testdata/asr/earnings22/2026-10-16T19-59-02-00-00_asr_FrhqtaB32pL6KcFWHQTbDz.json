@@ -1,0 +1,455 @@
+{
+  "version": 2,
+  "status": "success",
+  "eval": {
+    "eval_id": "RuBBMScJbT6jMiNCfeh664",
+    "run_id": "gjwPgB6yGmXScJpHPfQEqV",
+    "created": "2026-10-16T19:59:02+00:00",
+    "task": "asr",
+    "task_id": "FrhqtaB32pL6KcFWHQTbDz",
+    "task_version": 0,
+    "task_file": "evaluation/suites/asr_quality.py",
+    "task_display_name": "asr",
+    "task_registry_name": "asr",
+    "task_attribs": {},
+    "task_args": {
+      "name": "earnings22",
+      "tier": "/home/jaime/experiments/spike-model-hosting/evaluation/tiers/asr-earnings22.txt",
+      "bar": null
+    },
+    "task_args_passed": {
+      "name": "earnings22",
+      "tier": "/home/jaime/experiments/spike-model-hosting/evaluation/tiers/asr-earnings22.txt",
+      "bar": null
+    },
+    "dataset": {
+      "name": "earnings22",
+      "samples": 150,
+      "sample_ids": [
+        "4483338/86.wav",
+        "4450488/130.wav",
+        "4432298/92.wav"
+      ],
+      "shuffled": false
+    },
+    "model": "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+    "model_generate_config": {},
+    "model_base_url": "http://framework:8080/v1",
+    "model_args": {
+      "default_query": {
+        "autoload": "false"
+      }
+    },
+    "config": {
+      "epochs": 1,
+      "fail_on_error": true,
+      "continue_on_fail": false,
+      "score_on_error": false,
+      "max_samples": 1,
+      "sandbox_cleanup": true,
+      "sandbox_prebuilt": false,
+      "log_samples": true,
+      "log_realtime": true,
+      "log_images": false,
+      "score_display": true
+    },
+    "revision": {
+      "type": "git",
+      "origin": "https://github.com/JaimeStill/spike-model-hosting.git",
+      "commit": "e5952b2",
+      "dirty": true
+    },
+    "packages": {
+      "inspect_ai": "0.3.281"
+    },
+    "metadata": {
+      "set": "earnings22",
+      "dataset": "hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb earnings22/test-*.parquet",
+      "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+      "prompt": "Transcribe the following speech segment in English into English text."
+    },
+    "scorers": [
+      {
+        "name": "wer",
+        "options": {},
+        "metrics": [
+          {
+            "name": "corpus_wer",
+            "options": {}
+          }
+        ],
+        "metadata": {}
+      }
+    ]
+  },
+  "plan": {
+    "name": "plan",
+    "steps": [
+      {
+        "solver": "generate",
+        "params": {
+          "tool_calls": "loop"
+        },
+        "params_passed": {}
+      }
+    ],
+    "config": {
+      "max_connections": 1,
+      "max_tokens": 1024,
+      "temperature": 0.0,
+      "extra_body": {
+        "cache_prompt": false,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      }
+    }
+  },
+  "results": {
+    "total_samples": 150,
+    "completed_samples": 150,
+    "scores": [
+      {
+        "name": "wer",
+        "scorer": "wer",
+        "scored_samples": 150,
+        "unscored_samples": 0,
+        "params": {},
+        "metrics": {
+          "corpus_wer": {
+            "name": "corpus_wer",
+            "value": 0.13593691325572663,
+            "params": {}
+          }
+        }
+      }
+    ],
+    "headline": {
+      "scorer": "wer",
+      "score": "wer",
+      "metric": "corpus_wer"
+    }
+  },
+  "stats": {
+    "started_at": "2026-10-16T19:59:02+00:00",
+    "completed_at": "2026-10-16T20:01:03+00:00",
+    "model_usage": {
+      "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+        "input_tokens": 30153,
+        "output_tokens": 3188,
+        "total_tokens": 33341,
+        "input_tokens_cache_read": 0
+      }
+    },
+    "role_usage": {},
+    "connection_limit_history": []
+  },
+  "invalidated": false,
+  "tags": [],
+  "metadata": {
+    "set": "earnings22",
+    "dataset": "hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb earnings22/test-*.parquet",
+    "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+    "prompt": "Transcribe the following speech segment in English into English text."
+  },
+  "samples": [
+    {
+      "id": "4432298/92.wav",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "e5CFBKcUiXuiC4vn8Cjzz8",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "So, if you would like to ask a question, please signal by pressing star 1 on your telephone or keypad.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "Qy8Cjs8kjyZquxAGsWpbkq",
+              "content": "If you would like to ask a question please signal by pressing star one on your telephone keypad.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "If you would like to ask a question please signal by pressing star one on your telephone keypad.",
+        "usage": {
+          "input_tokens": 135,
+          "output_tokens": 20,
+          "total_tokens": 155,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.7192050009616651,
+        "response_id": "chatcmpl-Q4kcDqAesymwAgjMwpV7BgXb6Nrnvk8o"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.1,
+          "answer": "If you would like to ask a question please signal by pressing star one on your telephone keypad.",
+          "metadata": {
+            "errors": 2,
+            "words": 20,
+            "ins": 0,
+            "del": 2,
+            "sub": 0,
+            "reference": "so if you would like to ask a question please signal by pressing star one on your telephone or keypad",
+            "hypothesis": "if you would like to ask a question please signal by pressing star one on your telephone keypad"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 4.480125
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 135,
+          "output_tokens": 20,
+          "total_tokens": 155,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:59:04.037555+00:00",
+      "completed_at": "2026-10-16T19:59:04.764953+00:00",
+      "total_time": 0.727,
+      "working_time": 0.725,
+      "uuid": "D6vVCZmrYPJ58CFTBxTdo6",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "4450488/130.wav",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "YYFuPGyduP2tQFEon5UcGu",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "In Sierra Gorda, the main driving force was the increased in the production value.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "2Jb6kgnuBrs8xCf5iwmPLm",
+              "content": "and she regarded the main driving force was the increase in the production value",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "and she regarded the main driving force was the increase in the production value",
+        "usage": {
+          "input_tokens": 166,
+          "output_tokens": 15,
+          "total_tokens": 181,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.6146706300205551,
+        "response_id": "chatcmpl-sMTQViymzBQ5kmtrOWq25VeLLMNPP0Ei"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.2857142857142857,
+          "answer": "and she regarded the main driving force was the increase in the production value",
+          "metadata": {
+            "errors": 4,
+            "words": 14,
+            "ins": 0,
+            "del": 0,
+            "sub": 4,
+            "reference": "in sierra gorda the main driving force was the increased in the production value",
+            "hypothesis": "and she regarded the main driving force was the increase in the production value"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 5.700045351473923
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 166,
+          "output_tokens": 15,
+          "total_tokens": 181,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:59:03.410528+00:00",
+      "completed_at": "2026-10-16T19:59:04.034440+00:00",
+      "total_time": 0.624,
+      "working_time": 0.62,
+      "uuid": "7chmtxQ8nxPnxcqWcDDmeN",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "4483338/86.wav",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "8G4yWWBrKsAMUjoCoXQikK",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "But with that, I would like to hand over to Charlotte, who will take us through the financial overview.",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "k9JyAJFZQ2BW5evq8EQc2N",
+              "content": "Hansen. But with that, I'd like to hand over to Charlotte who will take us through the Farnash lobby.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "Hansen. But with that, I'd like to hand over to Charlotte who will take us through the Farnash lobby.",
+        "usage": {
+          "input_tokens": 179,
+          "output_tokens": 27,
+          "total_tokens": 206,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.9225965390214697,
+        "response_id": "chatcmpl-arhBZCB7F7A6w1EtDRu6Zwnag6NrczmQ"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.15789473684210525,
+          "answer": "Hansen. But with that, I'd like to hand over to Charlotte who will take us through the Farnash lobby.",
+          "metadata": {
+            "errors": 3,
+            "words": 19,
+            "ins": 1,
+            "del": 0,
+            "sub": 2,
+            "reference": "but with that i would like to hand over to charlotte who will take us through the financial overview",
+            "hypothesis": "hansen but with that i would like to hand over to charlotte who will take us through the farnash lobby"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 6.2400416666666665
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 179,
+          "output_tokens": 27,
+          "total_tokens": 206,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:59:02.346509+00:00",
+      "completed_at": "2026-10-16T19:59:03.395344+00:00",
+      "total_time": 1.049,
+      "working_time": 0.933,
+      "uuid": "Jsmriva5hC7xgiRt9LQKJF",
+      "error_retries": [],
+      "turn_count": 1
+    }
+  ],
+  "reductions": [
+    {
+      "scorer": "wer",
+      "samples": [
+        {
+          "value": 0.15789473684210525,
+          "answer": "Hansen. But with that, I'd like to hand over to Charlotte who will take us through the Farnash lobby.",
+          "metadata": {
+            "errors": 3,
+            "words": 19,
+            "ins": 1,
+            "del": 0,
+            "sub": 2,
+            "reference": "but with that i would like to hand over to charlotte who will take us through the financial overview",
+            "hypothesis": "hansen but with that i would like to hand over to charlotte who will take us through the farnash lobby"
+          },
+          "history": [],
+          "sample_id": "4483338/86.wav"
+        },
+        {
+          "value": 0.2857142857142857,
+          "answer": "and she regarded the main driving force was the increase in the production value",
+          "metadata": {
+            "errors": 4,
+            "words": 14,
+            "ins": 0,
+            "del": 0,
+            "sub": 4,
+            "reference": "in sierra gorda the main driving force was the increased in the production value",
+            "hypothesis": "and she regarded the main driving force was the increase in the production value"
+          },
+          "history": [],
+          "sample_id": "4450488/130.wav"
+        },
+        {
+          "value": 0.1,
+          "answer": "If you would like to ask a question please signal by pressing star one on your telephone keypad.",
+          "metadata": {
+            "errors": 2,
+            "words": 20,
+            "ins": 0,
+            "del": 2,
+            "sub": 0,
+            "reference": "so if you would like to ask a question please signal by pressing star one on your telephone or keypad",
+            "hypothesis": "if you would like to ask a question please signal by pressing star one on your telephone keypad"
+          },
+          "history": [],
+          "sample_id": "4432298/92.wav"
+        }
+      ]
+    }
+  ]
+}

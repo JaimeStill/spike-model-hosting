@@ -1,0 +1,6 @@
+# tier agent-tau2-airline
+# dataset inspect_evals tau2@3-A airline base split, sierra-research/tau2-bench@377cecff73b873e63430a0acfce00e0eff024855
+# seed 20261016
+22
+37
+44

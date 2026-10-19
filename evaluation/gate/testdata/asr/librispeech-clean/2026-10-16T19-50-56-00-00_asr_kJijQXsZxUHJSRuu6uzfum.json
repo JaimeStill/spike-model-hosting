@@ -1,0 +1,455 @@
+{
+  "version": 2,
+  "status": "success",
+  "eval": {
+    "eval_id": "5pZy3HNaScVxKFkiMmiCbQ",
+    "run_id": "6L8FTv37JXef3q9fAHRGRM",
+    "created": "2026-10-16T19:50:56+00:00",
+    "task": "asr",
+    "task_id": "kJijQXsZxUHJSRuu6uzfum",
+    "task_version": 0,
+    "task_file": "evaluation/suites/asr_quality.py",
+    "task_display_name": "asr",
+    "task_registry_name": "asr",
+    "task_attribs": {},
+    "task_args": {
+      "name": "librispeech-clean",
+      "tier": "/home/jaime/experiments/spike-model-hosting/evaluation/tiers/asr-librispeech-clean.txt",
+      "bar": null
+    },
+    "task_args_passed": {
+      "name": "librispeech-clean",
+      "tier": "/home/jaime/experiments/spike-model-hosting/evaluation/tiers/asr-librispeech-clean.txt",
+      "bar": null
+    },
+    "dataset": {
+      "name": "librispeech-clean",
+      "samples": 150,
+      "sample_ids": [
+        "3729-6852-0025",
+        "4446-2273-0024",
+        "2094-142345-0023"
+      ],
+      "shuffled": false
+    },
+    "model": "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+    "model_generate_config": {},
+    "model_base_url": "http://framework:8080/v1",
+    "model_args": {
+      "default_query": {
+        "autoload": "false"
+      }
+    },
+    "config": {
+      "epochs": 1,
+      "fail_on_error": true,
+      "continue_on_fail": false,
+      "score_on_error": false,
+      "max_samples": 1,
+      "sandbox_cleanup": true,
+      "sandbox_prebuilt": false,
+      "log_samples": true,
+      "log_realtime": true,
+      "log_images": false,
+      "score_display": true
+    },
+    "revision": {
+      "type": "git",
+      "origin": "https://github.com/JaimeStill/spike-model-hosting.git",
+      "commit": "e5952b2",
+      "dirty": true
+    },
+    "packages": {
+      "inspect_ai": "0.3.281"
+    },
+    "metadata": {
+      "set": "librispeech-clean",
+      "dataset": "hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb librispeech/test.clean-*.parquet",
+      "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+      "prompt": "Transcribe the following speech segment in English into English text."
+    },
+    "scorers": [
+      {
+        "name": "wer",
+        "options": {},
+        "metrics": [
+          {
+            "name": "corpus_wer",
+            "options": {}
+          }
+        ],
+        "metadata": {}
+      }
+    ]
+  },
+  "plan": {
+    "name": "plan",
+    "steps": [
+      {
+        "solver": "generate",
+        "params": {
+          "tool_calls": "loop"
+        },
+        "params_passed": {}
+      }
+    ],
+    "config": {
+      "max_connections": 1,
+      "max_tokens": 1024,
+      "temperature": 0.0,
+      "extra_body": {
+        "cache_prompt": false,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      }
+    }
+  },
+  "results": {
+    "total_samples": 150,
+    "completed_samples": 150,
+    "scores": [
+      {
+        "name": "wer",
+        "scorer": "wer",
+        "scored_samples": 150,
+        "unscored_samples": 0,
+        "params": {},
+        "metrics": {
+          "corpus_wer": {
+            "name": "corpus_wer",
+            "value": 0.022094140249759846,
+            "params": {}
+          }
+        }
+      }
+    ],
+    "headline": {
+      "scorer": "wer",
+      "score": "wer",
+      "metric": "corpus_wer"
+    }
+  },
+  "stats": {
+    "started_at": "2026-10-16T19:50:56+00:00",
+    "completed_at": "2026-10-16T19:53:05+00:00",
+    "model_usage": {
+      "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+        "input_tokens": 31531,
+        "output_tokens": 3531,
+        "total_tokens": 35062,
+        "input_tokens_cache_read": 0
+      }
+    },
+    "role_usage": {},
+    "connection_limit_history": []
+  },
+  "invalidated": false,
+  "tags": [],
+  "metadata": {
+    "set": "librispeech-clean",
+    "dataset": "hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb librispeech/test.clean-*.parquet",
+    "normalizer": "huggingface/open_asr_leaderboard@1b85e2790d532b074888caa4add3ee5bef2f60cd normalizer/normalizer.py EnglishTextNormalizer",
+    "prompt": "Transcribe the following speech segment in English into English text."
+  },
+  "samples": [
+    {
+      "id": "2094-142345-0023",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "fwMdtmYsSorDXpJWDwzr62",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "you're a rare un for sitting down to your work a little while after it's time to put by",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "WXwgZsKXNDr8ngQJaHtvWu",
+              "content": "You are a rare one for sitting down to your work a little pile after it's time to put by.",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "You are a rare one for sitting down to your work a little pile after it's time to put by.",
+        "usage": {
+          "input_tokens": 153,
+          "output_tokens": 24,
+          "total_tokens": 177,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.8260424869949929,
+        "response_id": "chatcmpl-YFHrxwU5YceC0O7gufHMQgagWAsYvKsh"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.09523809523809523,
+          "answer": "You are a rare one for sitting down to your work a little pile after it's time to put by.",
+          "metadata": {
+            "errors": 2,
+            "words": 21,
+            "ins": 0,
+            "del": 0,
+            "sub": 2,
+            "reference": "you are a rare un for sitting down to your work a little while after it is time to put by",
+            "hypothesis": "you are a rare one for sitting down to your work a little pile after it is time to put by"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 5.18
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 153,
+          "output_tokens": 24,
+          "total_tokens": 177,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:50:58.174297+00:00",
+      "completed_at": "2026-10-16T19:50:59.007426+00:00",
+      "total_time": 0.833,
+      "working_time": 0.831,
+      "uuid": "2PSj5Jg9fqHDSzFSDpY4Md",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "3729-6852-0025",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "kX2wcSxfqMdNus7SMo6bk3",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "is there not a meridian everywhere",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "2QNUVqKJNQNfTvXtdhP5gT",
+              "content": "is there not a meridian everywhere",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "is there not a meridian everywhere",
+        "usage": {
+          "input_tokens": 98,
+          "output_tokens": 7,
+          "total_tokens": 105,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.37020223098807037,
+        "response_id": "chatcmpl-ZEZdZe1inbj7jUtympcI1DrRQKKgJPW9"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "is there not a meridian everywhere",
+          "metadata": {
+            "errors": 0,
+            "words": 6,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "is there not a meridian everywhere",
+            "hypothesis": "is there not a meridian everywhere"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 3.0
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 98,
+          "output_tokens": 7,
+          "total_tokens": 105,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:50:56.942152+00:00",
+      "completed_at": "2026-10-16T19:50:57.434618+00:00",
+      "total_time": 0.492,
+      "working_time": 0.38,
+      "uuid": "BYDcYMZ5JSSm9pvjtNvX7s",
+      "error_retries": [],
+      "turn_count": 1
+    },
+    {
+      "id": "4446-2273-0024",
+      "epoch": 1,
+      "input": [
+        {
+          "id": "iLRGNsfqvBbZCxvvpcUgiA",
+          "content": [
+            {
+              "type": "text",
+              "text": "Transcribe the following speech segment in English into English text."
+            },
+            {
+              "type": "audio",
+              "audio": "<base64-data-removed>",
+              "format": "wav"
+            }
+          ],
+          "role": "user"
+        }
+      ],
+      "target": "bartley started when hilda rang the little bell beside her dear me why did you do that",
+      "output": {
+        "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0",
+        "choices": [
+          {
+            "message": {
+              "id": "8hUiruzNBK5L4AhQbL4c2t",
+              "content": "bartley started when hilda rang the little bell beside her dear me why did you do that",
+              "source": "generate",
+              "role": "assistant",
+              "model": "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
+            },
+            "stop_reason": "stop"
+          }
+        ],
+        "completion": "bartley started when hilda rang the little bell beside her dear me why did you do that",
+        "usage": {
+          "input_tokens": 144,
+          "output_tokens": 20,
+          "total_tokens": 164,
+          "input_tokens_cache_read": 0
+        },
+        "time": 0.7265059879864566,
+        "response_id": "chatcmpl-UNQXAi69qTFKfzWElhGENfbFyC7Ek7sg"
+      },
+      "scores": {
+        "wer": {
+          "value": 0.0,
+          "answer": "bartley started when hilda rang the little bell beside her dear me why did you do that",
+          "metadata": {
+            "errors": 0,
+            "words": 17,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "bartley started when hilda rang the little bell beside her dear me why did you do that",
+            "hypothesis": "bartley started when hilda rang the little bell beside her dear me why did you do that"
+          },
+          "history": []
+        }
+      },
+      "metadata": {
+        "audio_s": 4.825
+      },
+      "store": {},
+      "model_usage": {
+        "openai-api/router/ggml-org/gemma-4-E4B-it-GGUF:Q8_0": {
+          "input_tokens": 144,
+          "output_tokens": 20,
+          "total_tokens": 164,
+          "input_tokens_cache_read": 0
+        }
+      },
+      "role_usage": {},
+      "started_at": "2026-10-16T19:50:57.438313+00:00",
+      "completed_at": "2026-10-16T19:50:58.171065+00:00",
+      "total_time": 0.733,
+      "working_time": 0.731,
+      "uuid": "QVNMBv998SAxijhdcouXs6",
+      "error_retries": [],
+      "turn_count": 1
+    }
+  ],
+  "reductions": [
+    {
+      "scorer": "wer",
+      "samples": [
+        {
+          "value": 0.0,
+          "answer": "is there not a meridian everywhere",
+          "metadata": {
+            "errors": 0,
+            "words": 6,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "is there not a meridian everywhere",
+            "hypothesis": "is there not a meridian everywhere"
+          },
+          "history": [],
+          "sample_id": "3729-6852-0025"
+        },
+        {
+          "value": 0.0,
+          "answer": "bartley started when hilda rang the little bell beside her dear me why did you do that",
+          "metadata": {
+            "errors": 0,
+            "words": 17,
+            "ins": 0,
+            "del": 0,
+            "sub": 0,
+            "reference": "bartley started when hilda rang the little bell beside her dear me why did you do that",
+            "hypothesis": "bartley started when hilda rang the little bell beside her dear me why did you do that"
+          },
+          "history": [],
+          "sample_id": "4446-2273-0024"
+        },
+        {
+          "value": 0.09523809523809523,
+          "answer": "You are a rare one for sitting down to your work a little pile after it's time to put by.",
+          "metadata": {
+            "errors": 2,
+            "words": 21,
+            "ins": 0,
+            "del": 0,
+            "sub": 2,
+            "reference": "you are a rare un for sitting down to your work a little while after it is time to put by",
+            "hypothesis": "you are a rare one for sitting down to your work a little pile after it is time to put by"
+          },
+          "history": [],
+          "sample_id": "2094-142345-0023"
+        }
+      ]
+    }
+  ]
+}

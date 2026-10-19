@@ -1,0 +1,7 @@
+{
+  "main_score": "ndcg_at_10",
+  "prompts": {
+    "query": "task: search result | query: ",
+    "document": "title: {title or none} | text: "
+  }
+}

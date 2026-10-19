@@ -1,0 +1,49 @@
+# The consumer and instrument tools the spike runs from the laptop: the coding agents it drives
+# against the router (Claude Code, Pi, OpenCode), the load tool it measures with (GuideLLM), and
+# the runtimes they need. The coding agents are native binaries, so no Node runtime is pinned.
+# They live in this environment, not a mise.toml, so the shell's PATH keeps the architect's own
+# Claude Code and Pi. mise loads this file only in the evaluation area, so run them from the
+# repository root as `MISE_ENV=consumers mise -C evaluation exec -- <tool>`, or from evaluation/
+# as `MISE_ENV=consumers mise exec -- <tool>`, and this environment's tasks as
+# `MISE_ENV=consumers mise run //evaluation:<task>`.
+[tools]
+"aqua:anthropics/claude-code" = "2.1.301"
+"aqua:earendil-works/pi" = "1.3.0"
+"aqua:anomalyco/opencode" = "1.19.3"
+# torch, which GuideLLM requires, publishes no wheels for Python 3.15 yet: hold Python at 3.14.
+python = "3.14.8"
+# mise's pipx backend installs GuideLLM through uv.
+uv = "0.13.1"
+"pipx:guidellm" = "0.8.1"
+
+# The baseline's GuideLLM grid against SPIKE_ROUTER_URL, run from the laptop: three models, two
+# profiles, 1 and 4 streams, client figures beside the engine's. It reads the network, so `check`
+# never runs it. It runs in the caller's directory, so a -profile path is the caller's.
+[tasks.baseline]
+description = "Run the GuideLLM baseline grid (client beside engine figures) against SPIKE_ROUTER_URL"
+dir = "{{cwd}}"
+run = "{{config_root}}/scripts/baseline.sh"
+
+# The audio role's tier lists, evaluation/tiers/asr-<set>.txt, drawn again from their seed and
+# the sets' pinned revisions. It reads the network and rewrites the committed lists.
+[tasks.asr-tiers]
+description = "Draw the audio role's ASR tier lists from the sets' IDs with their seed"
+run = "{{config_root}}/scripts/asr-tiers.sh"
+
+# The vision role's tier lists, evaluation/tiers/vision-<benchmark>.txt, drawn again from their
+# seed and the benchmarks' pinned revisions. It reads the network and rewrites the committed lists.
+[tasks.vision-tiers]
+description = "Draw the vision role's V*Bench, DocVQA and MMMU tier lists from their IDs with their seed"
+run = "{{config_root}}/scripts/vision-tiers.sh"
+
+# The agent role's BFCL tier lists, evaluation/tiers/agent-<tier>.txt, drawn again from their seed
+# and the Gorilla commit inspect_evals pins. It reads the network and rewrites the committed lists.
+[tasks.agent-tiers]
+description = "Draw the agent role's BFCL single-turn and multi-turn tier lists from their IDs with their seed"
+run = "{{config_root}}/scripts/agent-tiers.sh"
+
+# The deep stage's τ2 task lists, evaluation/tiers/agent-tau2-<domain>.txt, drawn again from their
+# seed and the τ2 data inspect_evals ships. It rewrites the committed lists.
+[tasks.tau2-tiers]
+description = "Draw the deep stage's τ2 airline and retail task lists from their IDs with their seed"
+run = "{{config_root}}/scripts/tau2-tiers.sh"

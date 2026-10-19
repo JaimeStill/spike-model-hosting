@@ -1,0 +1,21 @@
+# The floors the gate tests judge against: evaluation/floors.toml's initial values, held here so
+# that tuning the committed floors moves no test.
+[pool]
+free_mib = 2816
+
+[agent]
+decode_tok_s = 20.0
+prefill_tok_s = 500.0
+ttft_8k_s = 20.0
+stream4_decode_tok_s = 10.0
+
+[vision]
+image_answer_s = 10.0
+
+[audio]
+rtfx = 5.0
+stream4_rtfx = 1.0
+
+[embedding]
+throughput_tok_s = 4300.0
+query32_ms = 250.0

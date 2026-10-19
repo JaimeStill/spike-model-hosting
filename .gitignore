@@ -9,3 +9,7 @@ coverage.out
 
 # Untracked spike state: the concurrent run's Pi agent directory, sessions and cache.
 .state/
+
+# The suites project's virtual environment and Python bytecode.
+.venv/
+__pycache__/

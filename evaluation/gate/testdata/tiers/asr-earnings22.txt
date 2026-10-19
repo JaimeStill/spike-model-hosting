@@ -1,0 +1,6 @@
+# tier asr-earnings22
+# dataset hf-audio/esb-datasets-test-only-sorted@de79e57adf9983993bcc72586d7313460825f5eb earnings22/test-*.parquet
+# seed 20261016
+4483338/86.wav
+4450488/130.wav
+4432298/92.wav

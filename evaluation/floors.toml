@@ -1,0 +1,38 @@
+# The floors evaluate's fitness and capacity stages judge a model against, per role (package
+# evaluation/gate). Each is absolute and task-based: what the role's work needs, not a fraction
+# of any model's score. These are initial values; a later decision may tune them.
+
+# The pool, a set's shared memory: at least this much stays free idle (fitness) and at the peak
+# of 4 requests in flight (capacity). Admission judges the set's memory budget by it too.
+# 2816 (2.75 GiB) since slice 8: the vision model's working memory grows to a fixed high-water
+# mark under image work, not a leak (docs/findings/memory-budget.md), and set A holds 2968-2991
+# MiB free at that mark; 3072 is the earlier value.
+[pool]
+free_mib = 2816
+
+# The agent role, the set's chat model, which every coding agent's session runs on.
+[agent]
+# Single-stream decode, tokens a second (llama.cpp's timings.predicted_per_second).
+decode_tok_s = 20.0
+# Single-stream prefill of an 8k-token prompt, tokens a second (timings.prompt_per_second).
+prefill_tok_s = 500.0
+# Time to first token of that 8k-token prompt, seconds, at the client.
+ttft_8k_s = 20.0
+# Decode of each of 4 streams in flight, tokens a second.
+stream4_decode_tok_s = 10.0
+
+[vision]
+# One image question answered, ~100 tokens out, wall seconds at the client.
+image_answer_s = 10.0
+
+[audio]
+# Transcription speed, audio seconds over wall seconds (RTFx), single stream.
+rtfx = 5.0
+# RTFx of each of 4 transcriptions in flight.
+stream4_rtfx = 1.0
+
+[embedding]
+# Throughput of one batch, prompt tokens a second at the client.
+throughput_tok_s = 4300.0
+# One 32-token query embedded, wall milliseconds at the client.
+query32_ms = 250.0

@@ -31,15 +31,39 @@ for mod in $GO_MODULES; do
 	[ "$directive" = "$go_minor" ] || report "$mod/go.mod: go $directive -> go $go_minor"
 done
 
-# mise tools pinned below their latest version. The consumers environment
-# loads mise.toml and mise.consumers.toml both, so one scan covers each, and
-# each line names the file that pins the tool.
-outdated=$(MISE_ENV=consumers mise outdated --bump --local --json |
-	jq -r 'to_entries[] |
-		"\(.value.source.path | split("/") | last): \(.key) \(.value.requested) -> \(.value.bump)"')
+# mise tools pinned below their latest version. `mise outdated --local` reads
+# only the configuration of the directory it runs in, so the scan runs in every
+# directory that holds a tracked mise configuration: the monorepo root and each
+# area. It runs under the consumers environment, which loads mise.toml and,
+# where there is one, mise.consumers.toml both, so one scan a directory covers
+# each file. Each line names, from the root, the file that pins the tool.
+mapfile -t config_dirs < <(git ls-files 'mise.toml' '*/mise.toml' 'mise.*.toml' '*/mise.*.toml' |
+	xargs -n1 dirname | sort -u)
+root=$PWD/
+outdated=
+for dir in "${config_dirs[@]}"; do
+	found=$(cd "$dir" && MISE_ENV=consumers mise outdated --bump --local --json |
+		jq -r --arg root "$root" 'to_entries[] |
+			"\(.value.source.path | ltrimstr($root)): \(.key) \(.value.requested) -> \(.value.bump)"')
+	outdated+=$found$'\n'
+done
+outdated=$(sort -u <<<"$outdated")
 while read -r line; do
 	[ -n "$line" ] && report "$line"
 done <<<"$outdated"
+
+# Each uv project's direct dependencies behind their newest release, from its lock: the
+# suites project pins its packages exactly, so a newer release is reported, never taken. uv is
+# pinned in the consumers environment only, so it runs from the evaluation area, on the
+# project's absolute path. Each line names the project's lock.
+mapfile -t uv_projects < <(git ls-files 'uv.lock' '*/uv.lock' | xargs -r -n1 dirname)
+for dir in "${uv_projects[@]}"; do
+	tree=$(MISE_ENV=consumers mise -C evaluation exec -- uv tree --project "$PWD/$dir" --outdated --depth 1 --locked)
+	behind=$(sed -nE 's/.*── ([^ ]+) (v[^ ]+) \(latest: (v[^)]+)\).*/\1 \2 -> \3/p' <<<"$tree")
+	while read -r line; do
+		[ -n "$line" ] && report "$dir/uv.lock: $line"
+	done <<<"$behind"
+done
 
 # The profiles pin no engine: they hold llama.cpp to a minimum build, a floor a
 # newer release never makes stale, so there is nothing of theirs to scan. Each
