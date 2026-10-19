@@ -22,6 +22,8 @@ needs root. `<host>` is the Framework's name on the tailnet, which nothing commi
   bandwidth. The models live on a dedicated NVMe drive (ext4).
 - **OS:** Omarchy (Arch Linux). The OS install is the architect's and stays fixed; there is no
   restore point.
+  <!-- OS version: not recorded yet. Add the Omarchy release and kernel once the architect's OS
+  update lands. -->
 - **The memory pool:** the BIOS's GPU reservation is 512 MB, and the kernel's GTT pool is set
   to 96 GiB (98304 MiB) by `ttm pages_limit` and `amdgpu gttsize`, built into the boot image.
   The steps are personal-agents' `preparation/framework-desktop.md`. Every set is sized against
@@ -42,9 +44,9 @@ by the architect before `profile` and reverted to check mode when the spike comp
 
 **The check-mode lapse.** In check mode, once the check period lapses, a non-interactive ssh
 fails (`exit status 255`) until someone re-authenticates in a browser; the router's HTTP API is
-unaffected. On 2026-10-18, 01:00-01:44 UTC, the lapse cost two of baseline 1's runs: every
-pool reading failed, so the vision run's set stage and the audio run's fitness failed
-"couldn't measure", and both were run again ([`docs/findings/baseline.md`](../../docs/findings/baseline.md),
+unaffected. A 44-minute lapse cost two of baseline 1's runs: every pool reading failed, so the
+vision run's set stage and the audio run's fitness failed "couldn't measure", and both were run
+again ([`docs/findings/baseline.md`](../../docs/findings/baseline.md),
 "Runs not kept"). Before a long run, check that a non-interactive `ssh <host> true` succeeds.
 If the rule is in check mode, re-authenticate just before the run, or have the architect set it
 to accept.
@@ -63,8 +65,7 @@ packages trail upstream's model support. The profile holds llama.cpp to a minimu
   the build; a rollback points it back.
 - The previous build stays in its directory for diagnosis until the next move removes it.
 
-The Framework runs b11715 (`b11715-9d1878a43`), installed in `evaluation` slice 10; b11669
-stays in `/opt/llama.cpp/b11669`.
+The Framework runs b11715 (`b11715-9d1878a43`); b11669 stays in `/opt/llama.cpp/b11669`.
 
 ## The rendered unit and presets
 
@@ -89,8 +90,8 @@ command's `-user`, `-hf-home`, and `-models-dir`).
 ## Moving to a new build
 
 The root commands for one build move, in the order the architect runs them in one session. The
-values shown are the last move's, b11669 to b11715 (`evaluation` slice 10, 2026-10-17); a new
-move replaces the tags, the asset's sha256, and the rendered files' sums, and records itself in
+values shown are the last move's, b11669 to b11715; a new move replaces the tags, the asset's
+sha256, and the rendered files' sums, and records itself in
 [`llama-cpp-builds.md`](llama-cpp-builds.md): the release-note review before, and what was
 re-verified after.
 
@@ -138,9 +139,9 @@ readlink /opt/llama.cpp/current
 Expect `...: OK` from `sha256sum`; the new build's version (`version: 11715 (9d1878a43)`); a
 `Vulkan0` device, the Radeon 8060S (RADV STRIX_HALO); and `current` still the old build.
 `mkdir` without `-p` stops the step if the directory already exists. The router keeps running
-the old build throughout. The b11715 move also checked the new presets key it needed:
-`llama-server --help | grep -A1 -- '--mtmd-batch-max-tokens'` printed the flag's help line,
-default 1024.
+the old build throughout. When the new presets add a key, check that the new build knows its
+flag: for b11715, `llama-server --help | grep -A1 -- '--mtmd-batch-max-tokens'` printed the
+flag's help line, default 1024.
 
 ### b. Install the presets and the unit, keeping the old ones
 
@@ -215,7 +216,7 @@ sync && echo 3 | sudo tee /proc/sys/vm/drop_caches && sudo systemctl restart lla
 The same pair is the deep stage's last step: `go run ./evaluation/cmd/evaluate -set a -role agent
 -restart` asks for each restart on stderr, naming its command, when it reaches cold load, about
 85 minutes into an agent run on set A. Without `-restart`, the deep stage records cold load as
-not run. b11715's pair, timed by the coldload step on 2026-10-17, is in
+not run. b11715's pair is in
 [`llama-cpp-builds.md`](llama-cpp-builds.md), "b11669 to b11715".
 
 ### e. Roll back

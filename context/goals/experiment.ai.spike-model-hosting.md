@@ -177,7 +177,7 @@ Door          two-way, except the cleaned .state run outputs. The repository
 
 ## Progress
 
-slices 12/12 committed · standards ✓ · spec ✓ · editor —
+slices 12/12 committed · standards ✓ · spec ✓ · editor ✓
 
 ## Decisions
 
@@ -624,8 +624,9 @@ slices 12/12 committed · standards ✓ · spec ✓ · editor —
   ~4 at 128B); and admin's go-cli-sdk need (met).
 - coordinator · roadmap: add task `evaluation` after `main-model` (the repository laid out by
   area; evaluate's gated stages admission, fitness, capacity, quality, set and deep, with
-  absolute task-based floors, early stop and one-hour model runs; role pipelines on Inspect AI
-  and MTEB; τ2 with Claude Code as the simulated user; set A's baseline), then `candidates`
+  absolute task-based floors and early stop, a chat-and-vision model's run budgeted at ~85 min
+  and measured at ~95-105 min; role pipelines on Inspect AI and MTEB; τ2 with Claude Code as the
+  simulated user; set A's baseline), then `candidates`
   (candidates for every role, including Nemotron 3.5 Super, through the pipelines against set
   A's bars; the verdict and startup set), both before `rocm`.
 - coordinator · ai-hosting.md (line 133) and roadmap.toml, validate task (line 515): repoint

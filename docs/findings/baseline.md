@@ -66,8 +66,7 @@ request's first token waits for the others' prefill, and on the agentic profile 
 arrives while three are generating waits for its own 8192-token prefill beside them.
 
 GuideLLM's JSON for every cell and the `/metrics` snapshots were kept under the untracked
-`.state/baseline/`, and removed once the findings were committed (the architect's decision,
-`evaluation` slice 11). The grid is `MISE_ENV=consumers mise run //evaluation:baseline` with
+`.state/baseline/`, and removed once the findings were committed. The grid is `MISE_ENV=consumers mise run //evaluation:baseline` with
 `SPIKE_ROUTER_URL` set (`evaluation/scripts/baseline.sh`).
 
 ## Prefix reuse
@@ -137,7 +136,7 @@ the stages that didn't run and the llama.cpp PRs that would trigger a re-probe.
 
 The figures are for set `mistral`: unsloth's Mistral Small 4 `UD-Q4_K_XL` with its mmproj `BF16`
 at `c = 131072`, beside gemma-4-E4B and EmbeddingGemma 2. The router was b11669
-(`b11669-620d2225c`, upstream Vulkan x64). They were taken from the laptop (host `terminal`) on
+(`b11669-620d2225c`, upstream Vulkan x64). They were taken from the laptop on
 2026-10-15 and 2026-10-16, with GuideLLM 0.8.1 at the consumers environment's pins. The network
 path differed from set A's rows above: `tailscale ping` read a direct LAN path at 1-2 ms, not
 the DERP relay.
@@ -240,8 +239,7 @@ b11715 (`b11715-9d1878a43`, upstream Vulkan x64), each role on its assigned mode
 (agent), Gemma 4 26B-A4B (vision, `mtmd-batch-max-tokens = 512`), gemma-4-E4B (audio) and
 EmbeddingGemma 2 (embedding), all four loaded (`devices/strix-halo/profile.toml`). A baseline is
 the set run (`-set a`: each role's tier 1 alone, then all at once) and one model run per role
-(`-set a -role <role>`, admission through deep). Everything ran from the laptop (host
-`terminal`) over HTTP, the pool read over user-level ssh. `tailscale ping` read a direct LAN path
+(`-set a -role <role>`, admission through deep). Everything ran from the laptop over HTTP, the pool read over user-level ssh. `tailscale ping` read a direct LAN path
 before every run, 0-2 ms. Every run passed every stage it reached. These figures are the
 baseline: `evaluation/bars.toml` takes its bars from the quality table below.
 
@@ -261,7 +259,7 @@ baseline: `evaluation/bars.toml` takes its bars from the quality table below.
 | 2 | embedding | 2026-10-18 22:47 | yes | 4.9 min | — |
 
 - **The reloads.** From baseline 1's embedding run on, every run started from freshly loaded
-  models (the architect's decision, slice 11): set A unloaded and loaded again over the router's
+  models ([`evaluation.md`](../evaluation.md), "Before each run"): set A unloaded and loaded again over the router's
   API, 30 s idle, then the run. Baseline 1's first four runs had none; the drift that made the
   reload necessary is in [`memory-budget.md`](memory-budget.md), "The pool over a day of runs".
   Quality scores don't depend on the pool, so those runs stand. Baseline 2's agent run's deep
@@ -269,7 +267,7 @@ baseline: `evaluation/bars.toml` takes its bars from the quality table below.
   stages also ran on the state their gates left.
 - **Runs not kept.** Baseline 1's first vision and audio runs, 2026-10-18 00:58 and 02:18 UTC,
   lost every pool reading when Tailscale SSH's check period lapsed (01:00-01:44): the vision
-  run's set stage and the audio run's fitness failed "couldn't measure" (`ssh framework
+  run's set stage and the audio run's fitness failed "couldn't measure" (`ssh <host>
   amdgpu_top: exit status 255`); the HTTP path was unaffected. The vision run's quality scores
   before the lapse were V*Bench 0.65, DocVQA 0.898 and MMMU 0.720, within the kept runs' range.
   Baseline 1's first embedding run failed fitness on the pool, 2778 MiB free (`memory-budget.md`).
@@ -278,9 +276,9 @@ baseline: `evaluation/bars.toml` takes its bars from the quality table below.
   MB, retail 2.7 MB) per sample to `TMPDIR` and never removes it, about 230 MB an agent run, and
   the laptop's `/tmp` quota was full. The resumed deep stage, and every run after it, ran with
   `TMPDIR` in the untracked `.state/tmp`.
-- **The hour.** A chat-and-vision model passing every gate at set A's rates was budgeted ~85
-  minutes for admission through set: the vision runs took 82.1 and 70.9 minutes. The agent runs
-  took 37.2 and 35.9, then about 48 for the deep stage.
+- **Run time.** The vision runs took 82.1 and 70.9 minutes from admission through the set stage,
+  and the agent runs 37.2 and 35.9, then about 48 for the deep stage. Against the ~85-minute
+  budget for a chat-and-vision model, see [`evaluation.md`](../evaluation.md), "The stages".
 
 ### Tools, versions and seeds
 
@@ -338,7 +336,7 @@ rounded up. No bar was set while the baseline ran, so every tier ran whole.
 - **More readings of the tier 1s.** The set runs measured the same tier 1s alone: BFCL
   single-turn 0.65 and 0.67, V*Bench 0.66 and 0.62, LibriSpeech test-clean 0.0221 and STSBenchmark
   0.8748 both times. V*Bench's four readings span 0.61-0.66, wider than its bar's spread; the
-  bars come from the quality stages only, as the brief defines them.
+  bars come from the quality stages only.
 - **Against the cards.** gemma-4-E4B's FLEURS WER, 0.0749, is under the card's 0.08 (a
   multilingual figure). Gemma 4 26B-A4B's MMMU validation, 0.715-0.720, is near the card's MMMU
   Pro, 73.8%, a harder variant.

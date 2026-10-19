@@ -13,7 +13,7 @@
 //     "# seed <n>", then one sample ID a line. The committed lists are evaluation/tiers/<tier>.txt.
 //   - Bar is a tier's or task's bar in [0, 1] and its direction: a floor a pass rate or score
 //     must reach, or, AtMost, a ceiling a lower-is-better measure such as a WER must not exceed.
-//     Bars are them by name; LoadBars reads them from a TOML file of name = bar keys, floors under
-//     [bars] and ceilings under [bars_at_most], evaluation/bars.toml, which the baseline fills: a
-//     bar is set A's score less (or, for a ceiling, plus) its two-run spread.
+//     Bars holds them by name; LoadBars reads them from a TOML file of name = bar keys, floors
+//     under [bars] and ceilings under [bars_at_most], evaluation/bars.toml, which the baseline
+//     fills: a bar is set A's score less (or, for a ceiling, plus) its two-run spread.
 package tier

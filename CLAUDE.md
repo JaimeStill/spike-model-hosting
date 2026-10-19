@@ -16,10 +16,10 @@ from `context/README.md`.
 - **Check:** `mise run check` (hermetic). The HTTP probes (the `probe` package) run against
   the router `SPIKE_ROUTER_URL` names, as `mise run integration`.
 - **Profiles:** `devices/*/profile.toml` are the host-class profiles; `go run ./hosting/cmd/profile`
-  lists, validates, and renders them, and `go run ./hosting/cmd/swap` swaps the router between a
-  profile's named sets. Every command takes a profile by host-class name (`strix-halo`, the
-  default), found from the module root, or by path. The `profile` and `swap` packages' docs list
-  their APIs.
+  validates and renders them, lists their engines, and describes a set, and
+  `go run ./hosting/cmd/swap` swaps the router between a profile's named sets. Every command takes
+  a profile by host-class name (`strix-halo`, the default), found from the module root, or by
+  path. The `profile` and `swap` packages' docs list their APIs.
 - **Goals:** this spike's tasks live in the coordinator's roadmap,
   `standards-lab/context/roadmap.toml`, under `experiment.ai.spike-model-hosting`. Its goal
   record is `context/goals/experiment.ai.spike-model-hosting.md`.

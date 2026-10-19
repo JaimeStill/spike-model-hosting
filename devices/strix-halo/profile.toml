@@ -60,8 +60,8 @@ vision = "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0"
 audio = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
 embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
 
-# The binding test: with all four loaded and four requests in flight on each, at least 3GiB of
-# the pool stays free.
+# The binding test: with all four loaded and four requests in flight on each, at least the pool
+# floor, 2816MiB (2.75GiB, evaluation/floors.toml), stays free.
 [sets.memory_budget]
 pool_mib = 98304
 measured_mib = 94926
@@ -87,11 +87,11 @@ embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
 # Estimated, never measured at 4 in flight: Mistral Small 4 was disqualified at fitness (speed) on
 # b11669 before the concurrent run, so measured_mib stays unset; idle on b11669 the set used
 # 87763MiB of the pool (docs/findings/memory-budget.md). By that note's figures, 83154MiB of the
-# pool is left for a main model beside gemma-4-E4B and EmbeddingGemma 2 at the 3GiB bar, so the
-# pool holds 98304 - 3072 - 83154 = 12078MiB for those two and the desktop. Mistral Small 4 is
-# ~71526MiB of UD-Q4_K_XL weights and its mmproj, plus 2.8-5.1GiB of KV at c = 131072, taken at the
-# top (5222MiB): 76748MiB, compute buffers not counted. 12078 + 76748 = 88826MiB, 9478MiB under the
-# pool.
+# pool is left for a main model beside gemma-4-E4B and EmbeddingGemma 2 at main-model's 3GiB
+# floor, so the pool holds 98304 - 3072 - 83154 = 12078MiB for those two and the desktop. Mistral
+# Small 4 is ~71526MiB of UD-Q4_K_XL weights and its mmproj, plus 2.8-5.1GiB of KV at c = 131072,
+# taken at the top (5222MiB): 76748MiB, compute buffers not counted. 12078 + 76748 = 88826MiB,
+# 9478MiB under the pool.
 [sets.memory_budget]
 pool_mib = 98304
 estimated_mib = 88826
@@ -184,8 +184,8 @@ c_reason = """
 The vision model; the router loads its Q8_0 mmproj alongside. 5 of its 30 layers hold a
 full-attention cache (20,480 bytes/token, 0.625GiB at this c); the rest are 1024-token sliding
 windows. The shared budget binds here, not its trained 262144: at c = 65536, all four loaded
-with four requests in flight on each left 2.61GiB of the pool free, under the 3GiB bar, so this
-c, the first to drop, is 32768.
+with four requests in flight on each left 2.61GiB of the pool free, under the 2.75GiB pool floor,
+so this c, the first to drop, is 32768.
 """
 # The flag is --mtmd-batch-max-tokens in common/arg.cpp from b11452 (the minimum build) through
 # b11715; its default is 1024.
@@ -316,7 +316,7 @@ c_reason = """
 The Mistral Small 4 candidate's main model, unsloth's UD-Q4_K_XL (no ggml-org or mistralai GGUF
 exists); the router loads its mmproj alongside. Its card states a 256k (262144) context; c =
 131072 is gpt-oss-120b's, so the candidates compare at set A's main-model context, and 262144
-would leave the pool under the 3GiB bar. Its KV at this c is estimated at 2.8-5.1GiB.
+would leave the pool under main-model's 3GiB floor. Its KV at this c is estimated at 2.8-5.1GiB.
 """
 
 [models.sampling]

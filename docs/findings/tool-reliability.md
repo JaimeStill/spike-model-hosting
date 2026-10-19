@@ -208,8 +208,8 @@ Each set took about 16 minutes (15m33s and 17m17s).
 
 ### The engine row
 
-The engine row was retired in `evaluation`: BFCL's tier covers tool calls for every model and
-engine, so OpenAI's compatibility test no longer runs. What follows is its 2026-10-12 record.
+OpenAI's compatibility test no longer runs: BFCL's tier covers tool calls for every model and
+engine. This section is the test's last record.
 
 The engine row fails OpenAI's bar on a field name, and its tool calls sit at the bar's line. The row
 is OpenAI's compatibility test for gpt-oss implementations, the one
@@ -218,10 +218,9 @@ sets its bar with: openai/gpt-oss at `7b58334` (`7b583341fe16729127f6d5b94a7b09c
 `compatibility-test/`, 30 cases over six tools, each run five times through the OpenAI Agents SDK.
 It ran from the laptop against the Framework's router on 2026-10-12, on the same build
 (`b11572-efe3626b1`) and model (`ggml-org/gpt-oss-120b-GGUF:MXFP4`), in Chat Completions mode with
-`-k 5`, on Node 26.11.1 (tsx 4.23.15, which the suite's `npm start` needs but doesn't pin). The
-consumers environment's `gpt-oss-compat` task, retired in `evaluation`, fetched the suite into
-`.state/`, installed it from its lockfile, ran it against `SPIKE_ROUTER_URL`, and printed the table
-below. It measures the engine and model at the Chat Completions layer, with no consumer between, not
+`-k 5`, on Node 26.11.1 (tsx 4.23.15, which the suite's `npm start` needs but doesn't pin). The run
+fetched the suite into `.state/`, installed it from its lockfile, ran it against
+`SPIKE_ROUTER_URL`, and printed the table below. It measures the engine and model at the Chat Completions layer, with no consumer between, not
 the `/v1/messages` Claude Code uses. A run counts only when its response is valid and it called the
 case's tool with arguments the tool's schema accepts:
 
@@ -250,12 +249,12 @@ case's tool with arguments the tool's schema accepts:
 
 ## The comparison row: pass^5 on b11669
 
-This row was run as the bar `candidates` would judge each candidate main model against:
-gpt-oss-120b on the same build and pins, so its pass^5 ran again after the move to b11669. Since
-`evaluation` slice 7, harness fit judges every harness by one absolute bar instead
-([Harness fit on b11715](#harness-fit-on-b11715-set-as-baseline)), and the row stays as context. It ran as
-`go run ./evaluation/cmd/evaluate conform -set a -k 5` with `SPIKE_ROUTER_URL=http://framework:8080`,
-from the laptop (host `terminal`) against the Framework's router, on 2026-10-15. The router
+This row was run as the bar for each candidate main model: gpt-oss-120b on the same build and
+pins, so its pass^5 ran again after the move to b11669. Harness fit judges every harness by one
+absolute bar instead ([Harness fit on b11715](#harness-fit-on-b11715-set-as-baseline)), and the
+row stays as context. It ran as
+`go run ./evaluation/cmd/evaluate conform -set a -k 5` with `SPIKE_ROUTER_URL=http://<host>:8080`,
+from the laptop against the Framework's router, on 2026-10-15. The router
 reported `b11669-620d2225c` in `/props` `build_info`, with set A's four models loaded. The model was
 gpt-oss-120b (ggml-org `MXFP4`) and clutch was at `9981a3e`, as on b11572. The consumers ran at the
 consumers environment's pins. Pi 1.3.0 ran on its `llama.cpp` provider with `required` on `respond`.
@@ -324,7 +323,7 @@ staged: a candidate that fails a fitness gate is disqualified, and the later sta
 The fitness gate is engine generation of at least 24 tok/s, one stream, on the short profile.
 Mistral Small 4 (unsloth `UD-Q4_K_XL`, mmproj `BF16`, set `mistral`) generated at 3.36 tok/s
 there ([`baseline.md`](baseline.md), "Mistral Small 4 on b11669"). The router reported
-`b11669-620d2225c`. The runs went from the laptop (host `terminal`) against the Framework's
+`b11669-620d2225c`. The runs went from the laptop against the Framework's
 router, on 2026-10-15 and 2026-10-16.
 
 Two open llama.cpp PRs would trigger a re-probe.
@@ -439,8 +438,8 @@ role passes, since one harness fits. Each failed cell and its reason, as the run
 Against the b11669 comparison row: Pi held every cell again; Claude Code's `tool` and `skill`
 failures are the same text-for-a-call and made-up-motto failures, now on b11715; OpenCode's
 parse errors still reach it on `tool_choice` `auto`. These are the design inputs the native Go
-harness spike takes (the goal record's slice 7 decisions): force the call when offering
-`respond`, round-trip reasoning, no blind resend on a parse error.
+harness spike takes (the goal record's Decisions, "evaluation (slice 7, architect)"): force the
+call when offering `respond`, round-trip reasoning, no blind resend on a parse error.
 
 ## Which task answers which layer
 

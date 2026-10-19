@@ -5,7 +5,8 @@
 // clutch's conform package runs a Cell, one harness over one provider, through its nine
 // capabilities. This package builds the cells the spike runs from the laptop, its Harnesses,
 // each a consumer on the chat model of the profile's set the run names (Config.Roles) over the
-// router, on the consumers package's driver, its state under the run's own directory and never the user's:
+// router, on the consumers package's driver, its state under the run's own directory and never
+// the user's:
 //   - Pi on its llama.cpp provider, which the driver's bridge constrains to tool_choice
 //     "required" on every request that offers respond, at the chat model's thinking level
 //     (consumers.Pi).

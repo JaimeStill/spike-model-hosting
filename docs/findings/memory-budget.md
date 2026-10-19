@@ -33,8 +33,8 @@ EmbeddingGemma 2's 8192-token batch (`b = ub = 8192`). The KV pool is shared acr
 (`--kv-unified`): from 0 to 4 in flight, no model grew more than 17MiB on b11529, and on
 b11565 none of the generative models did and EmbeddingGemma 2 grew 38MiB.
 
-The binding test is measured: at least 3GiB of the pool free with every model loaded and 4
-requests in flight on each. The 85-90% planning estimate (personal-agents'
+The binding test is measured: at least the pool floor, 2816MiB (2.75GiB,
+`evaluation/floors.toml`), free with every model loaded and 4 requests in flight on each. The 85-90% planning estimate (personal-agents'
 `reference/model-selection.md`) budgets weights plus KV; set A's estimate is 90.9% of the pool,
 just over it, and the set passes the measured test on both builds. On b11529 the first run,
 with the 26B-A4B at `c = 65536` (18084MiB), measured 95425MiB for the set and 2669MiB (2.61GiB)
@@ -46,7 +46,7 @@ A candidate set swaps gpt-oss-120b and the 26B-A4B (82878MiB measured) out for i
 ## During the concurrent run, b11572
 
 With Pi, Claude Code and the model client streaming at once on b11572, 3.21GiB of the pool stayed
-free, above the 3GiB bar. The read is the same as above, taken during a live run of the `concurrent`
+free, above the pool floor. The read is the same as above, taken during a live run of the `concurrent`
 command (`go run ./evaluation/cmd/evaluate concurrent -rounds 10`) on b11572 (`b11572-efe3626b1`) on
 2026-10-12: Pi, Claude Code and the model client on gpt-oss-120b's 4 slots, and the model client's
 embedding stream on EmbeddingGemma 2, all at once. The run passed: 40 chat requests and 1032
@@ -67,7 +67,7 @@ shown beside the synthetic 4-in-flight measurement on b11565 above. Figures in M
 | pool used, with the desktop | 94926 | 95018 |
 | **pool free, of 98304** | **3378 (3.30GiB)** | **3286 (3.21GiB)** |
 
-The pool kept 214MiB more than the 3GiB bar. The set is 93MiB larger than the synthetic
+The pool kept 470MiB more than the 2816MiB floor. The set is 93MiB larger than the synthetic
 figure, and the Gemmas account for 79 of it. They grew during the baseline's grid
 ([`baseline.md`](baseline.md)), run just before, which sent both 8192-token prompts: read
 during its gpt-oss-120b cells, before their own, they were 17388 and 9955. The concurrent run
@@ -78,7 +78,7 @@ synthetic figure.
 
 Each candidate set loaded beside gemma-4-E4B and EmbeddingGemma 2 on b11669
 (`b11669-620d2225c`) on 2026-10-15, swapped in by `hosting/cmd/swap` (below), read with
-`evaluation/scripts/footprint.sh -set <set> framework 3 5`. All 4 slots of every model were idle at
+`evaluation/scripts/footprint.sh -set <set> <host> 3 5`. All 4 slots of every model were idle at
 all three samples, which read the same figures. Each read follows the set's probe and a few more
 requests, so the main model's KV and compute buffers had been used, but nothing was in flight.
 System RAM is `free -m` on the host just after. Figures in MiB:
@@ -95,8 +95,8 @@ System RAM is `free -m` on the host just after. Figures in MiB:
 | system RAM used, of 128081 (`free -m`) | 96816 | 102372 | 103588 |
 | system RAM available | 31265 | 25709 | 24493 |
 
-Both candidates fit with room: each leaves over 9GiB of the pool free at idle, three times the
-3GiB bar, where set A leaves 3.38GiB. The pool used lands within 1.2% of each estimate:
+Both candidates fit with room: each leaves over 9GiB of the pool free at idle, more than three
+times the 2.75GiB floor, where set A leaves 3.38GiB. The pool used lands within 1.2% of each estimate:
 Mistral 1063MiB under its 88826, Nemotron 559MiB over its 88039. Both estimates left the main
 model's compute buffers out.
 
@@ -133,12 +133,13 @@ would take about 25s. A first swap to a candidate is bound by the download.
 
 ## Gemma 4 26B-A4B's growth under vision use, b11669
 
-Set A fails the set stage's 3072MiB pool floor (2968-2990MiB free in three runs) because Gemma 4
+Set A held 2968-2990MiB free in three set-stage runs, under a 3072MiB pool floor, because Gemma 4
 26B-A4B grows under vision use and holds what it grows until it is reloaded. The growth is a high-water
 mark, not a leak: the image encoder's working buffers size up from their warm-up size to the largest
 image batch the model has encoded, and Vulkan's scratch buffers to the largest operation it has run.
-Each step happens once and holds. Two settings bound part of it. Neither could be tested live: the router
-takes no arguments on a load, and a scratch preset needs a root edit.
+Each step happens once and holds. Two settings bound part of it. Neither could be tested live
+before it was installed: the router takes no arguments on a load, and a scratch preset needs a
+root edit.
 
 ### What was measured
 
@@ -219,21 +220,24 @@ Neither setting was tested. `POST /models/load` takes the model's name and no ar
 which the user could add, loads with only the global section's options. So a scratch preset
 needs a section in the root-owned `/etc/llama-router/models.ini`, which is the architect's to add.
 
-### Recommendation
+### The settings chosen
 
-(a), a profile setting for Gemma 4 26B-A4B. Set `mtmd-batch-max-tokens = 512`, which takes the
-multi-image step off at no measured cost. With it the model's worst case is bounded at the
-single-image level, about fresh + 300MiB (17640), leaving about 2940MiB free with the other three
-idle. That is still under 3072. To keep the 3GiB floor, also set `c = 16384` on the 26B-A4B: its
-5 full-attention layers' KV at 20,480 bytes a token falls from 640 to 320MiB (an estimate by
-the method above, not yet measured). Set A gives it the vision role alone, and its largest
-prompt measured here is 2001 tokens, four images. Both changes need a scratch-preset run of the
-vision tier 1, for score, time and memory, before they go into the profile.
+The profile sets `mtmd-batch-max-tokens = 512` on Gemma 4 26B-A4B, which takes the multi-image
+step off at no measured cost, and the pool floor is 2816MiB (2.75GiB), with `c` kept at 32768.
+With the batch cap, the model's worst case is bounded at the single-image level, about fresh +
+300MiB (17640), leaving about 2940MiB free with the other three idle: under 3072, and about
+120MiB above 2816. The batch cap installed with the move to b11715
+([`llama-cpp-builds.md`](../../devices/strix-halo/llama-cpp-builds.md), "b11669 to b11715").
 
-(b), a lower floor, is the alternative if `c` stays at 32768: with the batch cap set, 2816MiB
-(2.75GiB) passes the bounded single-image case with about 120MiB to spare. (c), a reload in the
-procedure, doesn't help. The growth happens within the set stage, on its first V*Bench image,
-so a reload before the stage only resets the figure the stage then grows again.
+The options rejected:
+
+- **`c = 16384` on the 26B-A4B, keeping a 3072MiB floor.** Its 5 full-attention layers' KV at
+  20,480 bytes a token would fall from 640 to 320MiB (an estimate by the method above), but the
+  4 slots would share 16k tokens against MMMU's 4096-token answers.
+- **`image-max-tokens = 256`.** It halves each image's detail, which is V*Bench's subject.
+- **A reload in the procedure, before the set stage.** The growth happens within the set stage,
+  on its first V*Bench image, so a reload before the stage only resets the figure the stage
+  then grows again.
 
 ## The pool over a day of runs, b11715
 
@@ -275,8 +279,8 @@ single fall, 2925 to 2778 between the audio run's set stage and the embedding ru
 run's deep stage, the same prompts on gemma-4-E4B. The desktop's share (Hyprland, quickshell and
 Xwayland, up since September) didn't change.
 
-So a model's verdict depended on where it ran in the day. The architect's decision (slice 11):
-every model run, and the set run, starts from freshly loaded models. Before each run the four
+So a model's verdict depended on where it ran in the day. Every model run, and the set run, now
+starts from freshly loaded models ([`evaluation.md`](../evaluation.md), "Before each run"). Before each run the four
 models are unloaded and loaded again over the router's API (`POST /models/unload`, then
 `POST /models/load` for gpt-oss-120b, the 26B-A4B, gemma-4-E4B and EmbeddingGemma 2, each polled
 on `GET /models`), the run waits 30 s with every model loaded and idle, and the idle pool is
@@ -295,8 +299,8 @@ above the floor:
 | baseline 2's embedding run | baseline 2's audio run, its deep stage included | 3264 |
 
 Reordering the runs (which moves the failure) and a lower floor (which chases the growth) were
-rejected. This supersedes (c) above for the procedure between runs: a reload
-can't help within the set stage, but it stops one run's growth reaching the next.
+rejected. A reload still can't help within the set stage, as "The settings chosen" says, but it
+stops one run's growth reaching the next.
 
 Whether a set serving all day, with no evaluation's reloads, needs a scheduled reload or a
 different floor is left to `candidates`.

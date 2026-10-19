@@ -424,7 +424,7 @@ build" ([`README.md`](README.md)). The architect ran its steps a to d on 2026-10
   `/etc/llama-router/*.b11669`, and b11669 stays in its versioned directory.
 - **The switch.** `current` points at b11715 and `llama-router` restarted. All four of set A's
   models loaded with no manual load, and `/props` reports `b11715-9d1878a43`.
-- **The probe.** `SPIKE_ROUTER_URL=http://framework:8080 mise run integration` passed on
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on
   b11715, set a: every package ok, in 11.2s.
 - **The image batch cap.** The 26B-A4B's child process runs with
   `--mtmd-batch-max-tokens 512` (`ps -eo args` on the Framework, read over user-level SSH).

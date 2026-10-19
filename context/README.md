@@ -111,8 +111,8 @@ of the admin tooling.
   page.
 - **Host-class profile:** the `profile` package loads, validates, and renders a TOML profile to
   llama.cpp's router presets and systemd unit, and the `profile` command
-  (`hosting/cmd/profile`) lists, validates, and renders the profiles under `devices/`, and
-  describes a set for the scripts. Every command takes a profile by host-class name, found from
+  (`hosting/cmd/profile`) validates and renders the profiles under `devices/`, lists their
+  engines, and describes a set for the scripts. Every command takes a profile by host-class name, found from
   the module root, or by path. Each set assigns the model each role's requests go to
   (`[sets.roles]`), and `Profile.Set` is the one lookup the probe and every instrument share: each
   takes `-set` (or `SPIKE_SET`), the startup set by default. `devices/strix-halo/profile.toml`
@@ -155,13 +155,13 @@ of the admin tooling.
   gateway is held to, with pass^k as its measure, in
   [`tool-reliability.md`](../docs/findings/tool-reliability.md). The `passk` package and the
   `conform` step (`evaluate conform`) run clutch's conformance suite k times per harness and
-  judge each harness's fit by one absolute bar, the agent role's harness-fit tier. OpenAI's gpt-oss compatibility test, once the engine row, was retired in
-  `evaluation`: BFCL's tier covers tool calls for every model and engine.
+  judge each harness's fit by one absolute bar, the agent role's harness-fit tier. BFCL's tier
+  covers tool calls for every model and engine.
 - **Measurement:** footprint, speed, prefix cache, cold load, and the capability matrix. The
   llama.cpp Vulkan baseline every platform is measured against is in
   [`baseline.md`](../docs/findings/baseline.md): the GuideLLM grid
-  (`MISE_ENV=consumers mise run //evaluation:baseline`), prefix reuse (evaluate's `prefix` step), and cold load (the
-  `coldload` package and evaluate's `coldload` step). Set A's memory budget on the Framework,
+  (`MISE_ENV=consumers mise run //evaluation:baseline`), prefix reuse (evaluate's `prefix`
+  step), and cold load (the `coldload` package and evaluate's `coldload` step). Set A's memory budget on the Framework,
   estimated against measured, the candidate sets' idle footprints, and the swap timings between
   sets (evidence 6's model-swapping cell) are in
   [`memory-budget.md`](../docs/findings/memory-budget.md).

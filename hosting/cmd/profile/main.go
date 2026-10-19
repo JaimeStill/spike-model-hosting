@@ -1,4 +1,5 @@
-// Command profile lists, validates and renders the spike's host-class profiles.
+// Command profile validates and renders the spike's host-class profiles, lists their engines, and
+// describes their sets.
 //
 // Usage:
 //

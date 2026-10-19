@@ -55,8 +55,9 @@ The card's values are the ones the publisher trained and evaluated at; its bench
 and its tool-call behavior, hold only there. An agent built against a model is built against
 that configuration, and a deviation is a new configuration nobody has measured.
 
-The spike's round 6 is the case in point ([`tool-reliability.md`](findings/tool-reliability.md); the
-goal record's Decisions, round 6). gpt-oss-120b sometimes opened a JSON `final` after a tool
+The `align` task's sixth plan round is the case in point
+([`tool-reliability.md`](findings/tool-reliability.md); the goal record's Decisions, "align,
+round 6"). gpt-oss-120b sometimes opened a JSON `final` after a tool
 result, which llama.cpp's parser rejected. A patched chat template cut that failure on one
 prompt but broke other consumers' cells, and held only with `reasoning-effort = high`. Both
 were rejected and reverted: the embedded template wasn't wrong, and the patch and the effort
@@ -86,7 +87,7 @@ values and the rule behind them, and `reference/context-sizing.md` gives the met
 `devices/strix-halo/profile.toml` sets the values above, each with its source and reason, and the
 `profile` package renders each reason into the presets as a comment above the model's section.
 The package's doc comments define the fields and what validation refuses. Three rules from this
-note shape the profile:
+page shape the profile:
 
 - **Every sampling value is stated, though the engine reads the GGUF.** llama.cpp b11529 and
   later apply a GGUF's `general.sampling.*` keys as the server's defaults. The Gemma 4 GGUFs
@@ -107,7 +108,8 @@ The evaluation ([`evaluation.md`](evaluation.md)) reads the card in five places:
   model whose `c` passes it.
 - **The card's prompts** are the requests' own: the embedding encoder adds EmbeddingGemma 2's
   task prompts (its "Task Instruction Prefixes", by MTEB task type), and every transcription
-  sends gemma-4-E4B's ASR prompt first and the clip after it, the card's order for audio.
+  sends gemma-4-E4B's ASR prompt first and the clip after it, the card's order for audio. The
+  `gate` package's `ASRPrompt` holds that prompt, for fitness, capacity, and the ASR task alike.
 - **The card's tokenizer** cuts the GuideLLM grid's prompts to their token counts: the deep
   stage takes it from the model's `card_url`.
 - **The card's own scores** are recorded beside ours where the card reports one for a tier, and
@@ -144,10 +146,10 @@ checkpoints are not counted.
 | Model | Maximum context | Cached layers | KV bytes/token, f16 | Fixed per sequence | KV at the profile's c | KV at the maximum context | c in the profile, and why |
 |---|---|---|---|---|---|---|---|
 | gpt-oss-120b ([config](https://huggingface.co/openai/gpt-oss-120b/blob/main/config.json), [card](https://huggingface.co/openai/gpt-oss-120b)) | 131072, `max_position_embeddings`; the card states none | 18 full of 36 (8 KV heads × 64); 18 SWA at 128 tokens | 36,864 | 4.5 MiB (SWA) | 4.52 GiB | 4.52 GiB at 131072 | 131072, its trained length: the harness model runs at its ceiling. |
-| Gemma 4 26B-A4B ([config](https://huggingface.co/google/gemma-4-26B-A4B-it/blob/main/config.json), [card](https://huggingface.co/google/gemma-4-26B-A4B-it)) | 262144, the card's 256K and `max_position_embeddings` | 5 full of 30 (2 KV heads × 512); 25 SWA (8 × 256) at 1024 tokens | 20,480 | 200 MiB (SWA) | 1.41 GiB | 5.78 GiB at 262144 | 32768: the shared budget binds; at 65536 set A left 2.61 GiB free, under the 3 GiB bar. |
+| Gemma 4 26B-A4B ([config](https://huggingface.co/google/gemma-4-26B-A4B-it/blob/main/config.json), [card](https://huggingface.co/google/gemma-4-26B-A4B-it)) | 262144, the card's 256K and `max_position_embeddings` | 5 full of 30 (2 KV heads × 512); 25 SWA (8 × 256) at 1024 tokens | 20,480 | 200 MiB (SWA) | 1.41 GiB | 5.78 GiB at 262144 | 32768: the shared budget binds; at 65536 set A left 2.61 GiB free, under the 2.75 GiB pool floor. |
 | Gemma 4 E4B ([config](https://huggingface.co/google/gemma-4-E4B-it/blob/main/config.json), [card](https://huggingface.co/google/gemma-4-E4B-it)) | 131072, the card's 128K and `max_position_embeddings` | 4 full of the 24 that own a cache (2 × 512; the last 18 of 42 reuse earlier layers' KV); 20 SWA (2 × 256) at 512 tokens | 16,384 | 20 MiB (SWA) | 0.58 GiB | 2.08 GiB at 131072 | 32768, a quarter of its trained length: the audio and small model, sized with set A's budget. |
 | EmbeddingGemma 2 ([config](https://huggingface.co/google/embeddinggemma-2/blob/main/config.json), [card](https://huggingface.co/google/embeddinggemma-2)) | 8192, the card's context window (`max_position_embeddings` reads 262144) | 4 full of 24 (1 × 512); 20 SWA (2 × 256) at 512 tokens (the card's table says 1024) | 8,192 | 20 MiB (SWA) | 0.14 GiB | 0.14 GiB at 8192 | 8192, the card's window: an input has to fit one pass, and nothing is kept between requests. |
-| Mistral Small 4 ([config](https://huggingface.co/mistralai/Mistral-Small-4-119B-2603/blob/main/config.json), [card](https://huggingface.co/mistralai/Mistral-Small-4-119B-2603)) | 262144, the card's 256k (`max_position_embeddings` reads 1048576) | 36 MLA layers, latent 256 + rope 64 | 23,040 | none | 2.81 GiB | 5.63 GiB at 262144 (22.5 GiB at 1048576) | 131072, gpt-oss-120b's, so candidates compare at set A's main-model context; 262144 would leave the pool under the 3 GiB bar. |
+| Mistral Small 4 ([config](https://huggingface.co/mistralai/Mistral-Small-4-119B-2603/blob/main/config.json), [card](https://huggingface.co/mistralai/Mistral-Small-4-119B-2603)) | 262144, the card's 256k (`max_position_embeddings` reads 1048576) | 36 MLA layers, latent 256 + rope 64 | 23,040 | none | 2.81 GiB | 5.63 GiB at 262144 (22.5 GiB at 1048576) | 131072, gpt-oss-120b's, so candidates compare at set A's main-model context; 262144 would leave the pool under main-model's 3 GiB floor. |
 | Nemotron 3.5 Super VL ([config](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/main/config.json), [card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16)) | 1048576, the card's "up to 1M" and `max_position_embeddings` | 8 attention of 88 (2 KV heads × 128); 40 Mamba-2 (128 heads × 64, state 128, 8 groups, kernel 4); 40 MoE with no cache | 8,192 | 164.7 MiB (recurrent, f32) | 1.64 GiB | 8.64 GiB at 1048576 | 131072, gpt-oss-120b's, for the comparison; rejected 262144 and 1M. Its 8 checkpoints per slot hold ~5.1 GiB of recurrent state in system RAM, outside the pool. |
 
 Four models allow a larger context than the profile sets. Nemotron 3.5 Super's cache grows
@@ -170,6 +172,6 @@ The profile's mistral budget takes the high end, so its estimate holds for eithe
 ## Assumptions
 
 - Assumes the GGUF's embedded template matches the publisher's; the spike checked gpt-oss's
-  Harmony rendering in round 6, not the Gemma 4 templates token by token.
+  Harmony rendering in `align`'s sixth plan round, not the Gemma 4 templates token by token.
 - Assumes the quantizations set A runs (Q4_0 and Q8_0 for the Gemma models) cost less than
   their cards' measured margins; no card measures them.

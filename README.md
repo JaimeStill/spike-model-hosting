@@ -48,12 +48,12 @@ The findings:
 - [The memory budget](docs/findings/memory-budget.md): set A's budget against the Framework's
   96 GiB pool, the candidate sets' footprints, set swaps, and the pool's growth under use.
 
-## Where it stands
+## What the Framework serves
 
 The Framework runs llama.cpp b11715 (`b11715-9d1878a43`, upstream Vulkan x64) behind the
 profile's rendered unit and presets, serving set A: gpt-oss-120b (agent), Gemma 4 26B-A4B
-(vision), gemma-4-E4B (audio), and EmbeddingGemma 2 (embedding). Set A has run every stage of
-the evaluation twice, and its scores set the bars every candidate is judged by
+(vision), gemma-4-E4B (audio), and EmbeddingGemma 2 (embedding). Set A's scores from two full
+evaluation runs set the bars every candidate is judged by
 ([`evaluation/bars.toml`](evaluation/bars.toml)).
 
 ## The planned answer
@@ -62,7 +62,7 @@ The tasks still to run, in order, and what each settles:
 
 - **`candidates`:** a candidate for every role, Nemotron 3.5 Super among them, judged by the
   evaluation's floors and set A's bars; the verdict, and the startup set. Planned changes to the
-  evaluation, recorded in the goal record's Decisions and not yet built: a candidate gets a
+  evaluation, recorded in the goal record's Decisions: a candidate gets a
   screen, not a full run (a tier stops early on a pass as well as a fail, the screening fifth
   runs by default, the roles' quality tiers run concurrently, and results are kept by model,
   build, and preset), with the full run kept for finalists; each set states the concurrent agent
@@ -73,7 +73,7 @@ The tasks still to run, in order, and what each settles:
 - **`gateway`:** no gateway, agentgateway, and LiteLLM in front of the Framework.
 - **`admin`:** one admin tool over the profile.
 - **`cuda`** and **`engines-cuda`:** the Dell NVIDIA workstation's platforms. The workstation
-  turned out to be two GB10 units, so these tasks await a re-plan.
+  is two GB10 units, not a discrete-VRAM box, so these tasks await a re-plan.
 - **`validate`:** the evidence on both hosts, the platform comparison, and the answer.
 
 ## The answer

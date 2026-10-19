@@ -12,8 +12,8 @@ stage reached, the stages not run and why, and each stage's wall time.
 
 The code is the `gate` package (the stages), the `tier` package (seeded lists and bars), the
 uv project `evaluation/suites` (the Inspect AI and MTEB runs, with their early stops), and
-`evaluation/cmd/evaluate` (the command); each package's doc lists its API. Set A's measured results are in [`findings/baseline.md`](findings/baseline.md), "Set A's baseline on
-b11715".
+`evaluation/cmd/evaluate` (the command); each package's doc lists its API. Set A's measured
+results are in [`findings/baseline.md`](findings/baseline.md), "Set A's baseline on b11715".
 
 ## The stages
 
@@ -45,14 +45,15 @@ Harness fit judges each pinned harness by one absolute bar, not by set A's score
 applicable capability 5/5 and 0 invalid requests, a capability the harness can't exercise
 excluded and noted. A harness drops at its first failed trial. The role fails only when no
 harness fits, and the report gives the fit profile: which harnesses fit, and each failed cell
-with its reason. It replaced judging gpt-oss-120b against its own comparison row, which it
-failed on b11669 ([`findings/tool-reliability.md`](findings/tool-reliability.md), "Harness fit on
-b11715").
+with its reason. A comparison with one model's own row can't serve as the bar: gpt-oss-120b
+failed its own row on b11669 ([`findings/tool-reliability.md`](findings/tool-reliability.md),
+"Harness fit on b11715").
 
-The time it takes, from set A's two baseline runs on b11715: a vision run took 82.1 and 70.9
-minutes from admission through the set stage, against a budget of ~85 minutes for a
-chat-and-vision model that passes every gate; an agent run 37.2 and 35.9, then about 48 for the
-deep stage; an audio run 17.9 to 18.6, an embedding run about 5, and a set run about 38.
+A chat-and-vision model that passes every gate is budgeted ~85 minutes from admission through
+the set stage. Set A's two baseline runs on b11715 put such a model at about 95-105 minutes, over
+the budget: a vision run took 82.1 and 70.9 minutes, and an agent run 37.2 and 35.9, then about
+48 for the deep stage. An audio run took 17.9 to 18.6 minutes, an embedding run about 5, and a
+set run about 38. `candidates` times its first chat-and-vision model.
 
 ## The tools
 
@@ -61,15 +62,15 @@ Each tool, its kind, the stage that uses it, and why:
 | Tool | Kind | Stage | Why |
 |---|---|---|---|
 | [Inspect AI](https://inspect.aisi.org.uk/) 0.3.281 | harness | quality, set, deep | Runs every generative benchmark over the router's OpenAI API from the laptop, with sample-ID filtering for the seeded lists and an early-stop hook. Chosen over native tau2-bench (needs Python under 3.14), bfcl-eval (no gpt-oss or Gemma 4 handler), lmms-eval (torch), VLMEvalKit, and own fixtures alone. |
-| inspect_evals 0.24.0: BFCL | benchmark | quality (agent tiers 1 and 2), set | Tool calls for every model and engine, through the API, single- and multi-turn. It replaced OpenAI's gpt-oss compatibility test. |
+| inspect_evals 0.24.0: BFCL | benchmark | quality (agent tiers 1 and 2), set | Tool calls for every model and engine, through the API, single- and multi-turn. |
 | inspect_evals: V\*Bench, DocVQA, MMMU | benchmark | quality (vision tiers 1 to 3), set (V\*Bench) | Fine detail in large images, document reading, and multi-image reasoning across subjects, in cost order. |
-| The ASR task (`asr_quality.py`, an Inspect task) | benchmark | quality (audio), set (LibriSpeech test-clean) | The Open ASR Leaderboard's English sets and FLEURS English, scored by corpus WER after the leaderboard's English normalizer, with RTFx. |
+| The ASR task (`asr_quality.py`, an Inspect task) | benchmark | quality (audio), set (LibriSpeech test-clean) | The Open ASR Leaderboard's English sets and FLEURS English, scored by corpus WER after the leaderboard's English normalizer, with RTFx. Each clip goes with the card's ASR prompt, which the task takes as `--prompt` from the `gate` package's `ASRPrompt`, the prompt's one source. |
 | inspect_evals: τ2 airline and retail | benchmark | deep (agent) | Multi-turn tool use against a simulated user and a policy. Telecom is out: its simulated user needs tools. |
 | The claude-code Inspect provider (`claude_code.py`), Claude Code 2.1.301 as Sonnet | harness | deep (τ2) | τ2's simulated user, with no cloud spend: the laptop's pinned Claude Code in print mode on the architect's subscription, tools off, its own system prompt, no session persistence, the reported model ID recorded. inspect_evals' airline scorer has no model grader, so the simulator is its only use. |
 | [MTEB](https://github.com/embeddings-benchmark/mteb) 2.26.4 | benchmark | quality (embedding), set (STSBenchmark) | Similarity, classification, and retrieval, through an encoder that adds EmbeddingGemma 2's task prompts and calls the router's embeddings API; the stock OpenAI encoder adds no prompts. |
 | clutch's conform, through the `passk` package | conformance test | quality (agent tier 3, harness fit) | Whether each coding agent can drive the model through clutch's nine capabilities, k = 5 times. |
 | Pi 1.3.0, Claude Code 2.1.301, OpenCode 1.19.3 | harness | quality (harness fit); the `concurrent` step | The coding agents the model serves, each judged by harness fit, and run at once by `evaluate concurrent`. |
-| [GuideLLM](https://github.com/vllm-project/guidellm) 0.8.1 | load generator | deep (generative models) | The grid: short 512/256 and agentic 8192/512 at 1 and 4 streams, client figures beside the engine's `/metrics`. The grid `evaluation/scripts/baseline.sh` runs is ported to Go as `gate.GuideLLM`, the deep stage's runner of the same cells. |
+| [GuideLLM](https://github.com/vllm-project/guidellm) 0.8.1 | load generator | deep (generative models) | The grid: short 512/256 and agentic 8192/512 at 1 and 4 streams, client figures beside the engine's `/metrics`. The deep stage runs the same cells as `evaluation/scripts/baseline.sh`, through `gate.GuideLLM`. |
 | The `concurrent` package | load generator | capacity | Requests in flight on every slot, each carrying a nonce, so a crossed answer shows; a chat role's run carries an embedding stream beside it. The set stage sends rounds of the same nonce requests while its tiers run. |
 | Prefix reuse | benchmark | deep (generative models) | An 8192-token prefix, then four warm requests: the cache's effect on TTFT. Also `evaluate prefix`. |
 | The `coldload` package | benchmark | deep | A warm and a cold router restart, timed until every model is loaded again. Needs the architect's root restarts (`-restart`); otherwise recorded not run. Also `evaluate coldload`. |
@@ -152,7 +153,7 @@ The record names the tier and the bound that stopped it.
   A run resumed with `-from` on the same run directory doesn't reload.
 - **Point `TMPDIR` into `.state`.** inspect_evals' τ2 task writes one copy of the domain's
   database to `TMPDIR` per sample (airline 6.8 MB, retail 2.7 MB) and never removes it, about
-  230 MB an agent run, which filled the laptop's `/tmp` quota in the baseline. Run with
+  230 MB an agent run, enough to fill the laptop's `/tmp` quota. Run with
   `mkdir -p .state/tmp && export TMPDIR="$PWD/.state/tmp"`.
 - **Keep the laptop awake and the pool readable.** A long run holds `systemd-inhibit` on sleep,
   idle, and the lid switch. The pool is read over Tailscale SSH, so the SSH rule must not lapse
@@ -195,7 +196,7 @@ of which also runs alone.
 The tier lists are drawn again from their seed with the consumers environment's tasks, for
 example `MISE_ENV=consumers mise run //evaluation:vision-tiers`; each rewrites the committed lists.
 
-## Planned for candidates, not built
+## Planned for candidates
 
 The goal record's Decisions plan these changes for `candidates`:
 
@@ -208,8 +209,8 @@ The goal record's Decisions plan these changes for `candidates`:
   estimate, 15 to 25 minutes a candidate, is extrapolated, not measured. Set A's baseline stays
   two full runs, since its bars and spreads are what make a screen trustworthy.
 - **The concurrency count.** Every evaluated set reports the most agent sessions at once that
-  still meet the per-stream floors with the pool floor held, even when it is one. Capacity
-  today checks a fixed 4 in flight.
+  still meet the per-stream floors with the pool floor held, even when it is one. The capacity
+  stage checks a fixed 4 in flight.
 - **A lighter grouping.** Candidates also looks for a grouping that scores near set A's bars
   with less of the pool and bandwidth, so the host keeps headroom and concurrency.
 - **Only passing models.** A host keeps installed only the models that passed evaluation on it,
