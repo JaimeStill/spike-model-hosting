@@ -39,8 +39,10 @@ requires `tailscaled.service`, so no address or name is ever rendered or committ
 
 Sessions reach the host, for the pool readings and logs, by Tailscale SSH. The tailnet's access
 policy sets each SSH rule to **accept** (unattended) or **check** (the first connection after
-the rule's check period needs a browser re-authentication). The spike runs in accept mode, set
-by the architect before `profile` and reverted to check mode when the spike completes.
+the rule's check period needs a browser re-authentication). The spike runs in accept mode for
+the host alone: the host carries `tag:inference`, and an accept rule from the architect's user to
+that tag sits above the tailnet's check rule, which still covers every other device. The
+architect sets it and reverts the host to check mode when the spike completes.
 
 **The check-mode lapse.** In check mode, once the check period lapses, a non-interactive ssh
 fails (`exit status 255`) until someone re-authenticates in a browser; the router's HTTP API is
