@@ -219,7 +219,7 @@ Door          two-way, except:
 
 ## Progress
 
-slices 5/11 committed · standards — · spec — · editor —
+slices 6/11 committed · standards — · spec — · editor —
 
 ## Decisions
 
