@@ -582,6 +582,10 @@ slices 12/12 committed · standards ✓ · spec — · editor —
 - evaluation (slice 11): "set A's score" in a tier's bar is the mean of the two baseline runs; a bar is that mean less the two-run spread (a WER ceiling, the mean plus it), rounded toward the stricter side to 0.001. τ2 and harness fit set no bar: the deep stage records and never gates, and harness fit's bar is absolute.
 - evaluation (slice 10): the Framework moved to the newest b-tag at slice 10, where the brief's slice order places it, not at the start of BUILD as behavior 14 reads; slices 1-9 ran on b11669.
 - evaluation (spec review): admission judges origin by STANDARDS: a model of Chinese origin fails admission unless its profile entry records why no alternative serves (`origin_reason`); validation refuses a reason on any other origin.
+- evaluation (spec review, architect): behavior 12 is partly met: a chat-and-vision model's run composes to ~95-105 min against ~85 min (vision 82.1 and 70.9 min, agent 37.2 and 35.9 min, before reuse of tier 1 as the set stage's alone figure); candidates times its first chat-and-vision model and records the measured figure.
+- evaluation (spec review, architect): the baseline's cold-load figures are slice 10's build-move table on b11715; the deep stage's cold load is not rerun for the baseline.
+- evaluation (spec review, architect): the consumer and suite pins hold while set A's bars stand (claude-code 2.1.301, python 3.14.8, inspect-evals 0.24.0, mteb 2.26.4, openai 3.31.0, against newer releases); bumping a pin rebaselines the roles it affects.
+- evaluation (spec review, architect): the standards reviewer's four test questions are fixed in this task: the check fails when the Python env is missing, the ASR prompt has one source, the gate tests read a testdata profile, and testpackage's allow-packages narrow.
 
 ## Pending edits
 
