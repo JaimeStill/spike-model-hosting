@@ -310,6 +310,8 @@ func (r *Runner) run(ctx context.Context, mode, from string, prior *Report) (*Re
 		rep.Stages = append(rep.Stages, res)
 		rep.Reached = name
 		if err := ctx.Err(); err != nil {
+			// An interrupted run still states what the stages it ran measured.
+			rep.Ceiling, rep.Sessions = r.ceiling(rep), r.sessions(rep)
 			return rep, err
 		}
 	}

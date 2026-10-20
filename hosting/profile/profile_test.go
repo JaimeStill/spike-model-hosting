@@ -173,7 +173,8 @@ func TestRenderPresets(t *testing.T) {
 // slots since screen's slice 2) compares as the same value. The differences allowed are
 // load-on-startup = true and hf-repo = the section's name on each of set A's sections, and
 // mtmd-batch-max-tokens on a model that caps its image batch (the vision model's, from
-// evaluation's slice 8), which the profile renders and the pinned copy lacks. Every other set's
+// evaluation's slice 8), which the profile renders and the pinned copy lacks, and parallel and c
+// on a model whose slots and c evaluate's sweep chose (screen's slice 8). Every other set's
 // model renders without load-on-startup and is left out of the comparison: the pinned copy
 // predates the candidates.
 func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
@@ -232,9 +233,16 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 			t.Errorf("[%s]: in %s, not rendered", name, pinned)
 			continue
 		}
+		// A model whose slots and c evaluate's sweep chose (its slots_reason ends with the sweep's
+		// "Swept: " paragraph) runs at its own, not the pinned preset's.
+		swept := false
+		if m := p.Model(name); m != nil && strings.Contains(m.SlotsReason, "\n\nSwept: ") {
+			swept = true
+		}
 		for key, w := range wantKeys {
 			g, ok := gotKeys[key]
 			switch {
+			case swept && (key == "parallel" || key == "c"):
 			case !ok:
 				t.Errorf("[%s] %s: in %s, not rendered", name, key, pinned)
 			case !sameValue(g, w):
@@ -373,8 +381,8 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 		},
 		{
 			"a context over the card's",
-			replace(t, text, "card_context = 131072\nactive_params_b = 5.1", "card_context = 65536\nactive_params_b = 5.1"),
-			"models[0].c: 131072 is over the card's context, 65536",
+			replace(t, text, "card_context = 131072\nactive_params_b = 5.1", "card_context = 16384\nactive_params_b = 5.1"),
+			"models[0].c: 17664 is over the card's context, 16384",
 		},
 		{
 			"active parameters without bits per weight",

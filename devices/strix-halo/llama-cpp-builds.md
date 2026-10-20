@@ -607,3 +607,26 @@ root command and no restart, by the runbook's "The preset file's write access": 
   `total_slots` 4 for each of its models.
 - **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
   set a, with its new slots check (each model's `total_slots` against its profile entry).
+
+### Set A's swept slots and c, 2026-10-20
+
+`screen`'s slice 8 swept set A whole (`evaluate sweep -set a`) and committed each model's chosen
+slots and c ([`../../docs/findings/slots.md`](../../docs/findings/slots.md)): gpt-oss-120b 2 slots,
+c = 17664; Gemma 4 26B-A4B 8, c = 41472; gemma-4-E4B 16, c = 31488; EmbeddingGemma 2 16,
+c = 8192. The sweep installed each model's render as it committed it, with no root command and
+no restart, by the runbook's "The preset file's write access"; before it began, the profile's
+reasons were rewritten as model facts, installed as render `b987489d` the same way.
+
+- **The install.** The committed render is sha256
+  `6643c687c39a48ea518fab9c47e63aaa9ac842573419abaca2d75c340a87083e`; `sha256sum
+  /etc/llama-router/models.ini` on the Framework reads the same, with no temporary file beside
+  it, the file still the service user's (`-rw-r--r-- <user>:<group>`) until the next install.
+  It replaced `591c0ddb`.
+- **The reload.** Each model's section changed, so each reload unloaded and the sweep loaded
+  again only the model it committed; `/props` reports `total_slots` and `n_ctx` 2 and 17664,
+  8 and 41472, 16 and 31488, 16 and 8192.
+- **The pool.** Idle after a reload of the set, 6463 MiB free; at the warmed peak 6015 MiB, at
+  capacity's peak 5965 MiB, against the 2816 MiB floor (up from 3506 idle at four slots each,
+  mostly gpt-oss-120b's c falling from 131072 to 17664).
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a, each model's `total_slots` matching its profile entry.

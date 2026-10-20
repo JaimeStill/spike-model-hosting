@@ -2,6 +2,8 @@ package gate_test
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -172,5 +174,35 @@ func TestSessionsUnconfirmed(t *testing.T) {
 	}
 	if rep := newHarness(t, gptOSS).run(t, "", nil); rep.Sessions != nil {
 		t.Errorf("a model run's sessions %+v; want none", rep.Sessions)
+	}
+}
+
+// cancelOn is a run's log that cancels the run when a line holding line is written.
+type cancelOn struct {
+	line   string
+	cancel context.CancelFunc
+}
+
+func (c cancelOn) Write(b []byte) (int, error) {
+	if strings.Contains(string(b), c.line) {
+		c.cancel()
+	}
+	return len(b), nil
+}
+
+// TestSessionsInterrupted shows a set run interrupted once its quality stage begins still states
+// its sessions supported, its agent model's slots, unconfirmed: the run didn't reach the set
+// stage.
+func TestSessionsInterrupted(t *testing.T) {
+	h := newHarness(t, "")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	h.runner.Log = cancelOn{line: "evaluate: quality ", cancel: cancel}
+	rep, err := h.runner.Run(ctx, "", nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run = %v; want cancelled", err)
+	}
+	if s := rep.Sessions; s == nil || s.Supported != 4 || s.Model != gptOSS || s.Confirmed || s.Basis != "the run didn't reach the set stage" {
+		t.Errorf("an interrupted run's sessions %+v; want 4, gpt-oss-120b's, unconfirmed", s)
 	}
 }
