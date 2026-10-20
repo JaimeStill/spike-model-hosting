@@ -53,6 +53,34 @@ func TestSetSetting(t *testing.T) {
 	}
 }
 
+// TestSetSettingParagraphs shows a reason's paragraphs stay a blank line apart: one whose lines
+// fit 100 columns keeps them as written, and a long one is wrapped.
+func TestSetSettingParagraphs(t *testing.T) {
+	src, err := os.ReadFile(strixHalo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+	facts := "A fact,\nkept on its own line."
+	long := strings.Repeat("A sweep paragraph that runs long. ", 8)
+	out, err := profile.SetSetting(src, id, profile.Setting{Slots: 2, C: 8192, SlotsReason: facts + "\n\n" + long, CReason: facts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := profile.Parse(out, "edited")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := p.Model(id)
+	paras := strings.Split(m.SlotsReason, "\n\n")
+	if len(paras) != 2 || paras[0] != facts || strings.Count(paras[1], "\n") < 2 {
+		t.Errorf("slots reason %q; want the facts as written, a blank line, the long paragraph wrapped", m.SlotsReason)
+	}
+	if m.CReason != facts+"\n" {
+		t.Errorf("c reason %q; want %q", m.CReason, facts+"\n")
+	}
+}
+
 // TestSetSettingRefuses shows SetSetting refuses an edit it can't make safely: a model the
 // profile doesn't hold, a reason a multi-line string can't carry as written, a c over the card's
 // context (the result doesn't validate), and a key the model's table holds twice.

@@ -158,7 +158,7 @@ func (s *SetSweep) Run(ctx context.Context) ([]*SweepReport, error) {
 			err = ctx.Err()
 		}
 		if err == nil {
-			prof, set, err = s.commit(ctx, rep)
+			prof, set, err = s.commit(ctx, prof, rep)
 		}
 		if werr := WriteSweep(r.Dir, rep); werr != nil {
 			err = errors.Join(err, werr)
@@ -170,15 +170,17 @@ func (s *SetSweep) Run(ctx context.Context) ([]*SweepReport, error) {
 	return reps, nil
 }
 
-// commit writes rep's chosen setting into the profile and installs the profile's render as the
-// committed one, recording the install in rep.Install; it returns the profile and set as now
-// committed.
-func (s *SetSweep) commit(ctx context.Context, rep *SweepReport) (*profile.Profile, *profile.Set, error) {
+// commit writes rep's chosen setting into the profile, cur as committed before it, and installs
+// the profile's render as the committed one, recording the install in rep.Install; it returns
+// the profile and set as now committed.
+func (s *SetSweep) commit(ctx context.Context, cur *profile.Profile, rep *SweepReport) (*profile.Profile, *profile.Set, error) {
 	st := chosenStep(rep)
-	if st == nil {
+	m := cur.Model(rep.Model)
+	if st == nil || m == nil {
 		return nil, nil, fmt.Errorf("%s's sweep chose N = %d but holds no step at it", rep.Model, rep.Chosen)
 	}
-	slotsReason, cReason := SweepReasons(rep)
+	sweptSlots, sweptC := SweepReasons(rep, m.Kind == profile.KindEmbedding)
+	slotsReason, cReason := WithSweep(m.SlotsReason, sweptSlots), WithSweep(m.CReason, sweptC)
 	prof, err := s.Profile.Commit(ctx, rep.Model, profile.Setting{Slots: st.N, C: st.C, SlotsReason: slotsReason, CReason: cReason})
 	if err != nil {
 		return nil, nil, fmt.Errorf("committing %s's setting to the profile: %w", rep.Model, err)
@@ -217,9 +219,27 @@ var boundReasons = map[string]string{
 	BoundTop:     "it is the sweep's last step",
 }
 
-// SweepReasons are the slots_reason and c_reason a set sweep commits with a model's chosen
-// setting, each citing the sweep: its chosen N and what bound it, the build and the date.
-func SweepReasons(rep *SweepReport) (slots, c string) {
+// SweptMark begins the paragraph a set sweep writes into a model's slots_reason and c_reason,
+// after the reason's own paragraphs, the model's facts: a later sweep replaces it (WithSweep), so
+// a reason carries the last sweep alone.
+const SweptMark = "Swept: "
+
+// WithSweep is reason with its paragraph from a sweep, swept, in place of any it held: reason's
+// other paragraphs, split at blank lines, kept as they are and in order, then swept.
+func WithSweep(reason, swept string) string {
+	var out []string
+	for para := range strings.SplitSeq(strings.TrimSpace(reason), "\n\n") {
+		if p := strings.TrimSpace(para); p != "" && !strings.HasPrefix(p, SweptMark) {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(append(out, swept), "\n\n")
+}
+
+// SweepReasons are the paragraphs a set sweep adds to a model's slots_reason and c_reason, each
+// beginning SweptMark and citing the sweep: its chosen N and what bound it, the build and the
+// date; embedding says the model is an embedding model, whose c the sweep holds.
+func SweepReasons(rep *SweepReport, embedding bool) (slots, c string) {
 	var why []string
 	for _, b := range rep.Bounds {
 		why = append(why, boundReasons[b])
@@ -229,14 +249,18 @@ func SweepReasons(rep *SweepReport) (slots, c string) {
 		knee = fmt.Sprintf("the knee at %d", rep.Knee)
 	}
 	date := rep.Started.UTC().Format(time.DateOnly)
-	slots = fmt.Sprintf("%d slots, chosen by evaluate sweep on %s, %s, set %s's settings already chosen: the smaller of the largest N that held every floor at N, the pool floor and every session's context (%d) and %s. Bound by %s: %s. The sweep's table is in docs/findings/slots.md.",
-		rep.Chosen, rep.Build, date, rep.Set, rep.Held, knee, strings.Join(rep.Bounds, " and "), strings.Join(why, "; "))
+	slots = fmt.Sprintf("%s%d slots, chosen by evaluate sweep on %s, %s, in set %s beside the settings chosen before it: the smaller of the largest N that held every floor at N, the pool floor and every session's context (%d) and %s. Bound by %s: %s. The sweep's table is in docs/findings/slots.md.",
+		SweptMark, rep.Chosen, rep.Build, date, rep.Set, rep.Held, knee, strings.Join(rep.Bounds, " and "), strings.Join(why, "; "))
 	st := chosenStep(rep)
-	if st == nil {
-		return slots, ""
+	switch {
+	case st == nil:
+	case embedding:
+		c = fmt.Sprintf("%sc = %d held at its committed value by evaluate sweep on %s, %s, which swept the slots alone: llama.cpp keeps no KV memory for an embedding model, so c bounds each input, %d tokens at the %s role's target (evaluation/targets.toml).",
+			SweptMark, st.C, rep.Build, date, rep.Target, rep.TargetRole)
+	default:
+		c = fmt.Sprintf("%sc = %d is %d sessions of the %s role's per-session target, %d tokens (evaluation/targets.toml), rounded up to a multiple of 256: the context evaluate sweep's step at %d ran, on %s, %s.",
+			SweptMark, st.C, st.N, rep.TargetRole, rep.Target, st.N, rep.Build, date)
 	}
-	c = fmt.Sprintf("c = %d is %d sessions of the %s role's per-session target, %d tokens (evaluation/targets.toml), rounded up to a multiple of 256: the context evaluate sweep's step at %d ran, on %s, %s.",
-		st.C, st.N, rep.TargetRole, rep.Target, st.N, rep.Build, date)
 	return slots, c
 }
 

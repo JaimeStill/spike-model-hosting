@@ -152,7 +152,7 @@ func (h *sweepHarness) checkRestored(t *testing.T, rep *gate.SweepReport) {
 }
 
 // TestSweepSteps shows a sweep's steps: N doubles through 1, 2, 4, 8 and 16 until a step fails,
-// here 16, whose 16 sessions of the agent's 8704-token target need more than gpt-oss-120b's
+// here 16, whose 16 sessions of the agent's 8806-token target need more than gpt-oss-120b's
 // 131072-token card context, so c is capped there and the step fails on context with no request;
 // then one bisection, 12. Each step's c is N times the target, rounded up to a multiple of 256;
 // each is rendered from the profile, installed and reloaded, the swept model loaded again at it
@@ -167,10 +167,10 @@ func TestSweepSteps(t *testing.T) {
 	if want := []int{1, 2, 4, 8, 16, 12}; !slices.Equal(ns(rep), want) {
 		t.Fatalf("steps %v; want %v", ns(rep), want)
 	}
-	if rep.Target != 8704 || rep.TargetRole != gate.RoleAgent {
-		t.Errorf("target %d (%s); want 8704, the agent's 8192 in and 512 out", rep.Target, rep.TargetRole)
+	if rep.Target != 8806 || rep.TargetRole != gate.RoleAgent {
+		t.Errorf("target %d (%s); want 8806, the agent's 8294 in and 512 out", rep.Target, rep.TargetRole)
 	}
-	wantC := map[int]int{1: 8704, 2: 17408, 4: 34816, 8: 69632, 16: 131072, 12: 104448}
+	wantC := map[int]int{1: 8960, 2: 17664, 4: 35328, 8: 70656, 16: 131072, 12: 105728}
 	for _, st := range rep.Steps {
 		if st.C != wantC[st.N] {
 			t.Errorf("step %d: c = %d; want %d", st.N, st.C, wantC[st.N])
@@ -240,26 +240,47 @@ func TestSweepSteps(t *testing.T) {
 	}
 }
 
-// TestSweepAdjacentNoBisection shows the bisection is skipped when the last step that held and
-// the first that failed are adjacent: EmbeddingGemma 2's 8192-token target fills its 8192-token
-// card at 1, so 2 is capped and fails on context, and 1 is chosen.
-func TestSweepAdjacentNoBisection(t *testing.T) {
+// TestSweepEmbeddingSlotsOnly shows an embedding model's sweep holds its committed c and sweeps
+// its slots alone: llama.cpp keeps no KV pool for EmbeddingGemma 2 for the slots to share, so
+// every step runs at c = 8192, its card's context, though N 8192-token inputs would need N times
+// that, and every step holds here.
+func TestSweepEmbeddingSlotsOnly(t *testing.T) {
 	h := newSweepHarness(t, embedding, targets(t))
 	rep, err := h.sweep.Run(t.Context())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if want := []int{1, 2}; !slices.Equal(ns(rep), want) {
-		t.Fatalf("steps %v; want %v, no bisection between adjacent steps", ns(rep), want)
+	if want := []int{1, 2, 4, 8, 16}; !slices.Equal(ns(rep), want) {
+		t.Fatalf("steps %v; want %v", ns(rep), want)
 	}
-	if rep.Steps[0].C != 8192 || !rep.Steps[0].Held || !rep.Steps[1].Capped || rep.Steps[1].C != 8192 {
-		t.Errorf("steps %+v; want 1 held at c = 8192, and 2 capped at the card's 8192", rep.Steps)
+	for _, st := range rep.Steps {
+		if st.C != 8192 || st.Capped || !st.Held || st.Served[embedding] != (gate.Setting{Slots: st.N, C: 8192}) {
+			t.Errorf("step %d: c = %d, capped %v, held %v, served %+v; want held at c = 8192", st.N, st.C, st.Capped, st.Held, st.Served[embedding])
+		}
 	}
-	if rep.Chosen != 1 || !slices.Equal(rep.Bounds, []string{gate.BoundContext}) {
-		t.Errorf("chosen %d by %v; want 1 by context", rep.Chosen, rep.Bounds)
+	// The fake's query times are the test machine's, so the knee may fall anywhere: the held N
+	// is the sweep's last step.
+	if rep.Held != 16 || len(rep.HeldBy) != 0 || slices.Contains(rep.Bounds, gate.BoundContext) {
+		t.Errorf("held %d by %v, bounds %v; want 16 held, no context bound", rep.Held, rep.HeldBy, rep.Bounds)
 	}
 	if r := rep.Steps[0].Rates; len(r) != 1 || r[0].Role != gate.RoleEmbedding || !r[0].Measured || r[0].Throughput <= 0 || r[0].TTFTMedianS <= 0 {
 		t.Errorf("rates %+v; want the embedding queries' tokens a second and wall times", r)
+	}
+	h.checkRestored(t, rep)
+}
+
+// TestSweepEmbeddingInputOverC shows an embedding model's step fails on context, with no request,
+// when one input of its target is over its committed c.
+func TestSweepEmbeddingInputOverC(t *testing.T) {
+	tg := targets(t)
+	tg.Embedding.In = 9000
+	h := newSweepHarness(t, embedding, tg)
+	rep, err := h.sweep.Run(t.Context())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if want := []int{1}; !slices.Equal(ns(rep), want) || !rep.Steps[0].Capped || rep.Chosen != 0 || !slices.Equal(rep.Bounds, []string{gate.BoundContext}) {
+		t.Errorf("steps %v, %+v, chosen %d by %v; want 1 capped, none chosen, bound by context", ns(rep), rep.Steps, rep.Chosen, rep.Bounds)
 	}
 	h.checkRestored(t, rep)
 }
@@ -496,7 +517,7 @@ func TestSweepRefusesUncommitted(t *testing.T) {
 // a file missing a role's target or holding a key the schema doesn't define fails.
 func TestLoadTargets(t *testing.T) {
 	tg := targets(t)
-	for role, want := range map[string]int{gate.RoleAgent: 8704, gate.RoleVision: 5172, gate.RoleAudio: 1956, gate.RoleEmbedding: 8192} {
+	for role, want := range map[string]int{gate.RoleAgent: 8806, gate.RoleVision: 5172, gate.RoleAudio: 1956, gate.RoleEmbedding: 8192} {
 		if got := tg.Of(role).Tokens(); got != want {
 			t.Errorf("%s target %d tokens; want %d", role, got, want)
 		}

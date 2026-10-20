@@ -130,8 +130,10 @@ func TestSetSweep(t *testing.T) {
 	if want := []int{1, 2, 4, 8, 6}; !slices.Equal(ns(reps[1]), want) || reps[1].Chosen != 6 || !slices.Equal(reps[1].Bounds, []string{gate.BoundPool}) {
 		t.Errorf("Gemma 4 26B-A4B: steps %v, chosen %d by %v; want steps %v, 6 by the pool", ns(reps[1]), reps[1].Chosen, reps[1].Bounds, want)
 	}
-	if reps[3].Chosen != 1 || !slices.Equal(reps[3].Bounds, []string{gate.BoundContext}) {
-		t.Errorf("EmbeddingGemma 2: chosen %d by %v; want 1, its target filling its card", reps[3].Chosen, reps[3].Bounds)
+	for _, st := range reps[3].Steps {
+		if st.C != 8192 {
+			t.Errorf("EmbeddingGemma 2's step %d at c = %d; want its committed 8192, the slots swept alone", st.N, st.C)
+		}
 	}
 
 	p, sum := h.committed(t)
@@ -152,7 +154,12 @@ func TestSetSweep(t *testing.T) {
 		if (gate.Setting{Slots: m.Slots, C: m.C}) != want {
 			t.Errorf("%s committed at %d slots and c = %d; want its chosen %+v", rep.Model, m.Slots, m.C, want)
 		}
-		for _, reason := range []string{m.SlotsReason, m.CReason} {
+		old := h.runner.Profile.Model(rep.Model)
+		for k, reason := range []string{m.SlotsReason, m.CReason} {
+			facts := []string{old.SlotsReason, old.CReason}[k]
+			if !strings.HasPrefix(reason, strings.TrimSpace(facts)+"\n\n"+gate.SweptMark) {
+				t.Errorf("%s's reason %q; want its facts, %q, then the sweep's paragraph", rep.Model, reason, facts)
+			}
 			if !strings.Contains(reason, "evaluate sweep") || !strings.Contains(reason, rep.Build) || !strings.Contains(reason, rep.Started.Format("2006-01-02")) {
 				t.Errorf("%s's reason %q doesn't cite its sweep, build and date", rep.Model, reason)
 			}
@@ -263,5 +270,46 @@ func TestSetSweepStops(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(h.presets.path); sha(b) != sum {
 		t.Errorf("the presets file is sha256 %s; want the committed profile's render, %s", sha(b), sum)
+	}
+}
+
+// TestSetSweepRerun shows a second set sweep replaces each reason's paragraph from the first and
+// keeps the model's facts: every reason holds its facts once and one sweep's paragraph.
+func TestSetSweepRerun(t *testing.T) {
+	h := newSetSweepHarness(t, totalSlots)
+	facts := map[string][2]string{}
+	for _, id := range h.runner.Set.Models {
+		m := h.runner.Profile.Model(id)
+		facts[id] = [2]string{strings.TrimSpace(m.SlotsReason), strings.TrimSpace(m.CReason)}
+	}
+	if _, err := h.sweep.Run(t.Context()); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	p, _ := h.committed(t)
+	set, err := p.Set("a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.runner.Profile, h.runner.Set = p, set
+	if _, err := h.sweep.Run(t.Context()); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+	p, _ = h.committed(t)
+	for id, f := range facts {
+		m := p.Model(id)
+		for k, reason := range []string{m.SlotsReason, m.CReason} {
+			paras := strings.Split(strings.TrimSpace(reason), "\n\n")
+			if len(paras) != 2 || paras[0] != f[k] || !strings.HasPrefix(paras[1], gate.SweptMark) {
+				t.Errorf("%s's reason after two sweeps %q; want its facts %q once, then one sweep's paragraph", id, reason, f[k])
+			}
+		}
+	}
+}
+
+// TestWithSweep shows WithSweep keeps a reason's own paragraphs in order and replaces a sweep's.
+func TestWithSweep(t *testing.T) {
+	got := gate.WithSweep("Fact one.\n\n"+gate.SweptMark+"old.\n\nFact two,\nwrapped.\n", gate.SweptMark+"new.")
+	if want := "Fact one.\n\nFact two,\nwrapped.\n\n" + gate.SweptMark + "new."; got != want {
+		t.Errorf("WithSweep = %q; want %q", got, want)
 	}
 }

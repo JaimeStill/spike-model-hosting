@@ -23,8 +23,9 @@ const reasonWidth = 100
 // SetSetting returns src, a profile's TOML, with model id's slots, c, slots_reason and c_reason
 // replaced by s's, every other byte as it was: the comments, the order and the other entries
 // stay. Each key must appear once in the model's own table (from its [[models]] header to the
-// next table header), the reasons as multi-line basic strings, which s's reasons are written as,
-// wrapped at 100 columns. The result must parse as src's profile with those four values alone
+// next table header). s's reasons are written as multi-line basic strings, their paragraphs a
+// blank line apart: a paragraph whose lines fit 100 columns kept line for line, any other wrapped
+// at 100. The result must parse as src's profile with those four values alone
 // changed, and validate; SetSetting returns an error, and no bytes, otherwise.
 func SetSetting(src []byte, id string, s Setting) ([]byte, error) {
 	before, err := Parse(src, "the profile")
@@ -139,24 +140,39 @@ func replaceKey(table []string, key string, with []string) ([]string, error) {
 	return slices.Concat(table[:at], with, table[to:]), nil
 }
 
-// multiline is key = text as a multi-line basic string, text wrapped at reasonWidth.
+// multiline is key = text as a multi-line basic string. text's paragraphs, split at blank lines,
+// stay a blank line apart: a paragraph whose lines all fit reasonWidth keeps its lines as they
+// are, and any other is wrapped at reasonWidth.
 func multiline(key, text string) []string {
 	out := []string{key + ` = """` + "\n"}
-	var line bytes.Buffer
-	for word := range strings.FieldsSeq(text) {
-		if line.Len() > 0 && line.Len()+1+len(word) > reasonWidth {
-			out = append(out, line.String()+"\n")
-			line.Reset()
+	for i, para := range strings.Split(strings.TrimSpace(text), "\n\n") {
+		if i > 0 {
+			out = append(out, "\n")
 		}
-		if line.Len() > 0 {
-			line.WriteByte(' ')
+		lines := strings.Split(strings.TrimSpace(para), "\n")
+		if !slices.ContainsFunc(lines, func(l string) bool { return len(l) > reasonWidth }) {
+			for _, l := range lines {
+				out = append(out, strings.TrimRight(l, " \t")+"\n")
+			}
+			continue
 		}
-		line.WriteString(word)
+		var line bytes.Buffer
+		for word := range strings.FieldsSeq(para) {
+			if line.Len() > 0 && line.Len()+1+len(word) > reasonWidth {
+				out = append(out, line.String()+"\n")
+				line.Reset()
+			}
+			if line.Len() > 0 {
+				line.WriteByte(' ')
+			}
+			line.WriteString(word)
+		}
+		out = append(out, line.String()+"\n")
 	}
-	return append(out, line.String()+"\n", `"""`+"\n")
+	return append(out, `"""`+"\n")
 }
 
-// wrapped is text as its multi-line string decodes: its lines as multiline wraps them, each
+// wrapped is text as its multi-line string decodes: its lines as multiline writes them, each
 // ending in a newline.
 func wrapped(text string) string {
 	lines := multiline("", text)

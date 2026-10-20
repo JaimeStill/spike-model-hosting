@@ -50,7 +50,8 @@
 // vision, audio and embedding (a model the set assigns two roles once, at the larger target), from
 // -from's model when given. After each model's sweep and its restore, it writes the chosen N and
 // that step's c into the profile file -profile names, editing only the model's slots, c,
-// slots_reason and c_reason (the reasons citing the sweep's N, bound, build and date), and
+// slots_reason and c_reason (each reason's own paragraphs kept, its paragraph from a sweep,
+// beginning "Swept:", replaced by one citing this sweep's N, bound, build and date), and
 // installs the new render as the committed one, checked as a restore is; the next model's sweep
 // starts from it, so each model is swept against the settings already chosen. It stops at the
 // first model that chooses no N, or whose sweep, commit or install fails, the models before it

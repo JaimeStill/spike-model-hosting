@@ -188,7 +188,9 @@ var ErrRestore = errors.New("RESTORE FAILED")
 // last step that held and that failure (the integer midpoint, none when they are adjacent). Each
 // step's c is N times the model's per-session target, rounded up to a multiple of 256 and capped
 // at the card's context; a step the cap leaves a session short of its target fails on context
-// with no request sent. Each other step renders the committed profile with the model at N and c
+// with no request sent. An embedding model's c stays its committed c, which bounds each input
+// alone (no KV pool is shared across its slots), so its steps sweep the slots only. Each other
+// step renders the committed profile with the model at N and c
 // (profile.Profile.Override), installs it (Presets), has the router read it again
 // (router.ReloadPresets), loads the model again at its new setting, checks its server runs at it,
 // then reloads and warms the whole set (Warm) and runs capacity on the model at N for each of its
@@ -305,6 +307,19 @@ func (s *Sweep) step(ctx context.Context, roles []string, target, n int, bisecti
 	st = SweepStep{N: n, C: min(roundUp(need, ctxStep), m.CardContext), Bisection: bisection}
 	began := time.Now()
 	defer func() { st.WallS = time.Since(began).Seconds() }()
+	if m.Kind == profile.KindEmbedding {
+		// llama.cpp creates no KV memory for an embedding architecture (b11734,
+		// src/llama-model.cpp create_memory: LLM_ARCH_GEMMA_EMBEDDING2, GEMMA_EMBEDDING, the BERT
+		// family and the rest set res = nullptr), so no pool is shared across the slots and c
+		// bounds each input alone: the step holds the committed c and sweeps the slots only.
+		st.C = m.C
+		if target > m.C {
+			st.Capped, st.Failed = true, []string{BoundContext}
+			st.Detail = fmt.Sprintf("one input of %d tokens is over the model's c = %d", target, m.C)
+			return st, nil
+		}
+		need = 0
+	}
 	if need > m.CardContext {
 		st.Capped, st.Failed = true, []string{BoundContext}
 		st.Detail = fmt.Sprintf("%d sessions of %d tokens need c = %d, over the card's %d: capped there, a session holds %d, short of its target",

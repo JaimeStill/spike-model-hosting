@@ -164,7 +164,9 @@
 // its set loaded at their own settings, N through SweepSteps until a step fails, then one
 // bisection. Each step's c is N times the model's per-session target (Targets), rounded up to a
 // multiple of 256 and capped at the card's context, where a session short of its target fails on
-// context with no request. Each other step renders the profile with the override
+// context with no request; an embedding model's c stays its committed c (llama.cpp keeps it no
+// KV pool), its steps sweeping the slots alone. Each other step renders the profile with the
+// override
 // (profile.Profile.Override), installs it (Presets), has the router read it again
 // (router.ReloadPresets), loads the model again and checks its server runs at the step's setting,
 // then warms the set as a run does (Warm, its 8192-token prompt cut to a smaller c) and runs
@@ -247,8 +249,9 @@
 //   - SetSweep is the set sweep, SetSweep.Run returning each model's SweepReport with the Install
 //     of its committed setting; SweepOrder lists the models it sweeps, each a Swept with its roles;
 //     ProfileFile is the profile file it commits into, FileProfile the TOML file on disk
-//     (profile.SetSetting); SweepReasons are the reasons it commits; WriteSetSweepSummary writes it
-//     for a reader.
+//     (profile.SetSetting); SweepReasons are the paragraphs it adds to each reason, beginning
+//     SweptMark, which WithSweep puts in place of a reason's earlier one; WriteSetSweepSummary
+//     writes it for a reader.
 //   - Presets is the router's presets file, which a sweep installs and sums; SSHPresets reaches it
 //     over ssh, a temporary file in its directory renamed over it. Targets are the roles'
 //     per-session targets, each a Target, data in evaluation/targets.toml, which LoadTargets

@@ -215,11 +215,21 @@ preset file, which no stage touches, and records nothing in the results index.
   multiple of 256 and capped at the card's context. The target is the largest of the model's
   roles' in [`evaluation/targets.toml`](../evaluation/targets.toml): each role's largest tier
   request, its prompt and the room its answer is given, measured once on b11734 by the router's
-  own token count. The agent's is the agentic shape, 8192 in and 512 out; the vision role's the
+  own token count, the chat template with it. The agent's is capacity's agentic request on
+  gpt-oss-120b, its 8192-token passage, the template and the ask, 8294 tokens (`prompt_n`), and
+  512 out (a nominal 8192 left no room for the template: two streams ran out of context at
+  `c` = 17408, [`findings/slots.md`](findings/slots.md)); the vision role's the
   tier lists' largest prompt on Gemma 4 26B-A4B (MMMU, 1076 tokens) and the tiers' 4096 out; the
   audio role's the longest clip on gemma-4-E4B (Earnings-22, 36.4 s, 932 tokens) and the ASR
   task's 1024 out; the embedding role's one 8192-token input. A step the cap leaves a session
   short of its target fails on context, with no request sent.
+- **An embedding model's `c` stays its committed `c`.** llama.cpp (b11734) creates no KV memory
+  for an embedding architecture (`src/llama-model.cpp`, `create_memory`: EmbeddingGemma's
+  `LLM_ARCH_GEMMA_EMBEDDING2` and `GEMMA_EMBEDDING`, the BERT family and the rest return no
+  memory), so there is no pool its slots share and `c` bounds each input alone. For a model of
+  kind `embedding` the sweep holds `c` at the committed value (EmbeddingGemma 2's 8192, its card's
+  context) and sweeps the slots only; a step fails on context only when one input of the target
+  is over that `c`.
 - **Each step** renders the profile with that one model's override
   (`profile.Profile.Override`), installs it as the router's preset file, has the router read it
   again (`GET /models?reload=1`, which unloads the model whose section changed), loads the model
@@ -254,13 +264,14 @@ profile's slots change only by a commit.
 the set in role order: agent, vision, audio, embedding, a model the set assigns two roles once,
 at the larger of their targets (`-from <role>` starts at that role's model). After each model's
 sweep and restore it writes the chosen N and that step's `c` into the profile file, editing only
-the model's `slots`, `c`, `slots_reason` and `c_reason` (the reasons cite the sweep: N, bound,
-build, date), and installs the new render as the committed one, checked as a restore is. So each
+the model's `slots`, `c`, `slots_reason` and `c_reason`, and installs the new render as the committed one, checked as a restore is. So each
 model is swept against the settings already chosen for the models before it, and the models after
 it at their committed ones. Vision, audio and embedding take the N their own sweep holds, not
 capped at the agent's. It stops at the first model that chooses no N or whose sweep, edit or
 install fails, the models before it committed and installed; the profile's edit is left to be
-committed.
+committed. Each reason keeps its own paragraphs, the model's facts, and ends with one paragraph
+from the sweep, beginning `Swept:` (N, bound, build, date), which a later sweep replaces, so a
+reason never accumulates sweeps.
 
 ## Before each run
 

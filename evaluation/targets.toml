@@ -12,10 +12,14 @@
 
 [agent]
 # The agentic shape an agent session is counted by, as capacity's agent streams and the deep
-# stage's agentic grid cell send it: an 8192-token prompt, 512 out.
-in = 8192
+# stage's agentic grid cell send it: an 8192-token passage with the nonce and the summary ask
+# after it, 512 out. Sent once to gpt-oss-120b on b11734, 2026-10-20, through capacity's own
+# request (agenticBody): prompt_n 8294, the passage, the chat template and the ask. The nominal
+# 8192 it replaces left no room for the template: at 2 slots and c = 17408 both streams ran out
+# of context (docs/findings/slots.md).
+in = 8294
 out = 512
-source = "the agentic shape: an 8192-token prompt and 512 out (capacity's agent streams, the deep stage's agentic cell)"
+source = "capacity's agentic request on gpt-oss-120b, b11734 (8192-token passage, the chat template and the ask: prompt_n 8294), and its max_tokens, 512"
 
 [vision]
 # Every sample of the three vision tier lists (vision-vstar, vision-docvqa, vision-mmmu, 450
