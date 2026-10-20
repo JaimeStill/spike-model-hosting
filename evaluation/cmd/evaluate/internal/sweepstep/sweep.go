@@ -1,9 +1,11 @@
 // Package sweepstep is evaluate's sweep step, which chooses one model's slots and c on the
-// router (the evaluation package gate's Sweep), and restores the committed presets after.
+// router (the evaluation package gate's Sweep), and restores the committed presets after; or, in
+// its set mode, sweeps a whole set and commits each model's choice (gate's SetSweep).
 //
 // Usage:
 //
 //	evaluate sweep [-router url] [-profile name|path] [-set name] (-role role | -model id) [-ssh dest] [-floors path] [-targets path] [-uv path] [-python path] [-state dir]
+//	evaluate sweep -set name [-from role] [-router url] [-profile name|path] [-ssh dest] [-floors path] [-targets path] [-uv path] [-python path] [-state dir]
 //	evaluate sweep -restore [-router url] [-profile name|path] [-set name] [-ssh dest]
 //
 // The model is -model, by router ID, or the model the set assigns -role: agent (the profile's
@@ -44,8 +46,20 @@
 // summary of it goes to stdout, and a line as each step starts to stderr. The sweep records
 // nothing in the results index.
 //
-// It exits 0 when it chose an N of at least 1 and the restore verified, or -restore verified; 1
-// when no N held, the sweep or the restore failed, or it can't run; and 2 on a usage error.
+// The set mode, -set with no -role or -model, sweeps each model of the set in role order, agent,
+// vision, audio and embedding (a model the set assigns two roles once, at the larger target), from
+// -from's model when given. After each model's sweep and its restore, it writes the chosen N and
+// that step's c into the profile file -profile names, editing only the model's slots, c,
+// slots_reason and c_reason (the reasons citing the sweep's N, bound, build and date), and
+// installs the new render as the committed one, checked as a restore is; the next model's sweep
+// starts from it, so each model is swept against the settings already chosen. It stops at the
+// first model that chooses no N, or whose sweep, commit or install fails, the models before it
+// committed and installed. Each model's report is its own run directory's, as a one-model sweep's;
+// the summary ends with a line a model. The profile's edit is left for the caller to commit.
+//
+// It exits 0 when it chose an N of at least 1 and the restore verified (in the set mode, for every
+// model, each installed), or -restore verified; 1 when no N held, the sweep, the restore or an
+// install failed, or it can't run; and 2 on a usage error.
 package sweepstep
 
 import (
@@ -73,14 +87,15 @@ var errUsage = errors.New("usage")
 // usage is the step's usage, printed on -h and after a usage error.
 const usage = `usage:
   evaluate sweep [-router url] [-profile name|path] [-set name] (-role role | -model id) [-ssh dest] [-floors path] [-targets path] [-uv path] [-python path] [-state dir]
+  evaluate sweep -set name [-from role] [-router url] [-profile name|path] [-ssh dest] [-floors path] [-targets path] [-uv path] [-python path] [-state dir]
   evaluate sweep -restore [-router url] [-profile name|path] [-set name] [-ssh dest]
 `
 
 // options are the step's flags, after the environment's fallbacks.
 type options struct {
-	router, profile, set, role, model, ssh, floors, targets, uv, python, state string
-	// restore runs the restore alone.
-	restore bool
+	router, profile, set, role, model, from, ssh, floors, targets, uv, python, state string
+	// restore runs the restore alone; whole sweeps the whole set, -set given with no model.
+	restore, whole bool
 }
 
 // Run runs the step with args, reading the environment through getenv, and returns its exit
@@ -122,6 +137,7 @@ func parse(args []string, getenv func(string) string) (options, error) {
 	fs.StringVar(&o.set, "set", getenv("SPIKE_SET"), "the profile's set (SPIKE_SET); empty is the startup set")
 	fs.StringVar(&o.role, "role", "", "the role whose model to sweep: agent, vision, audio or embedding")
 	fs.StringVar(&o.model, "model", "", "the model to sweep, by router ID")
+	fs.StringVar(&o.from, "from", "", "in the set mode, the role whose model to start at: agent, vision, audio or embedding")
 	fs.BoolVar(&o.restore, "restore", false, "only restore the committed presets and verify them")
 	fs.StringVar(&o.ssh, "ssh", "", "the ssh destination the presets file and the pool are on; default the router's host")
 	fs.StringVar(&o.floors, "floors", "", "the floors file; default the module root's evaluation/floors.toml")
@@ -135,6 +151,9 @@ func parse(args []string, getenv func(string) string) (options, error) {
 		}
 		return o, fmt.Errorf("%w: %v", errUsage, err)
 	}
+	setGiven := false
+	fs.Visit(func(f *flag.Flag) { setGiven = setGiven || f.Name == "set" })
+	o.whole = !o.restore && o.role == "" && o.model == "" && setGiven
 	switch {
 	case fs.NArg() != 0:
 		return o, fmt.Errorf("%w: unexpected arguments %q", errUsage, fs.Args())
@@ -142,15 +161,20 @@ func parse(args []string, getenv func(string) string) (options, error) {
 		return o, fmt.Errorf("%w: no router: set -router or SPIKE_ROUTER_URL", errUsage)
 	case o.restore && (o.role != "" || o.model != ""):
 		return o, fmt.Errorf("%w: -restore restores the set's presets; it takes no -role or -model", errUsage)
-	case !o.restore && (o.role == "") == (o.model == ""):
-		return o, fmt.Errorf("%w: name the model to sweep with -role or -model, one of them, or give -restore", errUsage)
+	case !o.restore && !o.whole && (o.role == "") == (o.model == ""):
+		return o, fmt.Errorf("%w: name the model to sweep with -role or -model, one of them, the set to sweep whole with -set alone, or give -restore", errUsage)
+	case o.from != "" && !o.whole:
+		return o, fmt.Errorf("%w: -from starts a set sweep, -set with no -role or -model", errUsage)
 	}
-	if o.role != "" {
-		role, err := gate.ParseRole(o.role)
+	for _, r := range []*string{&o.role, &o.from} {
+		if *r == "" {
+			continue
+		}
+		role, err := gate.ParseRole(*r)
 		if err != nil {
 			return o, fmt.Errorf("%w: %v", errUsage, err)
 		}
-		o.role = role
+		*r = role
 	}
 	o.router = strings.TrimSuffix(o.router, "/")
 	if o.ssh == "" {
@@ -166,7 +190,7 @@ func parse(args []string, getenv func(string) string) (options, error) {
 // run sets up the sweep and runs it, or the restore alone, and writes its report; ok is whether
 // it chose an N and the restore verified, or the restore alone verified.
 func run(ctx context.Context, o options, stdout, stderr io.Writer) (ok bool, err error) {
-	p, _, err := profile.Open(o.profile)
+	p, path, err := profile.Open(o.profile)
 	if err != nil {
 		return false, err
 	}
@@ -219,6 +243,9 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (ok bool, err
 	}
 	r.Peaks = gate.UV{Exe: uv, Python: python, Project: filepath.Join(root, gate.SuitesDir), Cache: filepath.Join(state, "cache"), Log: stderr}
 	r.Tiers, r.Footprint = filepath.Join(root, gate.TiersDir), gate.SSH{Dest: o.ssh}
+	if o.whole {
+		return runSet(ctx, sw, path, state, o.from, stdout)
+	}
 	dir := gate.RunDir(state, gate.SweepSubject(model), time.Now())
 	r.Dir = dir
 
@@ -238,10 +265,10 @@ func run(ctx context.Context, o options, stdout, stderr io.Writer) (ok bool, err
 	return rep.Chosen > 0 && rep.Restore != nil && rep.Restore.Verified, err
 }
 
-// pick returns the model the options name in set, empty for -restore.
+// pick returns the model the options name in set, empty for -restore and the set mode.
 func pick(set *profile.Set, o options) (string, error) {
 	switch {
-	case o.restore:
+	case o.restore || o.whole:
 		return "", nil
 	case o.role != "":
 		model := map[string]string{
@@ -256,4 +283,21 @@ func pick(set *profile.Set, o options) (string, error) {
 		return "", fmt.Errorf("set %s assigns %s no role", set.Name, o.model)
 	}
 	return o.model, nil
+}
+
+// runSet runs the set mode: sw's set swept whole (gate.SetSweep), committing each model's choice
+// into the profile file at path; ok is whether every model chose an N and was installed.
+func runSet(ctx context.Context, sw *gate.Sweep, path, state, from string, stdout io.Writer) (ok bool, err error) {
+	set := &gate.SetSweep{
+		Runner: sw.Runner, Presets: sw.Presets, Targets: sw.Targets, Profile: gate.FileProfile{Path: path}, From: from,
+		DirOf: func(model string) string { return gate.RunDir(state, gate.SweepSubject(model), time.Now()) },
+	}
+	reps, err := set.Run(ctx)
+	if werr := gate.WriteSetSweepSummary(stdout, sw.Runner.Set.Name, reps); werr != nil {
+		return false, errors.Join(err, werr)
+	}
+	if _, werr := fmt.Fprintf(stdout, "profile: %s, each chosen setting written; commit it\n", path); werr != nil {
+		return false, errors.Join(err, werr)
+	}
+	return err == nil && len(reps) > 0, err
 }

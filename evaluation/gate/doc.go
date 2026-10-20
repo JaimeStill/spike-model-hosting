@@ -173,6 +173,11 @@
 // (KneeGain), and the report names which bound. The sweep ends on every exit by restoring the
 // committed render, checked by its SHA-256 on the host (Sweep.Restore).
 //
+// A set sweep (SetSweep) sweeps a set's models one after another in role order (SweepOrder):
+// after each model's sweep it writes the chosen N and its step's c into the profile file, with
+// reasons citing the sweep (SweepReasons), and installs that render as the committed one, so each
+// later model is swept against the settings chosen before it.
+//
 // Every request carries autoload=false; a run refuses a model the router doesn't list loaded
 // before any stage (a run that reloads, any model of the set), and loads only the set it reloads.
 // A run resumed from a later stage, or a full run continuing its screen, reloads nothing and keeps
@@ -239,6 +244,11 @@
 //     restores alone; a restore that fails wraps ErrRestore. SweepSteps and KneeGain are the
 //     steps and the knee's threshold; WriteSweep writes the report as a run directory's SweepFile,
 //     named for SweepSubject, and WriteSweepSummary and WriteRestoreSummary write it for a reader.
+//   - SetSweep is the set sweep, SetSweep.Run returning each model's SweepReport with the Install
+//     of its committed setting; SweepOrder lists the models it sweeps, each a Swept with its roles;
+//     ProfileFile is the profile file it commits into, FileProfile the TOML file on disk
+//     (profile.SetSetting); SweepReasons are the reasons it commits; WriteSetSweepSummary writes it
+//     for a reader.
 //   - Presets is the router's presets file, which a sweep installs and sums; SSHPresets reaches it
 //     over ssh, a temporary file in its directory renamed over it. Targets are the roles'
 //     per-session targets, each a Target, data in evaluation/targets.toml, which LoadTargets

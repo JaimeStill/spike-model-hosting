@@ -250,6 +250,18 @@ The report is `.state/evaluate/<UTC time>-sweep-<model>/sweep.json`, with a summ
 A sweep's chosen N is a finding, recorded in [`findings/slots.md`](findings/slots.md); the
 profile's slots change only by a commit.
 
+**A set sweep**, `evaluate sweep -set <name>` with no `-role` or `-model`, sweeps every model of
+the set in role order: agent, vision, audio, embedding, a model the set assigns two roles once,
+at the larger of their targets (`-from <role>` starts at that role's model). After each model's
+sweep and restore it writes the chosen N and that step's `c` into the profile file, editing only
+the model's `slots`, `c`, `slots_reason` and `c_reason` (the reasons cite the sweep: N, bound,
+build, date), and installs the new render as the committed one, checked as a restore is. So each
+model is swept against the settings already chosen for the models before it, and the models after
+it at their committed ones. Vision, audio and embedding take the N their own sweep holds, not
+capped at the agent's. It stops at the first model that chooses no N or whose sweep, edit or
+install fails, the models before it committed and installed; the profile's edit is left to be
+committed.
+
 ## Before each run
 
 - **The run reloads the set.** Every model run, and the set run, starts from freshly loaded
@@ -313,6 +325,8 @@ go run ./evaluation/cmd/evaluate -set a -role agent -full -restart
 
 # Sweep one model's slots and c, the rest of its set loaded; restore the committed presets alone.
 go run ./evaluation/cmd/evaluate sweep -set a -role audio
+# Sweep the whole set in role order, committing each model's choice into the profile file.
+go run ./evaluation/cmd/evaluate sweep -set a
 go run ./evaluation/cmd/evaluate sweep -restore -set a
 ```
 

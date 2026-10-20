@@ -1238,6 +1238,7 @@ func TestOverride(t *testing.T) {
 	}
 	const id = "ggml-org/gemma-4-E4B-it-GGUF:Q8_0"
 	committed := parseINI(t, render(t, strixHalo))
+	slots, c := p.Model(id).Slots, p.Model(id).C
 	o, err := p.Override(id, 8, 15648)
 	if err != nil {
 		t.Fatal(err)
@@ -1263,8 +1264,8 @@ func TestOverride(t *testing.T) {
 	if len(got) != len(committed) {
 		t.Errorf("%d sections; want the profile's %d", len(got), len(committed))
 	}
-	if m := p.Model(id); m.Slots != 4 || m.C != 32768 {
-		t.Errorf("the profile's own %s is at %d slots and c = %d after Override; want it unchanged", id, m.Slots, m.C)
+	if m := p.Model(id); m.Slots != slots || m.C != c {
+		t.Errorf("the profile's own %s is at %d slots and c = %d after Override; want its %d and %d", id, m.Slots, m.C, slots, c)
 	}
 	if _, err := p.Override(id, 2, 262144); err == nil || !strings.Contains(err.Error(), "over the card's context") {
 		t.Errorf("Override over the card's context = %v; want refused", err)

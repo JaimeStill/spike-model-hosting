@@ -7,8 +7,11 @@
 // time.
 //
 // The schema:
-//   - Profile is a decoded profile; Load reads and validates one, and Profile.Validate reports
-//     what a profile built in code is missing.
+//   - Profile is a decoded profile; Load reads and validates one, Parse decodes and validates
+//     one from its TOML, and Profile.Validate reports what a profile built in code is missing.
+//   - SetSetting edits one model's Setting in a profile's TOML, its slots, c and their reasons,
+//     every other byte kept, and checks the result parses with those four values alone changed:
+//     how evaluate's set sweep commits a chosen setting.
 //   - Engine is the serving engine and its minimum build; Engine.Repository names its upstream.
 //   - Defaults, Model, Sampling, Prompts, Set and MemoryBudget are the profile's tables.
 //   - A Set names up to MaxSetModels of the profile's models, at least one a chat model, with

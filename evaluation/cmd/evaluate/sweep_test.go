@@ -10,8 +10,8 @@ import (
 )
 
 // TestSweepUsage shows the sweep step refuses a call it can't run with exit status 2 and its
-// usage: no router, no model or both ways of naming one, a model with -restore, an unknown role,
-// or a model the set assigns no role.
+// usage: no router, no model or set or both ways of naming a model, a model with -restore, an
+// unknown role, a model the set assigns no role, or -from outside the set mode.
 func TestSweepUsage(t *testing.T) {
 	router := []string{"-router", "http://127.0.0.1:1"}
 	cases := map[string]struct {
@@ -25,6 +25,8 @@ func TestSweepUsage(t *testing.T) {
 		"unknown role":  {append([]string{"-role", "reasoning"}, router...), `role "reasoning"`},
 		"not in set":    {append([]string{"-set", "a", "-model", "example/none-GGUF:Q4_0"}, router...), "assigns example/none-GGUF:Q4_0 no role"},
 		"argument":      {append([]string{"-role", "audio", "extra"}, router...), "unexpected arguments"},
+		"from no set":   {append([]string{"-from", "audio", "-role", "agent"}, router...), "-from starts a set sweep"},
+		"from role":     {append([]string{"-set", "a", "-from", "reasoning"}, router...), `role "reasoning"`},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

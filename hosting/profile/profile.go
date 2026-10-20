@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"path"
 	"regexp"
 	"slices"
@@ -476,10 +477,20 @@ func RouterTag(tag string) string {
 // errors, each naming the field at fault by its TOML key path; a key the schema doesn't define
 // is one of them.
 func Load(path string) (*Profile, error) {
-	var p Profile
-	md, err := toml.DecodeFile(path, &p)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("profile: %w", err)
+	}
+	return Parse(data, path)
+}
+
+// Parse decodes and validates a profile from data, the TOML Load reads; name is the file's,
+// for its errors.
+func Parse(data []byte, name string) (*Profile, error) {
+	var p Profile
+	md, err := toml.Decode(string(data), &p)
+	if err != nil {
+		return nil, fmt.Errorf("profile: %s: %w", name, err)
 	}
 	var errs []error
 	for _, key := range md.Undecoded() {
@@ -491,7 +502,7 @@ func Load(path string) (*Profile, error) {
 		errs = append(errs, fmt.Errorf("%s: not a key the schema defines", key))
 	}
 	if err := errors.Join(append(errs, p.Validate())...); err != nil {
-		return nil, fmt.Errorf("profile %s: %w", path, err)
+		return nil, fmt.Errorf("profile %s: %w", name, err)
 	}
 	return &p, nil
 }

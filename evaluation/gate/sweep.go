@@ -113,6 +113,10 @@ type SweepReport struct {
 	Bounds []string `json:"bounds"`
 	// Restore is the restore that ended the sweep, nil when the sweep refused to start.
 	Restore *Restore `json:"restore,omitempty"`
+	// Install, in a set sweep (SetSweep), is the install after the restore of the profile with
+	// the chosen setting committed: the render the set's next sweep starts from. Nil outside a
+	// set sweep, or when it stopped before the install.
+	Install *Restore `json:"install,omitempty"`
 	// Err is why the sweep stopped before it chose, empty when it chose.
 	Err string `json:"err,omitempty"`
 }
@@ -690,6 +694,13 @@ func WriteSweepSummary(w io.Writer, rep *SweepReport) error {
 		fmt.Fprintf(&b, "stopped: %s\n", rep.Err)
 	}
 	writeRestore(&b, rep.Restore)
+	if res := rep.Install; res != nil {
+		if res.Verified {
+			fmt.Fprintf(&b, "installed: the profile committed with %s at its chosen setting, sha256 %s, installed and verified; every model of the set serves at its committed setting\n", rep.Model, res.SHA256)
+		} else {
+			fmt.Fprintf(&b, "INSTALL FAILED: %s; the committed render is sha256 %s, the installed file %s\n", res.Err, res.SHA256, cmp.Or(res.Installed, "unread"))
+		}
+	}
 	_, err := io.WriteString(w, b.String())
 	return err
 }
