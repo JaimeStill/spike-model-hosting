@@ -651,6 +651,8 @@ slices 7/11 committed · standards — · spec — · editor —
 - screen (r2): the pool survey and the profile sketches land in screen as a paper document, with the model shapes evaluate must support; profile entries, downloads and admission runs wait for candidates.
 - screen (r2, architect): any open model licence is accepted: Apache-2.0, MIT, OpenMDW-1.1, the NVIDIA Open Model licences, the LFM Open License 1.0, the Llama 3.1 and 4 Community licences, and the Gemma Terms of Use; the pool's seven licence-pending models are admissible, and the omni profile (Nemotron 3 Nano Omni with EmbeddingGemma 2) is a real option. Supersedes round 2's rec of no more licences beyond Apache-2.0, MIT and OpenMDW-1.1.
 - screen (r2): a model fine-tuned from a Chinese-origin base takes its base's origin, so voyage-4-nano, harrier-oss-v1-0.6b and jina-embeddings-v5 are excluded; STANDARDS gains the line.
+- screen (escalation, architect): a set's models are swept in role order (agent, vision, audio, embedding), each against the Ns already chosen and the unswept models at their committed settings, so the agent, whose N is the sessions the set supports, takes the headroom first. Prompted by gemma-4-E4B, swept alone, choosing N = 16 at 2824 MiB free, 8 MiB over the floor. Rejected sweeping each against the committed settings and cutting back in proportion.
+- screen (escalation, architect): vision, audio and embedding take the N their own sweep holds, not capped at the agent's N: applications call those roles directly, not only inside agent sessions.
 
 ## Pending edits
 
