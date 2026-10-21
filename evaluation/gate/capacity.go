@@ -89,18 +89,20 @@ func (r *Runner) capAt(ctx context.Context, c *client, role string) capRun {
 		// An embedding stream sends batch after batch; three rounds each keep the N in flight
 		// long enough for the footprint to read the pool while they are.
 		cfg.Rounds = 3
+		_, document := r.embedPrompts(r.Model)
 		for i := range slots {
 			k := i % len(capacityInputs)
 			inputs := slices.Concat(capacityInputs[k:], capacityInputs[:k])
 			cfg.Embed = append(cfg.Embed, concurrent.EmbedStream{
-				Name: fmt.Sprintf("embedding-%d", i+1), Embedder: embedder{c, r.Model}, Inputs: inputs,
+				Name: fmt.Sprintf("embedding-%d", i+1), Embedder: embedder{c, r.Model, document}, Inputs: inputs,
 			})
 		}
 	} else {
 		rec = &recorder{c: c, model: r.Model, role: role, media: r.Media, asr: r.asrPrompt(r.Model), agentic: role == RoleAgent}
 		cfg.Chat = []concurrent.ChatStream{{Name: role, Chatter: rec, Workers: slots}}
 		if e := r.Set.Roles.Embedding; e != "" {
-			cfg.Embed = []concurrent.EmbedStream{{Name: "embedding", Embedder: embedder{c, e}, Inputs: capacityInputs}}
+			_, document := r.embedPrompts(e)
+			cfg.Embed = []concurrent.EmbedStream{{Name: "embedding", Embedder: embedder{c, e, document}, Inputs: capacityInputs}}
 		}
 	}
 
@@ -166,8 +168,9 @@ func (r *Runner) capAt(ctx context.Context, c *client, role string) capRun {
 		checks = append(checks, slowest("image answer at N", role, "s", 1, r.Floors.Vision.ImageAnswerS, loaded,
 			"fitness's timed image question, N at once, the slowest of them"))
 	case RoleEmbedding:
+		query, _ := r.embedPrompts(r.Model)
 		checks = append(checks, slowest("query 32 at N", role, "ms", 1000, r.Floors.Embedding.Query32MS, loaded,
-			"a 32-token query, N at once, the slowest of them"))
+			queryDetail(query, "fitness's timed query, N at once, the slowest of them, each")))
 	}
 
 	out := capRun{rec: rec, loaded: loaded}
@@ -205,16 +208,18 @@ func atN(ctx context.Context, n int, send func(context.Context) (time.Duration, 
 	return out
 }
 
-// queriesAtN cuts n distinct 32-token queries for the model, then embeds them at once, one a
-// request, timing each embedding alone, as fitness times its one query.
+// queriesAtN cuts n distinct 32-token queries for the model, each after its query prompt
+// (embedPrompts), then embeds them at once, one a request, timing each embedding alone, as
+// fitness times its one query.
 func (r *Runner) queriesAtN(ctx context.Context, c *client, n int) []timed {
+	query, _ := r.embedPrompts(r.Model)
 	queries := make([]string, n)
 	for i := range queries {
 		q, err := c.fitText(ctx, r.Model, queryTokens)
 		if err != nil {
 			return []timed{{err: fmt.Errorf("cutting query %d: %w", i+1, err)}}
 		}
-		queries[i] = q
+		queries[i] = query + q
 	}
 	var next atomic.Int64
 	return atN(ctx, n, func(ctx context.Context) (time.Duration, error) {
@@ -443,14 +448,21 @@ func (rc *recorder) floor(name, unit string, slots int, floor float64, value fun
 	return ch
 }
 
-// embedder is an embedding stream's consumer.
+// embedder is an embedding stream's consumer. Its inputs are documents, each sent after the
+// model's document prompt (embedPrompts), batched and alone alike, so the tolerance compares one
+// served form of each.
 type embedder struct {
-	c     *client
-	model string
+	c        *client
+	model    string
+	document string
 }
 
-// Embed embeds inputs in one request.
+// Embed embeds inputs in one request, each after the document prompt.
 func (e embedder) Embed(ctx context.Context, inputs []string) ([][]float32, error) {
-	got, err := e.c.embed(ctx, e.model, inputs)
+	prefixed := make([]string, len(inputs))
+	for i, in := range inputs {
+		prefixed[i] = e.document + in
+	}
+	got, err := e.c.embed(ctx, e.model, prefixed)
 	return got.Vectors, err
 }

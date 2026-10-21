@@ -30,7 +30,9 @@
 //     llama.cpp's timings or the client's clock, and judges the pool at the warmed peak, the idle
 //     reading beside it. The audio clip goes as the quality stage's ASR task sends one: the model's
 //     ASR prompt, from the profile, first, the clip after, at temperature 0 with reasoning off, the
-//     request capacity's audio streams send too.
+//     request capacity's audio streams send too. Embeddings go as the MTEB encoder sends them:
+//     the smoke sentence and the 32-token query (32 tokens of content) after the model's query
+//     prompt, the throughput batch after its document prompt, from the profile.
 //   - Capacity puts N requests in flight on the model per role, N its slots from the profile
 //     (Runner.slotsOf), through the concurrent package's run, and judges each of the N against
 //     the role's floor at N: the agent's streams in the agentic shape (an 8192-token prompt, 512
@@ -277,5 +279,6 @@
 //   - Media are the image and audio clip the stages send, the probe's (LoadMedia); WAVSeconds
 //     is a clip's length. The ASR prompt fitness, capacity and the set stage send with the clip,
 //     and UV.ASR passes asr_quality.py, is the profile's (profile.Prompts.ASR), its one source;
-//     so are the embedding prompts UV.Task passes mteb_quality.py (profile.Prompts.Embedding).
+//     so are the embedding prompts UV.Task passes mteb_quality.py (profile.Prompts.Embedding),
+//     whose query and document prompts fitness, capacity and the set stage prefix to theirs.
 package gate

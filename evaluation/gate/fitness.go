@@ -204,11 +204,28 @@ func transcriptionBody(model, prompt string, wav []byte, after string) map[strin
 	return body
 }
 
+// embedPrompts returns the query and document prompts the profile gives model id: its
+// prompts.embedding "query" and "document", MTEB's prompt types, which its encoder applies to a
+// task's queries and corpus where no task-type or compound key names the task (quality's MTEB
+// tasks read the same table). Fitness and capacity prefix them as the encoder does, so a timed
+// embedding is the model's served form of a query or a document, not raw text. Either is empty
+// for a model the profile gives none, whose inputs go as they are.
+func (r *Runner) embedPrompts(id string) (query, document string) {
+	if m := r.Profile.Model(id); m != nil && m.Prompts != nil {
+		return m.Prompts.Embedding["query"], m.Prompts.Embedding["document"]
+	}
+	return "", ""
+}
+
+// fitEmbedding embeds the smoke sentence as a query, the throughput batch as documents, and the
+// timed query as 32 tokens of content after the query prompt (embedPrompts): the prompt's tokens
+// add to the 32, as they do to every query the model serves.
 func (r *Runner) fitEmbedding(ctx context.Context, c *client) []Check {
 	var checks []Check
 	rctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	e, err := c.embed(rctx, r.Model, []string{"The access code is seven four two nine."})
+	query, document := r.embedPrompts(r.Model)
+	e, err := c.embed(rctx, r.Model, []string{query + "The access code is seven four two nine."})
 	if err != nil {
 		checks = append(checks, broken("embedding", RoleEmbedding, err))
 	} else {
@@ -225,6 +242,7 @@ func (r *Runner) fitEmbedding(ctx context.Context, c *client) []Check {
 		if inputs[i], err = c.fitText(rctx, r.Model, embedInputTokens); err != nil {
 			break
 		}
+		inputs[i] = document + inputs[i]
 	}
 	if err == nil {
 		e, err = c.embed(rctx, r.Model, inputs)
@@ -243,12 +261,23 @@ func (r *Runner) fitEmbedding(ctx context.Context, c *client) []Check {
 
 	q, err := c.fitText(rctx, r.Model, queryTokens)
 	if err == nil {
-		e, err = c.embed(rctx, r.Model, []string{q})
+		e, err = c.embed(rctx, r.Model, []string{query + q})
 	}
 	if err != nil {
 		return append(checks, broken("query 32", RoleEmbedding, err))
 	}
-	return append(checks, measure("query 32", RoleEmbedding, float64(e.Wall.Microseconds())/1000, "ms", AtMost, r.Floors.Embedding.Query32MS))
+	ch := measure("query 32", RoleEmbedding, float64(e.Wall.Microseconds())/1000, "ms", AtMost, r.Floors.Embedding.Query32MS)
+	ch.Detail = queryDetail(query, "one query")
+	return append(checks, ch)
+}
+
+// queryDetail says what a timed query held: 32 tokens of content, after the query prompt when
+// the model has one. what names the requests timed.
+func queryDetail(query, what string) string {
+	if query == "" {
+		return fmt.Sprintf("%s of %d tokens, no query prompt", what, queryTokens)
+	}
+	return fmt.Sprintf("%s of %d tokens of content after the query prompt %q", what, queryTokens, query)
 }
 
 // alphanumeric lowercases s and keeps only its letters and digits.

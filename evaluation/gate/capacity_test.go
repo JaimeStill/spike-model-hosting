@@ -106,6 +106,52 @@ func TestCapacityContextExhausted(t *testing.T) {
 	}
 }
 
+// TestEmbeddingPrompts shows fitness and capacity send the embedding model's inputs as its
+// encoder does, in the profile's prompts: the smoke sentence and each timed query after the
+// query prompt, each query 32 tokens of content after it (the fake's tokens are words), and the
+// throughput batch and capacity's streams after the document prompt; the timed checks say so.
+// Each class is counted, so one sent without its prompt is missing from its count.
+func TestEmbeddingPrompts(t *testing.T) {
+	h := newHarness(t, embedding)
+	prompts := h.runner.Profile.Model(embedding).Prompts.Embedding
+	query, document := prompts["query"], prompts["document"]
+	if query == "" || document == "" {
+		t.Fatalf("set A's embedding model has query %q, document %q; want both", query, document)
+	}
+	rep := h.run(t, "", nil)
+	if s := rep.Stage(gate.StageCapacity); s.Status != gate.StatusPass {
+		t.Fatalf("capacity %s; want pass\n%+v", s.Status, s.Checks)
+	}
+
+	// The warm-up's and the set stage's load inputs go without a prompt: they load, not time.
+	var smoke, queries, documents, streams int
+	for _, in := range h.router.embedded {
+		switch {
+		case in == query+"The access code is seven four two nine.":
+			smoke++
+		case strings.HasPrefix(in, query+"Run "):
+			if n := len(strings.Fields(strings.TrimPrefix(in, query))); n != 32 {
+				t.Errorf("timed query %q holds %d tokens after its prompt; want 32", in, n)
+			}
+			queries++
+		case strings.HasPrefix(in, document+"Run "):
+			documents++
+		case strings.HasPrefix(in, document):
+			streams++
+		}
+	}
+	slots := h.runner.Profile.Model(embedding).Slots
+	if smoke != 1 || queries != 1+slots || documents < 16 || streams == 0 {
+		t.Errorf("%d smoke, %d timed queries, %d throughput documents, %d stream documents; want 1, %d, 16 or more, some",
+			smoke, queries, documents, streams, 1+slots)
+	}
+	for stage, name := range map[string]string{gate.StageFitness: "query 32", gate.StageCapacity: "query 32 at N"} {
+		if c := check(t, rep, stage, gate.RoleEmbedding, name); !strings.Contains(c.Detail, fmt.Sprintf("32 tokens of content after the query prompt %q", query)) {
+			t.Errorf("%s's %s detail %q; want it to name the 32 tokens after the query prompt", stage, name, c.Detail)
+		}
+	}
+}
+
 // TestSetStageAtOwnSlots shows a set run's stages run each model at its own slots, from its
 // profile entry: each suite that keeps requests in flight, in the quality stage and the set
 // stage's phases alike, is given its model's slots as --slots (the ASR task, one clip at a time,

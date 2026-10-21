@@ -75,6 +75,8 @@ type fakeRouter struct {
 	images  []string
 	longest map[string]int
 	widest  map[string]int
+	// embedded are the embedding inputs seen, in order, as sent: each after any prompt.
+	embedded []string
 
 	// presets, when set, is the router's presets file: GET /models?reload=1 reads it again,
 	// unloading each loaded model whose section changed since it loaded, and a load takes its
@@ -418,8 +420,19 @@ func (f *fakeRouter) embeddings(body map[string]any, reply func(any)) {
 			inputs = append(inputs, s.(string))
 		}
 	}
-	if len(inputs) == 1 && len(strings.Fields(inputs[0])) == 32 {
-		f.timed()
+	f.mu.Lock()
+	f.embedded = append(f.embedded, inputs...)
+	f.mu.Unlock()
+	// A timed query is 32 words of content, counted after its query prompt (set A's ends in
+	// "query: ") where it has one.
+	if len(inputs) == 1 {
+		content := inputs[0]
+		if i := strings.LastIndex(content, "query: "); i >= 0 {
+			content = content[i+len("query: "):]
+		}
+		if len(strings.Fields(content)) == 32 {
+			f.timed()
+		}
 	}
 	var data []map[string]any
 	tokens := 0

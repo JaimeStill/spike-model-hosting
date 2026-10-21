@@ -547,7 +547,8 @@ func (r *Runner) cross(ctx context.Context, c *client, roles []assignment, done 
 	for _, a := range roles {
 		res.roles = append(res.roles, a.role)
 		if a.role == RoleEmbedding {
-			cfg.Embed = append(cfg.Embed, concurrent.EmbedStream{Name: a.role, Embedder: embedder{c, a.model}, Inputs: capacityInputs})
+			_, document := r.embedPrompts(a.model)
+			cfg.Embed = append(cfg.Embed, concurrent.EmbedStream{Name: a.role, Embedder: embedder{c, a.model, document}, Inputs: capacityInputs})
 			continue
 		}
 		cfg.Chat = append(cfg.Chat, concurrent.ChatStream{
