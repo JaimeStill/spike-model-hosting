@@ -173,10 +173,11 @@ func TestRenderPresets(t *testing.T) {
 // slots since screen's slice 2) compares as the same value. The differences allowed are
 // load-on-startup = true and hf-repo = the section's name on each of set A's sections, and
 // mtmd-batch-max-tokens on a model that caps its image batch (the vision model's, from
-// evaluation's slice 8), which the profile renders and the pinned copy lacks, and parallel and c
-// on a model whose slots and c evaluate's sweep chose (screen's slice 8). Every other set's
-// model renders without load-on-startup and is left out of the comparison: the pinned copy
-// predates the candidates.
+// evaluation's slice 8), which the profile renders and the pinned copy lacks. Parallel and c are
+// compared too, sweep or no sweep: set A runs at the preset's values again, so a future sweep
+// that commits other values fails here on purpose, and the pinned copy (or this test) is updated
+// deliberately with it. Every other set's model renders without load-on-startup and is left out
+// of the comparison: the pinned copy predates the candidates.
 func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 	p, err := profile.Load(strixHalo)
 	if err != nil {
@@ -233,19 +234,9 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 			t.Errorf("[%s]: in %s, not rendered", name, pinned)
 			continue
 		}
-		// A model whose slots and c evaluate's sweep chose (its slots_reason ends with the paragraph
-		// the sweep writes, "Swept: <N> slots, chosen by evaluate sweep ...") runs at its own, not the
-		// pinned preset's. A "Swept: " paragraph that records a sweep the startup set doesn't run at
-		// (set A's since the redirect of 2026-10-21) exempts nothing.
-		swept := false
-		if m := p.Model(name); m != nil && strings.Contains(m.SlotsReason, "\n\nSwept: ") &&
-			strings.Contains(m.SlotsReason, " slots, chosen by evaluate sweep on ") {
-			swept = true
-		}
 		for key, w := range wantKeys {
 			g, ok := gotKeys[key]
 			switch {
-			case swept && (key == "parallel" || key == "c"):
 			case !ok:
 				t.Errorf("[%s] %s: in %s, not rendered", name, key, pinned)
 			case !sameValue(g, w):
