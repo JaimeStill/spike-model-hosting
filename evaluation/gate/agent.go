@@ -43,16 +43,18 @@ const ConformK = 5
 // then its verdict, agent-conform.
 func AgentCheck(tierName string) string { return "agent-" + tierName }
 
-// Agent runs one BFCL tier on a router's agent model, the tier list at list, and leaves Inspect
-// AI's JSON log in out (ReadTier). A bar, a floor, stops the tier early once its pass rate
-// can't reach it (pass_stop.py's PassStop); nil runs the whole tier.
+// Agent runs one BFCL tier on a router's agent model, the tier list at list, slots requests in
+// flight (the model's profile slots, Runner.slotsOf), and leaves Inspect AI's JSON log in out
+// (ReadTier). A bar, a floor, stops the tier early once its pass rate can't reach it
+// (pass_stop.py's PassStop); nil runs the whole tier.
 type Agent interface {
-	Agent(ctx context.Context, router, model, tierName, list, out string, bar *float64) error
+	Agent(ctx context.Context, router, model, tierName, list, out string, slots int, bar *float64) error
 }
 
-// Agent runs the tier through agent_quality.py eval, and fails when uv does.
-func (u UV) Agent(ctx context.Context, router, model, tierName, list, out string, bar *float64) error {
-	args := []string{"eval", "--router", router, "--model", model, "--tier", tierName, "--list", list, "--output", out}
+// Agent runs the tier through agent_quality.py eval, slots as its --slots, and fails when uv does.
+func (u UV) Agent(ctx context.Context, router, model, tierName, list, out string, slots int, bar *float64) error {
+	args := []string{"eval", "--router", router, "--model", model, "--tier", tierName, "--list", list, "--output", out,
+		"--slots", strconv.Itoa(slots)}
 	if bar != nil {
 		args = append(args, "--bar", strconv.FormatFloat(*bar, 'g', -1, 64))
 	}
@@ -67,22 +69,24 @@ type Conform interface {
 	Run(ctx context.Context, plan passk.Plan) (passk.Result, error)
 }
 
-// agentTiers runs the agent role's tiers on t's model in order, and stops at the first that
-// fails.
+// agentTiers runs the agent role's tiers on t's model in order, each reused from the index when
+// the run may reuse its passed record (unit), and stops at the first that fails. A full run
+// reuses the screen's harness fit, which runs whole in a screen.
 func (r *Runner) agentTiers(ctx context.Context, rep *Report, t target) []Check {
 	var checks []Check
 	for _, at := range AgentTiers {
-		var tierChecks []Check
-		if at.Name == ConformTier {
-			tierChecks = r.conformTier(ctx, rep, at)
-		} else {
-			tierChecks = []Check{r.bfclTier(ctx, t, at)}
-		}
-		checks = append(checks, tierChecks...)
-		for _, c := range tierChecks {
-			if !c.Passed {
-				return checks
+		tierChecks := r.unit(t, RoleAgent, AgentCheck(at.Name), func() []Check {
+			switch {
+			case at.Name == ConformTier && t.full:
+				return reusedConform(t)
+			case at.Name == ConformTier:
+				return r.conformTier(ctx, rep, t, at)
 			}
+			return []Check{r.bfclTier(ctx, t, at)}
+		})
+		checks = append(checks, tierChecks...)
+		if !passed(tierChecks) {
+			return checks
 		}
 		if ctx.Err() != nil {
 			return checks
@@ -93,11 +97,13 @@ func (r *Runner) agentTiers(ctx context.Context, rep *Report, t target) []Check 
 
 // bfclTier runs one BFCL tier on t's model into t's agent/<tier>, and, when t is judged, judges it;
 // otherwise it runs whole and is recorded, passed. Its accuracy is judged against its floor, by
-// check name (agent-<tier>), under [bars]; the floor also stops it early (its screening fifth, then
-// a 95% Wilson upper bound on the pass rate under the floor); without one it runs whole and its
-// accuracy is recorded. The check records the samples run and passed, their model requests, their
-// working time, the wall time, the data's commit, the task's inspect_evals version and Inspect's
-// release.
+// check name (agent-<tier>), under [bars]; in a screen the floor also stops it early on either side
+// (its screening fifth, then the 95% Wilson upper bound on the pass rate under the floor, failed,
+// or the lower bound at or over it, passed); without one it runs whole and its accuracy is
+// recorded. A full run reuses the screen's record of a tier it ran whole, and runs the rest of one
+// it stopped, from agent/<tier>/rest, judging the whole list. The check records the samples run
+// and passed, their model requests, their working time, the wall time, the data's commit, the
+// task's inspect_evals version and Inspect's release.
 func (r *Runner) bfclTier(ctx context.Context, tg target, t AgentTier) Check {
 	name := AgentCheck(t.Name)
 	if r.Agent == nil || tg.dir == "" || r.Tiers == "" {
@@ -111,11 +117,25 @@ func (r *Runner) bfclTier(ctx context.Context, tg target, t AgentTier) Check {
 	case hasBar:
 		floor = &bar.Value
 	}
+	var screen Check
+	if tg.full {
+		c, ok := tg.screenCheck(RoleAgent, name)
+		switch {
+		case !ok || !c.Passed:
+			return broken(name, RoleAgent, errNoScreen(name))
+		case c.Stop == nil:
+			return reused(c)
+		}
+		screen = c
+	}
 	dir := filepath.Join(tg.dir, "agent", t.Name)
 	out := filepath.Join(dir, "logs")
-	// A rerun into the same run directory (a resumed run) must not read the last run's logs.
-	if err := os.RemoveAll(dir); err != nil {
-		return broken(name, RoleAgent, err)
+	// A rerun into the same run directory (a resumed run) must not read the last run's logs; a
+	// full run reads the screen's.
+	if !tg.full {
+		if err := os.RemoveAll(dir); err != nil {
+			return broken(name, RoleAgent, err)
+		}
 	}
 	listPath := filepath.Join(r.Tiers, name+".txt")
 	list, err := tier.ReadListFile(listPath)
@@ -123,15 +143,24 @@ func (r *Runner) bfclTier(ctx context.Context, tg target, t AgentTier) Check {
 		return broken(name, RoleAgent, err)
 	}
 	began := time.Now()
-	err = r.Agent.Agent(ctx, r.Router, tg.model, t.Name, listPath, out, floor)
-	wall := time.Since(began).Seconds()
 	var res TierResult
-	if err == nil {
-		res, err = ReadTier(out)
+	if tg.full {
+		var screenOut string
+		if screenOut, err = tg.screenDir(screen, filepath.Join("agent", t.Name, "logs")); err == nil {
+			res, err = r.restTier(t.Name, list, screenOut, filepath.Join(dir, restDir), func(restList, restOut string) error {
+				return r.Agent.Agent(ctx, r.Router, tg.model, t.Name, restList, restOut, r.slotsOf(tg.model), nil)
+			})
+		}
+	} else {
+		err = r.Agent.Agent(ctx, r.Router, tg.model, t.Name, listPath, out, r.slotsOf(tg.model), floor)
+		if err == nil {
+			res, err = ReadTier(out)
+		}
+		if err == nil {
+			err = res.matches(t.Name, &list)
+		}
 	}
-	if err == nil {
-		err = res.matches(t.Name, &list)
-	}
+	wall := time.Since(began).Seconds() + screen.Values["wall_s"]
 	if err != nil {
 		ch := broken(name, RoleAgent, err)
 		ch.Values = map[string]float64{"wall_s": wall}
@@ -140,14 +169,15 @@ func (r *Runner) bfclTier(ctx context.Context, tg target, t AgentTier) Check {
 
 	score, passes, n := res.Score(), res.Passes(), len(res.IDs)
 	notes := []string{fmt.Sprintf("tier %d", t.Tier), fmt.Sprintf("%d of %d samples, %d passed, %d model requests", n, len(list.IDs), passes, res.Requests)}
-	ch, judged := judgeTier(tg, name, RoleAgent, score, "accuracy", bar, hasBar, len(res.Stopped) > 0, n, res.StopReason)
+	ch, judged := judgeTier(tg, name, RoleAgent, score, "accuracy", bar, hasBar, tierStop(res, len(list.IDs)))
 	notes = append(notes, judged)
 	ch.Values = map[string]float64{
 		"wall_s": wall, "working_s": res.WorkingS, "requests": float64(res.Requests),
 		"samples": float64(n), "passes": float64(passes), "tier": float64(t.Tier),
 	}
-	if res.Upper != nil {
-		ch.Values["pass_rate_upper_bound"] = *res.Upper
+	boundValues(ch.Values, res)
+	if tg.full {
+		notes = append(notes, continued(ch.Values, screen))
 	}
 	notes = append(notes, "the router's defaults, parallel tool calls allowed", "dataset "+res.Dataset,
 		"inspect_evals "+res.InspectEvals+" "+strings.Join(res.Tasks, ", "), "inspect "+res.Inspect)
@@ -168,7 +198,7 @@ const ConformReport = "report.md"
 // recorded, never failing on its own; the tier's verdict, agent-conform, fails only when no
 // harness fits. Every model of the set must be loaded, since the capabilities send images and
 // audio to the set's other models.
-func (r *Runner) conformTier(ctx context.Context, rep *Report, t AgentTier) []Check {
+func (r *Runner) conformTier(ctx context.Context, rep *Report, tg target, t AgentTier) []Check {
 	name := AgentCheck(ConformTier)
 	if r.Conform == nil || r.Dir == "" {
 		return []Check{broken(name, RoleAgent, errors.New("the runner has no conform runner or run directory"))}
@@ -186,14 +216,14 @@ func (r *Runner) conformTier(ctx context.Context, rep *Report, t AgentTier) []Ch
 		Router: r.Router, Roles: r.Set.Roles, K: ConformK, Harnesses: passk.Harnesses,
 		Wire: filepath.Join(dir, "wire"), Drop: true,
 	}
-	if m := r.model(); m != nil {
+	if m := r.Profile.Model(tg.model); m != nil {
 		plan.Reasoning = m.Consumers
 	}
 	began := time.Now()
 	res, err := r.Conform.Run(ctx, plan)
 	wall := time.Since(began).Seconds()
 	if err == nil {
-		err = writeConform(filepath.Join(dir, ConformReport), res, rep)
+		err = writeConform(filepath.Join(dir, ConformReport), res, rep, tg.model)
 	}
 	if err != nil {
 		ch := broken(name, RoleAgent, err)
@@ -214,7 +244,7 @@ func (r *Runner) conformTier(ctx context.Context, rep *Report, t AgentTier) []Ch
 	verdict := measure(name, RoleAgent, float64(len(fit)), "harnesses fit", AtLeast, 1)
 	verdict.Values = map[string]float64{"wall_s": wall, "tier": float64(t.Tier), "harnesses": float64(len(res.Fits))}
 	verdict.Detail = fmt.Sprintf("tier %d; harness fit at pass^%d, model %s on %s; fit: %s; does not fit: %s",
-		t.Tier, ConformK, rep.Model, rep.Build, orNone(fit), orNone(unfit))
+		t.Tier, ConformK, tg.model, rep.Build, orNone(fit), orNone(unfit))
 	return append(checks, verdict)
 }
 
@@ -257,7 +287,7 @@ func harnessFit(f passk.Fit, wall time.Duration, tierN int) Check {
 // writeConform writes the conform tier's table to path: the model and build it ran on, each
 // harness's cells and fit, each harness's verdict and wall time, and why each trial that didn't
 // pass didn't.
-func writeConform(path string, res passk.Result, rep *Report) error {
+func writeConform(path string, res passk.Result, rep *Report, model string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
@@ -270,7 +300,7 @@ func writeConform(path string, res passk.Result, rep *Report) error {
 		walls = append(walls, fmt.Sprintf("%s %s", fit.Row.Consumer, res.Wall[fit.Row.Consumer].Round(time.Second)))
 	}
 	_, err = fmt.Fprintf(f, "harness fit, conform pass^%d: model %s, build %s, set %s; %s (%s)\n\n",
-		ConformK, rep.Model, rep.Build, rep.Set, res.Elapsed.Round(time.Second), strings.Join(walls, ", "))
+		ConformK, model, rep.Build, rep.Set, res.Elapsed.Round(time.Second), strings.Join(walls, ", "))
 	if err == nil {
 		err = passk.WriteTable(f, res.Fits)
 	}
@@ -292,4 +322,22 @@ func orNone(names []string) string {
 		return "none"
 	}
 	return strings.Join(names, ", ")
+}
+
+// reusedConform returns the screen's harness fit records, each harness's and the tier's
+// verdict, as a full run's: harness fit runs whole in a screen.
+func reusedConform(t target) []Check {
+	prefix := AgentCheck(ConformTier)
+	var out []Check
+	if t.screen != nil {
+		for _, c := range t.screen.Checks {
+			if c.Role == RoleAgent && (c.Name == prefix || strings.HasPrefix(c.Name, prefix+"-")) {
+				out = append(out, reused(c))
+			}
+		}
+	}
+	if len(out) == 0 || out[len(out)-1].Name != prefix || !out[len(out)-1].Passed {
+		return []Check{broken(prefix, RoleAgent, errNoScreen(prefix))}
+	}
+	return out
 }

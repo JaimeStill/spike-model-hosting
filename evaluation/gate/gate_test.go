@@ -37,13 +37,12 @@ type harness struct {
 	runner    *gate.Runner
 }
 
-// newHarness returns a runner for model in set A (testdata/profile.toml) against a fake router
-// with set A loaded, the
-// test floors (testdata/floors.toml), a pool with 3333MiB free, as set A left it idle on b11669, no bars, a fake uv
-// that answers each MTEB task, ASR set, vision tier, BFCL tier and τ2 domain with its recorded
-// result, a fake conform run in which Pi fits and Claude Code and OpenCode drop at their first
-// trial, and a fake GuideLLM that answers every cell with a recorded one; the architect isn't at
-// hand to restart the router.
+// newHarness returns a runner for model in set A (testdata/profile.toml) against a fake router with
+// set A loaded, the test floors (testdata/floors.toml), a pool with 3333MiB free, as set A left it
+// idle on b11669, no bars, a fake uv that answers each MTEB task, ASR set, vision tier, BFCL tier
+// and τ2 domain with its recorded result, a fake conform run in which Pi fits and Claude Code and
+// OpenCode drop at their first trial, and a fake GuideLLM that answers every cell with a recorded
+// one; the architect isn't at hand to restart the router.
 func newHarness(t *testing.T, model string) *harness {
 	t.Helper()
 	p, err := profile.Load(strixHalo)
@@ -76,6 +75,7 @@ func newHarness(t *testing.T, model string) *harness {
 		Media: gate.Media{PNG: []byte("png"), WAV: []byte("wav"), AudioSeconds: 6},
 		MTEB:  uv, ASR: uv, Vision: uv, Agent: uv, Dir: t.TempDir(), Tiers: tiers,
 		Conform: h.conform, Tau2: uv, Grid: h.guidellm.runner(), PollEvery: 2 * time.Millisecond,
+		Peaks: uv, Settle: time.Millisecond,
 	}
 	return h
 }
@@ -116,9 +116,21 @@ func check(t *testing.T, rep *gate.Report, stage, role, name string) gate.Check 
 
 func equal(a, b []string) bool { return strings.Join(a, "|") == strings.Join(b, "|") }
 
+// units returns s with its role's units' checks alone: a screen's quality stage without its
+// concurrent pass's two gates, no crossed answer and peak pool free, which judge no role.
+func units(s *gate.StageResult) *gate.StageResult {
+	if s == nil {
+		return nil
+	}
+	out := *s
+	out.Checks = slices.DeleteFunc(slices.Clone(s.Checks), func(c gate.Check) bool { return c.Role == "" })
+	return &out
+}
+
 // TestRunAgentPasses runs gpt-oss-120b, set A's agent, through every stage.
 func TestRunAgentPasses(t *testing.T) {
 	h := newHarness(t, gptOSS)
+	h.runner.Full = true
 	rep := h.run(t, "", nil)
 	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) {
@@ -141,6 +153,7 @@ func TestRunOtherRoles(t *testing.T) {
 	for model, role := range map[string]string{gemma26B: gate.RoleVision, gemmaE4B: gate.RoleAudio, embedding: gate.RoleEmbedding} {
 		t.Run(role, func(t *testing.T) {
 			h := newHarness(t, model)
+			h.runner.Full = true
 			rep := h.run(t, "", nil)
 			if !rep.Passed || !equal(rep.Roles, []string{role}) {
 				t.Errorf("passed %v roles %q; want passed, %s\n%+v", rep.Passed, rep.Roles, role, rep.Stages)
@@ -222,7 +235,7 @@ func TestRunRefusesUnloadedModel(t *testing.T) {
 // room: admission and fitness are reused, not rerun.
 func TestRunResumes(t *testing.T) {
 	h := newHarness(t, gptOSS)
-	h.footprint.free = []int{3333, 2500} // idle, then under the floor at the peak
+	h.footprint.free = []int{3333, 3333, 2500} // idle, warmed, then under the floor at capacity's peak
 	first := h.run(t, "", nil)
 	if first.Stage(gate.StageCapacity).Status != gate.StatusFail {
 		t.Fatalf("first run %q; want capacity failed", statuses(first))
@@ -234,7 +247,7 @@ func TestRunResumes(t *testing.T) {
 	h.footprint.free, h.footprint.n = []int{3333}, 0
 	toolCalls := h.router.count("messages")
 	rep := h.run(t, gate.StageCapacity, first)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set not run", "deep not run"}
 	if got := statuses(rep); !equal(got, want) || !rep.Passed || rep.From != gate.StageCapacity {
 		t.Fatalf("resumed run %q, passed %v, from %q; want %q, passed, from capacity", got, rep.Passed, rep.From, want)
 	}
@@ -276,24 +289,32 @@ func TestFloors(t *testing.T) {
 		{"prefill fails", gptOSS, gate.StageFitness, gate.RoleAgent, "prefill 8k", func(h *harness) { h.router.prefill = 400 }, false},
 		{"ttft passes", gptOSS, gate.StageFitness, gate.RoleAgent, "ttft 8k", func(*harness) {}, true},
 		{"ttft fails", gptOSS, gate.StageFitness, gate.RoleAgent, "ttft 8k", func(h *harness) { h.runner.Floors.Agent.TTFT8kS = tiny }, false},
-		{"4-stream decode passes", gptOSS, gate.StageCapacity, gate.RoleAgent, "4-stream decode", func(h *harness) { h.router.decode = 21 }, true},
-		{"4-stream decode fails", gptOSS, gate.StageCapacity, gate.RoleAgent, "4-stream decode", func(h *harness) {
+		{"decode at N passes", gptOSS, gate.StageCapacity, gate.RoleAgent, "decode at N", func(h *harness) { h.router.decode = 21 }, true},
+		{"decode at N fails", gptOSS, gate.StageCapacity, gate.RoleAgent, "decode at N", func(h *harness) {
 			h.router.decode = 21
-			h.runner.Floors.Agent.Stream4DecodeTokS = 22
+			h.runner.Floors.Agent.StreamDecodeTokS = 22
 		}, false},
 		{"image answer passes", gemma26B, gate.StageFitness, gate.RoleVision, "image answer", func(*harness) {}, true},
 		{"image answer fails", gemma26B, gate.StageFitness, gate.RoleVision, "image answer", func(h *harness) { h.runner.Floors.Vision.ImageAnswerS = tiny }, false},
+		{"image answer at N passes", gemma26B, gate.StageCapacity, gate.RoleVision, "image answer at N", func(*harness) {}, true},
+		{"image answer at N fails", gemma26B, gate.StageCapacity, gate.RoleVision, "image answer at N", func(h *harness) {
+			h.router.slowTimed, h.runner.Floors.Vision.ImageAnswerS = 200*time.Millisecond, 0.1
+		}, false},
 		{"rtfx passes", gemmaE4B, gate.StageFitness, gate.RoleAudio, "rtfx", func(*harness) {}, true},
 		{"rtfx fails", gemmaE4B, gate.StageFitness, gate.RoleAudio, "rtfx", func(h *harness) { h.runner.Floors.Audio.RTFx = huge }, false},
-		{"4-stream rtfx passes", gemmaE4B, gate.StageCapacity, gate.RoleAudio, "4-stream rtfx", func(*harness) {}, true},
-		{"4-stream rtfx fails", gemmaE4B, gate.StageCapacity, gate.RoleAudio, "4-stream rtfx", func(h *harness) { h.runner.Floors.Audio.Stream4RTFx = huge }, false},
+		{"rtfx at N passes", gemmaE4B, gate.StageCapacity, gate.RoleAudio, "rtfx at N", func(*harness) {}, true},
+		{"rtfx at N fails", gemmaE4B, gate.StageCapacity, gate.RoleAudio, "rtfx at N", func(h *harness) { h.runner.Floors.Audio.StreamRTFx = huge }, false},
 		{"throughput passes", embedding, gate.StageFitness, gate.RoleEmbedding, "throughput", func(*harness) {}, true},
 		{"throughput fails", embedding, gate.StageFitness, gate.RoleEmbedding, "throughput", func(h *harness) { h.runner.Floors.Embedding.ThroughputTokS = huge }, false},
 		{"query passes", embedding, gate.StageFitness, gate.RoleEmbedding, "query 32", func(*harness) {}, true},
 		{"query fails", embedding, gate.StageFitness, gate.RoleEmbedding, "query 32", func(h *harness) { h.runner.Floors.Embedding.Query32MS = tiny }, false},
-		{"idle pool passes", gptOSS, gate.StageFitness, "", "idle pool free", func(*harness) {}, true},
-		{"idle pool fails", gptOSS, gate.StageFitness, "", "idle pool free", func(h *harness) { h.footprint.free = []int{2700} }, false},
-		{"peak pool fails", embedding, gate.StageCapacity, gate.RoleEmbedding, "peak pool free", func(h *harness) { h.footprint.free = []int{3333, 2700} }, false},
+		{"query at N passes", embedding, gate.StageCapacity, gate.RoleEmbedding, "query 32 at N", func(*harness) {}, true},
+		{"query at N fails", embedding, gate.StageCapacity, gate.RoleEmbedding, "query 32 at N", func(h *harness) {
+			h.router.slowTimed, h.runner.Floors.Embedding.Query32MS = 200*time.Millisecond, 100
+		}, false},
+		{"warmed pool passes", gptOSS, gate.StageFitness, "", "warmed pool free", func(*harness) {}, true},
+		{"warmed pool fails", gptOSS, gate.StageFitness, "", "warmed pool free", func(h *harness) { h.footprint.free = []int{3333, 2700} }, false},
+		{"peak pool fails", embedding, gate.StageCapacity, gate.RoleEmbedding, "peak pool free", func(h *harness) { h.footprint.free = []int{3333, 3333, 2700} }, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -314,18 +335,21 @@ func TestFloors(t *testing.T) {
 	}
 }
 
-// TestTranscriptionRequest shows fitness's timed transcription and capacity's are one shape, the
-// quality stage's ASR task's: the card's prompt, ASRPrompt, first and the clip after it, at
-// temperature 0, with reasoning and the prompt cache off; capacity's carries its nonce request
-// after the clip. TestQualityAudio shows the ASR task is given the same prompt.
+// TestTranscriptionRequest shows the warm-up's transcription, fitness's timed one and capacity's
+// are one shape, the quality stage's ASR task's: the model's ASR prompt, read from the profile,
+// first and the clip after it, at temperature 0, with reasoning and the prompt cache off;
+// capacity's carries its nonce request after the clip. TestQualityAudio shows the ASR task is given
+// the same prompt.
 func TestTranscriptionRequest(t *testing.T) {
-	prompt := gate.ASRPrompt
-
 	h := newHarness(t, gemmaE4B)
+	// A changed prompt in the profile is the one every request sends.
+	const prompt = "Transcribe this clip, as the profile says."
+	h.runner.Profile.Model(gemmaE4B).Prompts.ASR = prompt
 	h.run(t, "", nil)
-	// The set stage's crossing probe sends capacity's request too, a round at a time.
-	if len(h.router.audio) < 1+4+1 {
-		t.Fatalf("%d audio requests; want fitness's one, capacity's 4 and the set stage's probe", len(h.router.audio))
+	// The set stage's crossing probe sends capacity's request too, a round at a time; the warm-up's
+	// longest clip goes first, as fitness's does.
+	if len(h.router.audio) < 1+1+4+1 {
+		t.Fatalf("%d audio requests; want the warm-up's one, fitness's one, capacity's 4 and the set stage's probe", len(h.router.audio))
 	}
 	for i, body := range h.router.audio {
 		kwargs, _ := body["chat_template_kwargs"].(map[string]any)
@@ -337,7 +361,7 @@ func TestTranscriptionRequest(t *testing.T) {
 		}
 		parts := body["messages"].([]any)[0].(map[string]any)["content"].([]any)
 		want := 2
-		if i > 0 {
+		if i > 1 {
 			want = 3
 		}
 		if len(parts) != want {
@@ -347,7 +371,7 @@ func TestTranscriptionRequest(t *testing.T) {
 		if first["type"] != "text" || first["text"] != prompt || second["type"] != "input_audio" {
 			t.Errorf("request %d: parts %v, %v; want the text %q, then the clip", i, first["type"], second["type"], prompt)
 		}
-		if i > 0 && !fakeNonce.MatchString(parts[2].(map[string]any)["text"].(string)) {
+		if i > 1 && !fakeNonce.MatchString(parts[2].(map[string]any)["text"].(string)) {
 			t.Errorf("request %d: the part after the clip %v; want the nonce request", i, parts[2])
 		}
 	}
@@ -416,6 +440,7 @@ func TestAdmissionOrigin(t *testing.T) {
 // summarizes it.
 func TestReport(t *testing.T) {
 	h := newHarness(t, gptOSS)
+	h.runner.Full = true
 	rep := h.run(t, "", nil)
 	state := t.TempDir()
 	dir := gate.RunDir(state, rep.Model, rep.Started)
@@ -433,7 +458,8 @@ func TestReport(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.Build != "b11669-620d2225c" || got.Set != "a" || got.Model != gptOSS || !equal(got.Roles, []string{gate.RoleAgent}) ||
-		got.Reached != gate.StageDeep || !got.Passed || got.HostClass != "strix-halo" || got.Router != h.router.srv.URL {
+		got.Reached != gate.StageDeep || !got.Passed || got.HostClass != "strix-halo" || got.Router != h.router.srv.URL ||
+		got.Mode != gate.ModeFull || !got.Finalist || got.Screened == nil {
 		t.Errorf("report header %+v", got)
 	}
 	for _, s := range got.Stages {
@@ -459,7 +485,7 @@ func TestReport(t *testing.T) {
 	if err := gate.WriteSummary(&sum, got); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"build b11669-620d2225c, set a, roles agent", "reached deep: passed",
+	for _, want := range []string{"build b11669-620d2225c, set a, roles agent", "reached deep: passed", "full run of a finalist, continuing its screen of ",
 		"ok   agent decode: 50 tok/s, floor >= 20", "ok   agent agent-tau2-airline: 0.5 pass^1, no floor", "ceiling: decode 50.0 tok/s of 92.5"} {
 		if !strings.Contains(sum.String(), want) {
 			t.Errorf("summary lacks %q:\n%s", want, sum.String())
@@ -472,14 +498,14 @@ func TestReport(t *testing.T) {
 func TestLoadFloors(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "floors.toml")
-	text := "[pool]\nfree_mib = 1\n[agent]\ndecode_tok_s = 2\nprefill_tok_s = 3\nttft_8k_s = 4\nstream4_decode_tok_s = 5\n" +
-		"[vision]\nimage_answer_s = 6\n[audio]\nrtfx = 7\nstream4_rtfx = 8\n[embedding]\nthroughput_tok_s = 9\nquery32_ms = 10\n"
+	text := "[pool]\nfree_mib = 1\n[agent]\ndecode_tok_s = 2\nprefill_tok_s = 3\nttft_8k_s = 4\nstream_decode_tok_s = 5\n" +
+		"[vision]\nimage_answer_s = 6\n[audio]\nrtfx = 7\nstream_rtfx = 8\n[embedding]\nthroughput_tok_s = 9\nquery32_ms = 10\n"
 	if err := os.WriteFile(p, []byte(text), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	f, err := gate.LoadFloors(p)
-	got := []float64{f.Pool.FreeMiB, f.Agent.DecodeTokS, f.Agent.PrefillTokS, f.Agent.TTFT8kS, f.Agent.Stream4DecodeTokS,
-		f.Vision.ImageAnswerS, f.Audio.RTFx, f.Audio.Stream4RTFx, f.Embedding.ThroughputTokS, f.Embedding.Query32MS}
+	got := []float64{f.Pool.FreeMiB, f.Agent.DecodeTokS, f.Agent.PrefillTokS, f.Agent.TTFT8kS, f.Agent.StreamDecodeTokS,
+		f.Vision.ImageAnswerS, f.Audio.RTFx, f.Audio.StreamRTFx, f.Embedding.ThroughputTokS, f.Embedding.Query32MS}
 	if err != nil || !slices.Equal(got, []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}) {
 		t.Errorf("LoadFloors = %v, %v; want 1 to 10, each floor by its key", got, err)
 	}

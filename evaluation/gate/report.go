@@ -35,6 +35,16 @@ type Check struct {
 	Values map[string]float64 `json:"values,omitempty"`
 	Detail string             `json:"detail,omitempty"`
 	Passed bool               `json:"passed"`
+	// Model is the model a set run's check judges, in a stage it runs model by model (admission,
+	// fitness, capacity, deep); empty in a model run, whose report names its model.
+	Model string `json:"model,omitempty"`
+	// Stop is a sampled tier's early stop in a screen, the side and bound that ended it; nil
+	// for a tier that ran its whole list.
+	Stop *Stop `json:"stop,omitempty"`
+	// ReusedFrom names the run directory, under the state root's evaluate/, of the run that
+	// measured a check this run reused from the results index (Index); empty for a check
+	// measured in this run, or taken from the run it resumes or continues.
+	ReusedFrom string `json:"reused_from,omitempty"`
 }
 
 // measure returns a check of measured against floor by op.
@@ -103,7 +113,14 @@ type Report struct {
 	Model   string    `json:"model"`
 	Roles   []string  `json:"roles"`
 	Started time.Time `json:"started"`
-	// From is the stage a resumed run started at, empty for a run from the start.
+	// Mode is the run's: ModeScreen or ModeFull. Finalist says the model, or the set run's models,
+	// passed every gate of a screen: a passed screen, or a full run, which continues one.
+	Mode     string `json:"mode"`
+	Finalist bool   `json:"finalist"`
+	// Screened is when the screen a full run continues started, nil for a screen.
+	Screened *time.Time `json:"screened,omitempty"`
+	// From is the stage a resumed run started at, empty for a run from the start or a full run
+	// continuing its screen.
 	From string `json:"from,omitempty"`
 	// Reached is the last stage that ran; Passed, whether every stage that ran passed.
 	Reached string        `json:"reached"`
@@ -111,6 +128,27 @@ type Report struct {
 	Stages  []StageResult `json:"stages"`
 	// Ceiling is nil when the run measured no decode, or the profile lacks the figures.
 	Ceiling *Ceiling `json:"ceiling,omitempty"`
+	// Warm is the run's reload and warm-up, nil for a run that stopped before it.
+	Warm *Warm `json:"warm,omitempty"`
+	// Keys are the keys the run's results are indexed by: each of the set's models', the set's
+	// and the method's; nil for a run with no index.
+	Keys *Keys `json:"keys,omitempty"`
+	// Sessions is a set run's statement of the concurrent agent sessions the set supports on its
+	// host; nil for a model run, or a set that assigns no agent model.
+	Sessions *Sessions `json:"sessions,omitempty"`
+}
+
+// Sessions is the concurrent agent sessions a set supports on its host: its agent model's N, the
+// slots its profile gives it, each a session in the agentic shape that capacity judged at N. The
+// set stage confirms it when it passes with every model of the set at its own slots, which a set
+// run's set stage runs (every role's tier 1 at once, each suite at its model's slots).
+type Sessions struct {
+	// Supported is the agent model's slots; Model, the set's agent model.
+	Supported int    `json:"supported"`
+	Model     string `json:"model"`
+	// Confirmed says the run's set stage passed; Basis says what confirmed it or why it isn't.
+	Confirmed bool   `json:"confirmed"`
+	Basis     string `json:"basis"`
 }
 
 // Stage returns the report's result for the stage named name, or nil.
@@ -202,6 +240,34 @@ func WriteSummary(w io.Writer, r *Report) error {
 	}
 	fmt.Fprintf(&b, "%s on %s, build %s, set %s, roles %s\n", subject, r.Router, r.Build, r.Set, strings.Join(r.Roles, ", "))
 	fmt.Fprintf(&b, "reached %s: %s\n", r.Reached, verdict)
+	switch {
+	case r.Mode == ModeFull && r.Screened != nil:
+		fmt.Fprintf(&b, "full run of a finalist, continuing its screen of %s\n", r.Screened.Format(time.RFC3339))
+	case r.Mode == ModeFull:
+		fmt.Fprintln(&b, "full run of a finalist")
+	case r.Mode == ModeScreen && r.Finalist:
+		fmt.Fprintln(&b, "screen: passed every gate, a finalist; its full run adds the rest of each tier, the set stage and the deep stage")
+	case r.Mode == ModeScreen:
+		fmt.Fprintln(&b, "screen: no finalist")
+	}
+	if w := r.Warm; w != nil {
+		line := fmt.Sprintf("reload %.0fs", w.ReloadS)
+		if w.Reused {
+			line = "the resumed run's reload"
+		}
+		for _, p := range []struct {
+			name string
+			p    *Pool
+		}{{"idle", w.Idle}, {"warmed peak", w.Peak}} {
+			if p.p != nil {
+				line += fmt.Sprintf(", %s %d MiB free", p.name, p.p.FreeMiB())
+				if ram := p.p.RAM; ram != nil {
+					line += fmt.Sprintf(" (system RAM %d MiB used, %d available)", ram.UsedMiB, ram.AvailableMiB)
+				}
+			}
+		}
+		fmt.Fprintln(&b, line)
+	}
 	for _, s := range r.Stages {
 		line := fmt.Sprintf("%-9s %-9s", s.Name, s.Status)
 		if s.Status == StatusPass || s.Status == StatusFail {
@@ -209,6 +275,14 @@ func WriteSummary(w io.Writer, r *Report) error {
 		}
 		if s.Reused {
 			line += " (reused)"
+		}
+		if from := reusedFrom(s.Checks); len(from) > 0 {
+			n := len(slices.DeleteFunc(slices.Clone(s.Checks), func(c Check) bool { return c.ReusedFrom == "" }))
+			if n == len(s.Checks) {
+				line += " (reused from " + strings.Join(from, ", ") + ")"
+			} else {
+				line += fmt.Sprintf(" (%d of %d checks reused from %s)", n, len(s.Checks), strings.Join(from, ", "))
+			}
 		}
 		if s.Reason != "" {
 			line += "  " + s.Reason
@@ -223,6 +297,9 @@ func WriteSummary(w io.Writer, r *Report) error {
 			if c.Role != "" {
 				name = c.Role + " " + name
 			}
+			if c.Model != "" {
+				name = c.Model + ": " + name
+			}
 			fmt.Fprintf(&b, "  %s %s", mark, name)
 			switch {
 			case c.Measured != nil && c.Floor != nil:
@@ -233,8 +310,18 @@ func WriteSummary(w io.Writer, r *Report) error {
 			if c.Detail != "" {
 				fmt.Fprintf(&b, " (%s)", c.Detail)
 			}
+			if c.ReusedFrom != "" {
+				fmt.Fprintf(&b, " [reused from %s]", c.ReusedFrom)
+			}
 			b.WriteString("\n")
 		}
+	}
+	if s := r.Sessions; s != nil {
+		state := "confirmed"
+		if !s.Confirmed {
+			state = "not confirmed"
+		}
+		fmt.Fprintf(&b, "sessions supported: %d, %s's slots; %s: %s\n", s.Supported, s.Model, state, s.Basis)
 	}
 	if c := r.Ceiling; c != nil {
 		fmt.Fprintf(&b, "ceiling: decode %.1f tok/s of %.1f (%.0f GB/s over %.2f GB a token): %.0f%%\n",
@@ -242,6 +329,18 @@ func WriteSummary(w io.Writer, r *Report) error {
 	}
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// reusedFrom returns the runs checks were reused from, each once, sorted.
+func reusedFrom(checks []Check) []string {
+	var runs []string
+	for _, c := range checks {
+		if c.ReusedFrom != "" && !slices.Contains(runs, c.ReusedFrom) {
+			runs = append(runs, c.ReusedFrom)
+		}
+	}
+	slices.Sort(runs)
+	return runs
 }
 
 // num formats v with as many decimals as it needs, up to three.

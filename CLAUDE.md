@@ -10,9 +10,9 @@ from `context/README.md`.
 - **Layout:** one Go module in a mise monorepo. `hosting/` holds the profile, router, swap, and
   probe packages and their commands; `evaluation/` the consumers, instruments, gated stages, and
   Python suites; `devices/<host class>/` each host class's `profile.toml`, runbook (`README.md`),
-  and build log; `docs/` the evaluation approach, the model cards, and, under `docs/findings/`,
-  the measured results; `context/` marathon's files only. Each area's `mise.toml` holds its
-  tasks, run from the root as `mise run //<area>:<task>`.
+  and build log; `docs/` the evaluation approach, the model cards, the model pool (on paper),
+  and, under `docs/findings/`, the measured results; `context/` marathon's files only. Each
+  area's `mise.toml` holds its tasks, run from the root as `mise run //<area>:<task>`.
 - **Check:** `mise run check` (hermetic). The HTTP probes (the `probe` package) run against
   the router `SPIKE_ROUTER_URL` names, as `mise run integration`.
 - **Profiles:** `devices/*/profile.toml` are the host-class profiles; `go run ./hosting/cmd/profile`
@@ -36,16 +36,20 @@ from `context/README.md`.
 - **Consumers and instruments:** `evaluation/mise.consumers.toml` pins them, run from the root as
   `MISE_ENV=consumers mise -C evaluation exec -- <tool>` (mise loads that file only in
   `evaluation/`); their untracked state is under the root's `.state/`.
-- **Evaluation:** `go run ./evaluation/cmd/evaluate -set a -role <role>` takes a model through
-  the stages admission, fitness, capacity, quality, set, and deep, judged by
-  `evaluation/floors.toml` and `evaluation/bars.toml` (set A's two-run baseline); `-set a` alone
-  is a set run, `-from <stage>` resumes. The agent's tier 3 is harness fit: conform pass^5
-  through every pinned harness, one absolute bar. The instruments also run alone as steps
-  (`conform`, `concurrent`, `prefix`, `coldload`; `-h` lists them). Before each run, reload the
-  set over the router's API and set `TMPDIR` to `.state/tmp` (τ2 leaves a database copy per
-  sample). Reports go to `.state/evaluate/`; once findings are committed, run outputs are
-  removed. `docs/evaluation.md` is the method; each package's `doc.go` lists its API.
+- **Evaluation:** `go run ./evaluation/cmd/evaluate -set a -role <role>` screens a model through
+  admission, fitness, capacity, and quality, judged by `evaluation/floors.toml` and
+  `evaluation/bars.toml` (set A's two-run baseline); `-full -run <dir>` continues a finalist's
+  screen through the set and deep stages; `-set a` alone is a set run, `-from <stage>` resumes.
+  The screen, full run, and results index are tested against fakes, not yet proven on a live
+  screen. The agent's tier 3 is harness fit: conform pass^5 through every pinned harness, one
+  absolute bar. The instruments also run alone as steps (`conform`, `concurrent`, `prefix`,
+  `coldload`; `-h` lists them), and `sweep` chooses a model's slots and c through the router's
+  preset file (`-restore` puts the committed render back). evaluate reloads the set before each
+  run; set `TMPDIR` to `.state/tmp` first (τ2 leaves a database copy per sample). Reports go to
+  `.state/evaluate/`, beside `index.json`, the results a rerun reuses (`-fresh` reuses none);
+  once findings are committed, run outputs are removed. `docs/evaluation.md` is the method; each
+  package's `doc.go` lists its API.
 - **Findings:** `docs/findings/baseline.md` (speed, prefix, cold load, set A's scores and bars),
-  `docs/findings/tool-reliability.md` (pass^5 and harness fit), and
-  `docs/findings/memory-budget.md` (the pool); the Framework's builds are in
-  `devices/strix-halo/llama-cpp-builds.md`.
+  `docs/findings/tool-reliability.md` (pass^5 and harness fit),
+  `docs/findings/memory-budget.md` (the pool), and `docs/findings/slots.md` (the sweeps); the
+  Framework's builds are in `devices/strix-halo/llama-cpp-builds.md`.

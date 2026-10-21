@@ -28,12 +28,26 @@ const (
 )
 
 // fitness smokes each role the model takes with the probe's request for it, measures its
-// single-stream floors, and reads the pool idle. Speeds come from llama.cpp's own timings in
+// single-stream floors, and judges the pool at the warmed peak the run's warm-up read
+// (warmedCheck). Speeds come from llama.cpp's own timings in
 // each answer; a time is the client's, from sending to the answer.
+//
+// A set run measures each of the set's models alone, one after another (perModel), and judges the
+// warmed peak once.
 func (r *Runner) fitness(ctx context.Context, rep *Report) []Check {
+	return append(r.perModel(ctx, rep, (*Runner).fitRoles), r.warmedCheck(rep.Warm))
+}
+
+// fitRoles smokes each role the model takes and measures its single-stream floors, reusing a
+// role's passed record from the index when its model's key matches (reusable).
+func (r *Runner) fitRoles(ctx context.Context, rep *Report) []Check {
 	c := &client{base: r.Router, hc: r.HTTP}
 	var checks []Check
 	for _, role := range rep.Roles {
+		if reused, ok := r.reusable(rep.Mode, r.modelEntry(StageFitness, role, "", r.Model)); ok {
+			checks = append(checks, reused...)
+			continue
+		}
 		switch role {
 		case RoleAgent:
 			checks = append(checks, r.fitAgent(ctx, c)...)
@@ -45,18 +59,7 @@ func (r *Runner) fitness(ctx context.Context, rep *Report) []Check {
 			checks = append(checks, r.fitEmbedding(ctx, c)...)
 		}
 	}
-	return append(checks, r.poolCheck(ctx, "idle pool free"))
-}
-
-// poolCheck reads the pool once and judges its free memory against the floor.
-func (r *Runner) poolCheck(ctx context.Context, name string) Check {
-	p, err := r.Footprint.Read(ctx)
-	if err != nil {
-		return broken(name, "", err)
-	}
-	ch := measure(name, "", float64(p.FreeMiB()), "MiB", AtLeast, r.Floors.Pool.FreeMiB)
-	ch.Detail = fmt.Sprintf("%d of %d MiB used", p.UsedMiB, p.TotalMiB)
-	return ch
+	return checks
 }
 
 func (r *Runner) fitAgent(ctx context.Context, c *client) []Check {
@@ -124,13 +127,9 @@ func (r *Runner) fitVision(ctx context.Context, c *client) []Check {
 		checks = append(checks, fact("image", RoleVision, detail, len(missing) == 0))
 	}
 
-	// The timed question is the image, then the question, as a client asks it, with the prompt
-	// cache off so the smoke's image tokens aren't reused.
 	rctx, cancel = context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	comp, err = c.chatUncached(rctx, r.Model, []map[string]any{
-		imagePart(r.Media.PNG), textPart("What shapes are in this image, and what colour is each?"),
-	}, imageAnswerTokens)
+	comp, err = imageQuestion(rctx, c, r.Model, r.Media.PNG)
 	if err != nil {
 		return append(checks, broken("image answer", RoleVision, err))
 	}
@@ -142,10 +141,19 @@ func (r *Runner) fitVision(ctx context.Context, c *client) []Check {
 	return append(checks, ch)
 }
 
+// imageQuestion is the timed image question, fitness's alone and capacity's N at once: the image,
+// then the question, as a client asks it, ~100 tokens out (imageAnswerTokens), with the prompt
+// cache off so an earlier send of the image isn't reused.
+func imageQuestion(ctx context.Context, c *client, model string, png []byte) (completion, error) {
+	return c.chatUncached(ctx, model, []map[string]any{
+		imagePart(png), textPart("What shapes are in this image, and what colour is each?"),
+	}, imageAnswerTokens)
+}
+
 func (r *Runner) fitAudio(ctx context.Context, c *client) []Check {
 	rctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	comp, err := c.complete(rctx, transcriptionBody(r.Model, r.Media.WAV, ""))
+	comp, err := c.complete(rctx, transcriptionBody(r.Model, r.asrPrompt(r.Model), r.Media.WAV, ""))
 	if err != nil {
 		return []Check{broken("transcription", RoleAudio, err), broken("rtfx", RoleAudio, err)}
 	}
@@ -163,28 +171,29 @@ func (r *Runner) fitAudio(ctx context.Context, c *client) []Check {
 	return []Check{smoke, rtfx}
 }
 
-// ASRPrompt is the card's ASR prompt (https://huggingface.co/google/gemma-4-E4B-it, "6. Audio"),
-// the language filled in, without its formatting bullets ("Only output the transcription, with
-// no newlines"; "When transcribing numbers, write the digits"). On a clip of a word or two,
-// gemma-4-E4B reads the bullets back as the transcript: on AMI's 40 shortest tier clips the full
-// prompt scored 165% WER and the sentence alone 47%, and on 40 LibriSpeech test.other utterances
-// both scored 6.3%. The normalizer writes numbers as digits whichever way they come, so the
-// bullets don't bear on the score. This is its one source: fitness and capacity send it, and
-// UV.ASR passes it to the quality stage's ASR task, asr_quality.py, as its --prompt, so every
-// stage that times or scores a transcription asks for one the same way.
-const ASRPrompt = "Transcribe the following speech segment in English into English text."
+// asrPrompt returns the ASR prompt the profile gives model id (profile.Prompts.ASR, with the
+// card it comes from): fitness, capacity and the set stage send it, and UV.ASR passes it to the
+// quality stage's ASR task, asr_quality.py, as its --prompt, so every stage that times or scores
+// a transcription asks for one the same way. It is empty for a model the profile gives none,
+// which a valid profile's sets never assign the audio role.
+func (r *Runner) asrPrompt(id string) string {
+	if m := r.Profile.Model(id); m != nil && m.Prompts != nil {
+		return m.Prompts.ASR
+	}
+	return ""
+}
 
 // transcriptionBody is a timed transcription of wav by model, as fitness and capacity send it
-// and as the quality stage's ASR task does: the card's prompt first and the clip after it (the
-// card's modality order for audio), at temperature 0, with reasoning off (the template's
-// enable_thinking; templates without the switch ignore it) and the prompt cache off (llama.cpp's
-// cache_prompt), so an earlier send of the clip isn't reused. Reasoning off times the
-// transcription, not a reasoning model's thinking first: at the card's temperature 1,
+// and as the quality stage's ASR task does: the model's ASR prompt (asrPrompt) first and the
+// clip after it (the card's modality order for audio), at temperature 0, with reasoning off (the
+// template's enable_thinking; templates without the switch ignore it) and the prompt cache off
+// (llama.cpp's cache_prompt), so an earlier send of the clip isn't reused. Reasoning off times
+// the transcription, not a reasoning model's thinking first: at the card's temperature 1,
 // gemma-4-E4B sometimes reasoned 145-169 tokens before a clip-first "Transcribe this audio
 // clip.", which put fitness's RTFx at 1.2-1.5 against its floor of 5. A non-empty after follows
 // the clip as a text part of its own: capacity's request to repeat its nonce.
-func transcriptionBody(model string, wav []byte, after string) map[string]any {
-	content := []map[string]any{textPart(ASRPrompt), audioPart(wav)}
+func transcriptionBody(model, prompt string, wav []byte, after string) map[string]any {
+	content := []map[string]any{textPart(prompt), audioPart(wav)}
 	if after != "" {
 		content = append(content, textPart(after))
 	}
@@ -195,11 +204,28 @@ func transcriptionBody(model string, wav []byte, after string) map[string]any {
 	return body
 }
 
+// embedPrompts returns the query and document prompts the profile gives model id: its
+// prompts.embedding "query" and "document", MTEB's prompt types, which its encoder applies to a
+// task's queries and corpus where no task-type or compound key names the task (quality's MTEB
+// tasks read the same table). Fitness and capacity prefix them as the encoder does, so a timed
+// embedding is the model's served form of a query or a document, not raw text. Either is empty
+// for a model the profile gives none, whose inputs go as they are.
+func (r *Runner) embedPrompts(id string) (query, document string) {
+	if m := r.Profile.Model(id); m != nil && m.Prompts != nil {
+		return m.Prompts.Embedding["query"], m.Prompts.Embedding["document"]
+	}
+	return "", ""
+}
+
+// fitEmbedding embeds the smoke sentence as a query, the throughput batch as documents, and the
+// timed query as 32 tokens of content after the query prompt (embedPrompts): the prompt's tokens
+// add to the 32, as they do to every query the model serves.
 func (r *Runner) fitEmbedding(ctx context.Context, c *client) []Check {
 	var checks []Check
 	rctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	e, err := c.embed(rctx, r.Model, []string{"The access code is seven four two nine."})
+	query, document := r.embedPrompts(r.Model)
+	e, err := c.embed(rctx, r.Model, []string{query + "The access code is seven four two nine."})
 	if err != nil {
 		checks = append(checks, broken("embedding", RoleEmbedding, err))
 	} else {
@@ -216,6 +242,7 @@ func (r *Runner) fitEmbedding(ctx context.Context, c *client) []Check {
 		if inputs[i], err = c.fitText(rctx, r.Model, embedInputTokens); err != nil {
 			break
 		}
+		inputs[i] = document + inputs[i]
 	}
 	if err == nil {
 		e, err = c.embed(rctx, r.Model, inputs)
@@ -234,12 +261,23 @@ func (r *Runner) fitEmbedding(ctx context.Context, c *client) []Check {
 
 	q, err := c.fitText(rctx, r.Model, queryTokens)
 	if err == nil {
-		e, err = c.embed(rctx, r.Model, []string{q})
+		e, err = c.embed(rctx, r.Model, []string{query + q})
 	}
 	if err != nil {
 		return append(checks, broken("query 32", RoleEmbedding, err))
 	}
-	return append(checks, measure("query 32", RoleEmbedding, float64(e.Wall.Microseconds())/1000, "ms", AtMost, r.Floors.Embedding.Query32MS))
+	ch := measure("query 32", RoleEmbedding, float64(e.Wall.Microseconds())/1000, "ms", AtMost, r.Floors.Embedding.Query32MS)
+	ch.Detail = queryDetail(query, "one query")
+	return append(checks, ch)
+}
+
+// queryDetail says what a timed query held: 32 tokens of content, after the query prompt when
+// the model has one. what names the requests timed.
+func queryDetail(query, what string) string {
+	if query == "" {
+		return fmt.Sprintf("%s of %d tokens, no query prompt", what, queryTokens)
+	}
+	return fmt.Sprintf("%s of %d tokens of content after the query prompt %q", what, queryTokens, query)
 }
 
 // alphanumeric lowercases s and keeps only its letters and digits.

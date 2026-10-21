@@ -2,7 +2,6 @@
 # two roles every set must fill.
 host_class = "strix-halo"
 bind = "tailnet"
-slots = 4
 kv = "unified"
 
 [engine]
@@ -45,6 +44,8 @@ The harness model. c = 131072 is its trained context_length, the ceiling: its KV
 36,864 bytes/token (18 of 36 layers hold a full-attention cache; the rest are 128-token sliding
 windows), 4.5GiB at this c, beside ~59GiB of MXFP4 weights.
 """
+slots = 4
+slots_reason = "4 slots, the evaluation baseline's value."
 
 [models.sampling]
 source = "https://github.com/openai/gpt-oss"
@@ -72,6 +73,8 @@ c = 8192
 c_reason = """
 Text embeddings only, 768-dimension output. c = 8192 is the context window its card states.
 """
+slots = 2
+slots_reason = "2 slots, so the render shows each model's own."
 args_reason = """
 embeddings serves it as an embedding model, mean pooling per its card; b and ub match c.
 """

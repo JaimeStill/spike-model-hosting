@@ -59,11 +59,11 @@ func visionLog(t *testing.T, tierName string) (string, map[string]any) {
 func TestQualityVision(t *testing.T) {
 	h := newHarness(t, gemma26B)
 	rep := h.run(t, "", nil)
-	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set not run", "deep not run"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}
-	q := rep.Stage(gate.StageQuality)
+	q := units(rep.Stage(gate.StageQuality))
 	if len(q.Checks) != len(gate.VisionTiers) {
 		t.Fatalf("%d quality checks; want one a tier, %d", len(q.Checks), len(gate.VisionTiers))
 	}
@@ -118,7 +118,7 @@ func TestQualityVision(t *testing.T) {
 			input = "--image " + filepath.Join(dir, "shapes.png")
 		}
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
-			"/module/evaluation/suites/vision_quality.py eval --router %s --model %s --tier %s --output %s %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
+			"/module/evaluation/suites/vision_quality.py eval --router %s --model %s --tier %s --output %s --slots 4 %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
 			h.router.srv.URL, gemma26B, vt.Name, filepath.Join(dir, "logs"), input)
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)
@@ -141,7 +141,7 @@ func TestQualityVisionBars(t *testing.T) {
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q", got, want)
 	}
-	q := rep.Stage(gate.StageQuality)
+	q := units(rep.Stage(gate.StageQuality))
 	if len(q.Checks) != 2 {
 		t.Fatalf("quality checks %+v; want the probe's and V*Bench's, the stage ended there", q.Checks)
 	}
@@ -151,7 +151,8 @@ func TestQualityVisionBars(t *testing.T) {
 	}
 	r := recordedVision["vstar-stopped"]
 	vstar := q.Checks[1]
-	if vstar.Passed || vstar.Op != gate.AtLeast || *vstar.Floor != 0.99 || !strings.Contains(vstar.Detail, fmt.Sprintf("early stop after %d: the 95%% upper bound", r.samples)) {
+	if vstar.Passed || vstar.Op != gate.AtLeast || *vstar.Floor != 0.99 || !strings.Contains(vstar.Detail, fmt.Sprintf("early stop, failed, after %d of 10: the 95%% upper bound", r.samples)) ||
+		vstar.Stop == nil || vstar.Stop.Side != gate.StopFail || vstar.Stop.Ran != r.samples {
 		t.Errorf("vision-vstar %+v; want stopped early, failed against >= 0.99", vstar)
 	}
 	if _, ok := vstar.Values["pass_rate_upper_bound"]; !ok || vstar.Values["samples"] != float64(r.samples) {
@@ -165,8 +166,8 @@ func TestQualityVisionBars(t *testing.T) {
 	h = newHarness(t, gemma26B)
 	h.runner.Bars = tier.Bars{"vision-docvqa": {Value: 0.1}}
 	rep = h.run(t, "", nil)
-	if c := check(t, rep, gate.StageQuality, gate.RoleVision, "vision-docvqa"); !c.Passed || *c.Floor != 0.1 || !strings.Contains(c.Detail, "early stop: ran in full") {
-		t.Errorf("vision-docvqa %+v; want a pass against >= 0.1, run in full", c)
+	if c := check(t, rep, gate.StageQuality, gate.RoleVision, "vision-docvqa"); !c.Passed || *c.Floor != 0.1 || !strings.Contains(c.Detail, "early stop: undecided") {
+		t.Errorf("vision-docvqa %+v; want a pass against >= 0.1, its whole list run undecided", c)
 	}
 	if !rep.Passed {
 		t.Errorf("run failed; want passed\n%+v", rep.Stages)
@@ -197,7 +198,7 @@ func TestQualityVisionBroken(t *testing.T) {
 				h.runner.Tiers = withExtraID(t, h.runner.Tiers, "vision-docvqa")
 			}
 			rep := h.run(t, "", nil)
-			q := rep.Stage(gate.StageQuality)
+			q := units(rep.Stage(gate.StageQuality))
 			if q.Status != gate.StatusFail {
 				t.Fatalf("quality %+v; want failed", q)
 			}
@@ -238,7 +239,7 @@ func TestQualityVisionProbe(t *testing.T) {
 	h.uv.testdata = dir
 	h.runner.Vision = h.uv.runner()
 	rep := h.run(t, "", nil)
-	q := rep.Stage(gate.StageQuality)
+	q := units(rep.Stage(gate.StageQuality))
 	if q.Status != gate.StatusFail || len(q.Checks) != 1 {
 		t.Fatalf("quality %+v; want failed at the probe, its only check", q)
 	}

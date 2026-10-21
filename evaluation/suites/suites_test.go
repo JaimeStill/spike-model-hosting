@@ -1,8 +1,11 @@
 package suites_test
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/JaimeStill/spike-model-hosting/evaluation/consumers"
@@ -43,5 +46,30 @@ func TestPython(t *testing.T) {
 		"--python", python, "python", "-W", "ignore", "-m", "unittest", "discover", "-p", "test_*.py")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("python tests: %v\n%s\nif uv can't resolve offline, %s", err, out, install)
+	}
+}
+
+// TestNoLogReuse guards, by the scripts' source, that no suite reuses Inspect logs (eval_set,
+// eval_retry) or caches model output (a generate cache, CachePolicy), so a unit evaluate runs is a
+// real rerun and evaluate's results index (package gate) is the only reuse. It reads source, not
+// behavior: a guard against the APIs being taken up, which only a live run could show otherwise.
+// MTEB's result cache is shown off at its call, in test_caches.py.
+func TestNoLogReuse(t *testing.T) {
+	scripts, err := filepath.Glob("*.py")
+	if err != nil || len(scripts) == 0 {
+		t.Fatalf("the suites' scripts: %q, %v", scripts, err)
+	}
+	reuse := regexp.MustCompile(`\beval_set\b|\beval_retry\b|\bCachePolicy\b|\bcache\s*=\s*True\b`)
+	for _, path := range scripts {
+		if strings.HasPrefix(path, "test_") {
+			continue
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m := reuse.FindString(string(b)); m != "" {
+			t.Errorf("%s uses %q: a cache or log reuse of the suite's own", path, m)
+		}
 	}
 }

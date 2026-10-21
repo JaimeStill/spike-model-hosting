@@ -3,7 +3,7 @@ inspect_evals' stock BFCL task, its single-turn or its multi-turn categories.
 
     uv run --project evaluation/suites python evaluation/suites/agent_quality.py eval \
         --router http://framework:8080 --model ggml-org/gpt-oss-120b-GGUF:MXFP4 \
-        --tier bfcl-single --list evaluation/tiers/agent-bfcl-single.txt --output DIR [--bar 0.8]
+        --tier bfcl-single --list evaluation/tiers/agent-bfcl-single.txt --slots 4 --output DIR [--bar 0.8]
 
     uv run --project evaluation/suites python evaluation/suites/agent_quality.py ids --tier bfcl-multi
 
@@ -37,13 +37,16 @@ into INSPECT_EVALS_CACHE_DIR's BFCL/ on first use.
 Generation: the agent model as it is served, at the router's defaults: the card's sampling and
 the template's default reasoning (gpt-oss's medium), since BFCL measures the model as the
 consumers get it; no temperature, reasoning or token limit is set, only parallel tool calls
-allowed (GENERATE). Four requests in flight, the profile's slots; the early stop judges samples
-as they complete.
+allowed (GENERATE). --slots requests in flight, the model's slots (slots.py); the early stop
+judges samples as they complete.
 
 Early stop (pass_stop.py's PassStop, with a bar): the tier's screening fifth runs whole, then,
-before each further sample, the tier stops once the one-sided 95% Wilson upper bound on its pass
-rate is below the bar. A BFCL sample scores 1 or 0, so the pass rate is the tier's accuracy. The
-tier's account of its early stop is written beside the log as early_stop.json.
+before each further sample, the tier stops failed once the one-sided 95% Wilson upper bound on
+its pass rate is below the bar, and passed once the lower bound is at or over it; between the
+two it runs on. A BFCL sample scores 1 or 0, so the pass rate is the tier's accuracy. The tier's
+account of its early stop, the side it stopped on with it, is written beside the log as
+early_stop.json. Without a bar the list runs whole: evaluate's full run sends the samples its
+screen didn't run as a list of their own, with no bar.
 """
 
 import argparse
@@ -59,6 +62,7 @@ from inspect_evals.bfcl import bfcl
 from inspect_evals.bfcl.bfcl import BFCL_GITHUB_COMMIT
 
 from pass_stop import EARLY_STOP_FILE, PassStop, read_list
+from slots import add_slots
 
 # The tiers' categories, as the leaderboard groups them.
 SINGLE_TURN = [
@@ -81,11 +85,10 @@ TIERS = {
 # scored 0/11 with it allowed, as without.
 GENERATE = GenerateConfig(parallel_tool_calls=True)
 
-# The router's slots: the requests a tier keeps in flight.
-SLOTS = 4
 
-
-def main():
+def parser() -> argparse.ArgumentParser:
+    """The command's arguments: ids, or eval with the model's --slots, the requests a tier keeps in
+    flight."""
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     pi = sub.add_parser("ids", help="print every sample ID a tier draws from")
@@ -94,7 +97,12 @@ def main():
     for flag in ("--router", "--model", "--tier", "--list", "--output"):
         pe.add_argument(flag, required=True)
     pe.add_argument("--bar", type=float)
-    a = p.parse_args()
+    add_slots(pe)
+    return p
+
+
+def main():
+    a = parser().parse_args()
 
     if a.tier not in TIERS:
         raise SystemExit(f"no tier {a.tier!r}; the tiers are {', '.join(TIERS)}")
@@ -124,7 +132,7 @@ def main():
     [log] = inspect_eval(
         task, model=model, sample_id=ids, log_dir=a.output, log_format="json",
         metadata={"tier": a.tier, "dataset": dataset},
-        max_connections=SLOTS, max_samples=SLOTS, display="plain",
+        max_connections=a.slots, max_samples=a.slots, display="plain",
     )
     if log.status != "success":
         sys.exit(f"inspect eval {a.tier}: {log.status}: {log.error.message if log.error else ''}")

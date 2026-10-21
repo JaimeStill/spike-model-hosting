@@ -14,7 +14,16 @@ import (
 // it; its origin is judged by STANDARDS (origin); it declares every role the set
 // assigns it; its context is within its card's; the set's memory budget leaves the pool's floor
 // free; and the router's build is at or above the profile's minimum.
-func (r *Runner) admission(_ context.Context, rep *Report) []Check {
+//
+// A set run judges each of the set's models on its own (perModel), then the set's budget and the
+// build once.
+func (r *Runner) admission(ctx context.Context, rep *Report) []Check {
+	return append(r.perModel(ctx, rep, (*Runner).admitModel), r.admitSet(rep)...)
+}
+
+// admitModel is admission's judgement of the model: its profile entry, licence, origin, roles
+// and context.
+func (r *Runner) admitModel(_ context.Context, rep *Report) []Check {
 	m := r.model()
 	if m == nil {
 		return []Check{fact("profile entry", "", "the profile doesn't list "+r.Model, false)}
@@ -40,8 +49,13 @@ func (r *Runner) admission(_ context.Context, rep *Report) []Check {
 	ctxCheck := measure("context", "", float64(m.C), "tokens", AtMost, float64(m.CardContext))
 	ctxCheck.Detail = "the profile's c against the card's context"
 	ctxCheck.Passed = ctxCheck.Passed && m.CardContext > 0
-	checks = append(checks, ctxCheck)
+	return append(checks, ctxCheck)
+}
 
+// admitSet is admission's judgement of the set and the router: the set's memory budget against
+// the pool's floor, and the router's build against the profile's minimum.
+func (r *Runner) admitSet(rep *Report) []Check {
+	var checks []Check
 	b := r.Set.MemoryBudget
 	used, kind := b.MeasuredMiB, "measured at 4 in flight on "+b.Build
 	if used == 0 {

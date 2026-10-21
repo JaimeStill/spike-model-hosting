@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -34,7 +35,7 @@ var Stages = []string{StageAdmission, StageFitness, StageCapacity, StageQuality,
 var ErrNotLoaded = errors.New("model not loaded")
 
 // Runner runs the stages for one model of a profile's set against the router, or, with no Model,
-// the set stage for the set itself: a set run.
+// for every model of the set together: a set run.
 type Runner struct {
 	// Router is the router's root URL; HTTP, the client that reaches it (nil for a default one).
 	Router string
@@ -43,17 +44,17 @@ type Runner struct {
 	Profile *profile.Profile
 	Set     *profile.Set
 	// Model is the model evaluated, by router ID: one the set assigns at least one role. Empty
-	// makes the run a set run, which takes the set stage alone, across every role the set
-	// assigns.
+	// makes the run a set run, which takes every model of the set through the stages, across
+	// every role the set assigns.
 	Model     string
 	Floors    Floors
 	Footprint Footprint
 	Media     Media
 	// SampleEvery spaces the footprint's readings while capacity's requests are in flight, and
-	// while the set stage's tiers run; zero is two seconds.
+	// while a screen's quality tiers or the set stage's tiers run; zero is two seconds.
 	SampleEvery time.Duration
-	// CrossEvery spaces the set stage's rounds of nonce requests over its concurrent phase; zero
-	// is 15 seconds.
+	// CrossEvery spaces the rounds of nonce requests over a screen's quality pass and the set
+	// stage's concurrent phase; zero is 15 seconds.
 	CrossEvery time.Duration
 	// LoadWorkers is how many workers each of the set's other roles sends its load with, one
 	// request after another, in a model run's set stage; zero is one. One worker a role keeps the
@@ -89,8 +90,32 @@ type Runner struct {
 	// Restarts says the architect is at hand to restart the router when the deep stage's cold load
 	// asks; without it, cold load is recorded not run.
 	Restarts bool
-	// PollEvery spaces cold load's polls of /models; zero is 250 milliseconds.
+	// PollEvery spaces cold load's polls of /models; zero is 250 milliseconds. The reload before a
+	// run polls at it too, where zero is the swap package's default.
 	PollEvery time.Duration
+	// Peaks finds the largest image and the longest clip the tier lists send, which the warm-up
+	// before a run sends the vision and audio roles' models (Warm).
+	Peaks Peaks
+	// Settle is the wait after the reload before the idle reading; zero is 30 seconds.
+	Settle time.Duration
+	// Full makes the run a full run, a finalist's: the screen's records, the rest of each
+	// tier, the set stage and the deep stage. Without it the run is a screen, which ends at the
+	// quality stage.
+	Full bool
+	// Index is evaluate's index of passed results: with one, the run reuses each unit whose key
+	// matches a passed entry, and records each unit it passes, for the caller to save. Fresh
+	// reuses nothing, measuring every unit again, and still records. Without an Index, the run
+	// reuses and records nothing.
+	Index *Index
+	Fresh bool
+
+	// screen is the screen a full run continues.
+	screen *Report
+	// keys are the run's keys, read once its build is.
+	keys *Keys
+	// peaks, when not nil, keeps each role's peak media once found, so a sweep, which warms the
+	// set at every step, finds them once.
+	peaks map[string]Peak
 }
 
 // Roles returns the roles the set assigns Model, in the order Roles lists them; for a set run,
@@ -108,31 +133,78 @@ func (r *Runner) Roles() []string {
 // SetSubject is the name a set run's directory takes in place of a model's: set-<name>.
 func SetSubject(set string) string { return "set-" + set }
 
-// setRunReason is why a set run reports the stages before the set stage not run, and
-// setRunAfterReason why it reports the deep stage not run.
+// Why a screen reports the set and deep stages not run.
 const (
-	setRunReason      = "a set run: each role's model takes it in its own run"
-	setRunAfterReason = "a set run takes the set stage alone; each role's model takes the deep stage in its own run"
+	screenSetReason  = "a screen: its quality stage's concurrent pass stands in for the set stage's concurrent phase; the alone figures and slowdowns are the full run's"
+	screenDeepReason = "a screen: the deep stage is a finalist's, in its full run"
 )
 
-// Run runs the stages in order and returns the run's report, stopping at the first stage that
+// Run runs the run's stages in order and returns its report, stopping at the first stage that
 // fails: every later stage is reported not run, naming it. Before any stage it refuses a model
 // the router doesn't list as loaded, with an error wrapping ErrNotLoaded, and reads the router's
 // build.
 //
-// from names the stage to start at; empty starts at admission. A run from a later stage reuses
-// prior's results for every stage before it: prior must be a run of the same model and set in
-// which each of them passed. A run from set also needs prior's quality records of the model's
-// tier 1 units, which its set stage reuses as the alone figure.
+// A run is a screen unless Full is set: admission, fitness and capacity, then the quality stage,
+// every role's tiers at once (quality), the set and deep stages reported not run. A screen that
+// passes every stage makes its model, or its set's models, a finalist (Report.Finalist). A model
+// run's stages are its model's; a set run (no Model) runs admission, fitness, capacity and deep
+// model by model, each model's checks naming it, and the quality stage across every role.
 //
-// A set run (no Model) starts at the set stage, from empty or naming it, and needs no prior: it
-// reports every stage before it not run, since each is a model's, and the deep stage after it,
-// which each model takes in its own run; it refuses the run unless the router lists every model
-// of the set loaded.
+// A full run continues a finalist's screen: prior, when it is one, or else a screen Run takes
+// first, returning that screen's report alone when it isn't a finalist. It reuses the screen's
+// admission, fitness and capacity and its warm-up, continues its quality stage (the rest of each
+// tier the screen stopped), then runs the set stage, alone figures, the concurrent phase and
+// slowdowns, and the deep stage.
+//
+// A run that resumes nothing starts from freshly loaded models (Warm): once admission has
+// passed on paper, and before any stage that sends a request, it reloads the set over the
+// router's API, reads the idle pool, drives each of the set's models to its high-water mark and
+// reads the pool at that warmed peak, which fitness judges against the pool's floor. Such a run
+// refuses unless every model of the set is loaded, since the reload unloads and loads them all;
+// it never loads a model it didn't find loaded. A reload that fails returns the report so far
+// with its error. A resumed or continued run reloads nothing and keeps the warm-up of the run it
+// resumes.
+//
+// from names the stage to start at; empty starts at admission, or a full run at its
+// continuation. A run from a later stage reuses prior's results for every stage before it: prior
+// must be a run of the same model (or set run) and set, and of the same mode, in which each of
+// them passed. A screen starts no later than quality, and a full run resumes only at set or deep.
+// A model's full run from set also needs prior's quality records of the model's tier 1 units,
+// which its set stage reuses as the alone figure.
 func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, error) {
 	if r.HTTP == nil {
 		r.HTTP = &http.Client{}
 	}
+	r.screen = nil
+	if !r.Full {
+		return r.run(ctx, ModeScreen, from, prior)
+	}
+	if from != "" {
+		if i := slices.Index(Stages, from); i >= 0 && i <= slices.Index(Stages, StageQuality) {
+			return nil, fmt.Errorf("a full run resumes only at set or deep; from %s, screen again and continue the screen", from)
+		}
+		return r.run(ctx, ModeFull, from, prior)
+	}
+	screen := prior
+	if screen == nil {
+		rep, err := r.run(ctx, ModeScreen, "", nil)
+		if err != nil || !rep.Finalist {
+			return rep, err
+		}
+		screen = rep
+	}
+	switch {
+	case screen.Mode != ModeScreen:
+		return nil, fmt.Errorf("a full run continues a screen, and the run given is a %s run", cmp.Or(screen.Mode, "pre-screen"))
+	case !screen.Finalist:
+		return nil, fmt.Errorf("the screen of %s reached %s and didn't pass every gate: no finalist, so no full run", cmp.Or(screen.Model, SetSubject(screen.Set)), screen.Reached)
+	}
+	r.screen = screen
+	return r.run(ctx, ModeFull, StageQuality, screen)
+}
+
+// run runs the stages from from (empty for all) in mode, reusing prior's before it.
+func (r *Runner) run(ctx context.Context, mode, from string, prior *Report) (*Report, error) {
 	start := 0
 	if from != "" {
 		start = slices.Index(Stages, from)
@@ -140,44 +212,53 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 			return nil, fmt.Errorf("no stage %q; the stages are %q", from, Stages)
 		}
 	}
-	setRun := r.Model == ""
-	if setRun {
-		if from != "" && from != StageSet {
-			return nil, fmt.Errorf("a set run takes the set stage alone, not from %s", from)
-		}
-		start = slices.Index(Stages, StageSet)
+	if mode == ModeScreen && start > slices.Index(Stages, StageQuality) {
+		return nil, fmt.Errorf("a screen ends at quality; resume from %s in a full run", from)
 	}
+	setRun := r.Model == ""
 	roles := r.Roles()
 	if len(roles) == 0 {
 		return nil, fmt.Errorf("set %s assigns %s no role", r.Set.Name, cmp.Or(r.Model, "any model"))
 	}
-	if err := r.checkLoaded(ctx); err != nil {
+	fresh := start == 0
+	if err := r.checkLoaded(ctx, fresh); err != nil {
 		return nil, err
 	}
 	build, err := router.Build(ctx, r.HTTP, r.Router)
 	if err != nil {
 		return nil, err
 	}
+	r.keys = nil
+	if r.Index != nil {
+		if r.keys, err = r.keysOf(build); err != nil {
+			return nil, err
+		}
+	}
 	rep := &Report{
 		Router: r.Router, Build: build, HostClass: r.Profile.HostClass, Set: r.Set.Name,
-		Model: r.Model, Roles: roles, Started: time.Now().UTC(),
+		Model: r.Model, Roles: roles, Mode: mode, Started: time.Now().UTC(), Keys: r.keys,
 	}
-	switch {
-	case setRun:
-		rep.From = from
-		for _, name := range Stages[:start] {
-			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: setRunReason})
+	defer r.record(rep)
+	if start > 0 {
+		if r.screen != nil {
+			screened := r.screen.Started
+			rep.Screened = &screened
+		} else {
+			rep.From = from
 		}
-	case start > 0:
-		rep.From = from
 		if err := reuse(rep, prior, start); err != nil {
 			return nil, err
 		}
-		// A model run's set stage takes its alone figures from the quality stage, so a run resumed
-		// at it needs them in the run it resumes.
-		if Stages[start] == StageSet {
+		if prior.Warm != nil {
+			w := *prior.Warm
+			w.Reused = true
+			rep.Warm = &w
+		}
+		// A model's full run takes its set stage's alone figures from the quality stage, so a run
+		// resumed at it needs them in the run it resumes.
+		if Stages[start] == StageSet && !setRun {
 			if _, err := qualityTierOne(rep.Stage(StageQuality), roles); err != nil {
-				return nil, fmt.Errorf("can't resume from set: %w, which its set stage reuses as the alone figure; resume from quality", err)
+				return nil, fmt.Errorf("can't resume from set: %w, which its set stage reuses as the alone figure; continue the screen again", err)
 			}
 		}
 	}
@@ -195,14 +276,31 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 		case failed != "":
 			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: failed + " failed"})
 			continue
-		case setRun && name != StageSet:
-			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: setRunAfterReason})
+		case mode == ModeScreen && name == StageSet:
+			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: screenSetReason})
+			continue
+		case mode == ModeScreen && name == StageDeep:
+			rep.Stages = append(rep.Stages, StageResult{Name: name, Status: StatusNotRun, Reason: screenDeepReason})
 			continue
 		}
+		if fresh && rep.Warm == nil && name != StageAdmission {
+			w, err := r.warm(ctx)
+			rep.Warm = w
+			if err != nil {
+				return rep, err
+			}
+		}
 		run := stages[name]
-		r.logf("evaluate: %s %s\n", name, cmp.Or(r.Model, SetSubject(r.Set.Name)))
+		r.logf("evaluate: %s %s (%s)\n", name, cmp.Or(r.Model, SetSubject(r.Set.Name)), mode)
 		began := time.Now()
-		checks := run(ctx, rep)
+		// The set stage is reused whole, under the set's key: every model of the set unchanged.
+		checks, ok := []Check(nil), false
+		if name == StageSet {
+			checks, ok = r.reusable(mode, r.setEntry(StageSet, "", "", cmp.Or(r.Model, SetSubject(r.Set.Name))))
+		}
+		if !ok {
+			checks = run(ctx, rep)
+		}
 		res := StageResult{Name: name, Status: StatusPass, Checks: checks, WallS: time.Since(began).Seconds()}
 		for _, c := range checks {
 			if !c.Passed {
@@ -212,12 +310,70 @@ func (r *Runner) Run(ctx context.Context, from string, prior *Report) (*Report, 
 		rep.Stages = append(rep.Stages, res)
 		rep.Reached = name
 		if err := ctx.Err(); err != nil {
+			// An interrupted run still states what the stages it ran measured.
+			rep.Ceiling, rep.Sessions = r.ceiling(rep), r.sessions(rep)
 			return rep, err
 		}
 	}
 	rep.Passed = failed == ""
+	// A screen that passed every stage makes a finalist; a full run is one's.
+	rep.Finalist = rep.Passed || mode == ModeFull
 	rep.Ceiling = r.ceiling(rep)
+	rep.Sessions = r.sessions(rep)
 	return rep, nil
+}
+
+// sessions states a set run's sessions supported: the set's agent model's slots, confirmed when
+// the run's set stage passed, every model at its own slots. A model run states none: its set
+// stage holds the set's other models at Runner.LoadWorkers, not at their own slots.
+func (r *Runner) sessions(rep *Report) *Sessions {
+	agent := r.Set.Roles.Chat
+	if r.Model != "" || agent == "" {
+		return nil
+	}
+	s := &Sessions{Supported: r.slotsOf(agent), Model: agent}
+	switch set := rep.Stage(StageSet); {
+	case set == nil:
+		s.Basis = "the run didn't reach the set stage"
+	case set.Status == StatusPass:
+		s.Confirmed = true
+		s.Basis = "the set stage passed with every model at its own slots"
+	case set.Status == StatusNotRun:
+		s.Basis = "the set stage didn't run: " + set.Reason
+	default:
+		s.Basis = "the set stage failed"
+	}
+	return s
+}
+
+// perModel runs fn, a stage that judges one model (admission's model checks, fitness, capacity,
+// deep's model parts), for the run: on Model for a model run; for a set run, on each of the set's
+// models in turn, alone, as its own model run would, each check naming its model, and each model's
+// output under the run directory's <Slug(model)>/.
+func (r *Runner) perModel(ctx context.Context, rep *Report, fn func(*Runner, context.Context, *Report) []Check) []Check {
+	if r.Model != "" {
+		return fn(r, ctx, rep)
+	}
+	var checks []Check
+	var seen []string
+	for _, a := range r.assignments() {
+		if slices.Contains(seen, a.model) {
+			continue
+		}
+		seen = append(seen, a.model)
+		sub := *r
+		sub.Model, sub.Dir = a.model, filepath.Join(r.Dir, Slug(a.model))
+		subRep := *rep
+		subRep.Model, subRep.Roles = a.model, sub.Roles()
+		for _, c := range fn(&sub, ctx, &subRep) {
+			c.Model = a.model
+			checks = append(checks, c)
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return checks
 }
 
 // reuse copies prior's results for the stages before Stages[start] into rep.
@@ -227,6 +383,15 @@ func reuse(rep, prior *Report, start int) error {
 	}
 	if prior.Model != rep.Model || prior.Set != rep.Set {
 		return fmt.Errorf("the run to resume is of %s in set %s, not %s in set %s", prior.Model, prior.Set, rep.Model, rep.Set)
+	}
+	// A full run continues a screen (rep.Screened) or resumes a full run; a screen resumes a
+	// screen.
+	want := rep.Mode
+	if rep.Screened != nil {
+		want = ModeScreen
+	}
+	if prior.Mode != want {
+		return fmt.Errorf("the run to resume is a %s run, not a %s", cmp.Or(prior.Mode, "pre-screen"), want)
 	}
 	for _, name := range Stages[:start] {
 		s := prior.Stage(name)
@@ -245,15 +410,15 @@ func reuse(rep, prior *Report, start int) error {
 	return nil
 }
 
-// checkLoaded refuses the run unless the router lists Model loaded, or, for a set run, every
-// model of the set.
-func (r *Runner) checkLoaded(ctx context.Context) error {
+// checkLoaded refuses the run unless the router lists Model loaded, or, for a run that reloads
+// the set first (whole), every model of the set.
+func (r *Runner) checkLoaded(ctx context.Context, whole bool) error {
 	status, err := router.Statuses(ctx, r.HTTP, r.Router)
 	if err != nil {
 		return err
 	}
 	models := []string{r.Model}
-	if r.Model == "" {
+	if whole || r.Model == "" {
 		models = r.Set.Models
 	}
 	for _, m := range models {
@@ -262,7 +427,7 @@ func (r *Runner) checkLoaded(ctx context.Context) error {
 			s = "unlisted"
 		}
 		if s != router.StatusLoaded {
-			return fmt.Errorf("%w: the router lists %s as %s; evaluate never loads a model, so load it (or swap its set in) first",
+			return fmt.Errorf("%w: the router lists %s as %s; evaluate reloads only a set it finds loaded and never loads a model, so load it (or swap its set in) first",
 				ErrNotLoaded, m, s)
 		}
 	}
@@ -278,6 +443,17 @@ func (r *Runner) logf(format string, args ...any) {
 
 // model returns the profile's entry for Model.
 func (r *Runner) model() *profile.Model { return r.Profile.Model(r.Model) }
+
+// slotsOf returns model's slots, from its profile entry: the requests capacity puts in flight on
+// it, and the requests in flight each suite (agent_quality.py, vision_quality.py, mteb_quality.py,
+// tau2_quality.py) keeps on it, given as its --slots, their one source. It is 0 for a model the
+// profile doesn't hold, which the suites refuse.
+func (r *Runner) slotsOf(model string) int {
+	if m := r.Profile.Model(model); m != nil {
+		return m.Slots
+	}
+	return 0
+}
 
 // ceiling compares the run's first measured decode with the model's bandwidth ceiling, or
 // returns nil when the run measured none or the profile lacks a figure it needs.

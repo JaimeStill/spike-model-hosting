@@ -27,6 +27,11 @@ The architecture pages that apply, in the architecture repository:
   build it ran on.
 - A model of Chinese origin is chosen only when no alternative serves, and its entry records why
   (`standards-lab/context/ai-strategy.md`, "Constraint: model origin").
+- A model fine-tuned from a Chinese-origin base takes its base's origin, whoever publishes the
+  fine-tune.
+- Any open model licence is accepted: Apache-2.0, MIT, OpenMDW-1.1, the NVIDIA Open Model
+  licences, the LFM Open License 1.0, the Llama 3.1 and 4 Community licences, and the Gemma
+  Terms of Use.
 - Every document names the exact version of each engine, gateway, and model it describes, as
   of when it is written.
 

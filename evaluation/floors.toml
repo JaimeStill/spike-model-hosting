@@ -2,8 +2,14 @@
 # evaluation/gate). Each is absolute and task-based: what the role's work needs, not a fraction
 # of any model's score. These are initial values; a later decision may tune them.
 
-# The pool, a set's shared memory: at least this much stays free idle (fitness) and at the peak
-# of 4 requests in flight (capacity). Admission judges the set's memory budget by it too.
+# The floors at N: capacity puts N requests in flight on each role model, N the model's slots in
+# its profile, and judges each of them, never their sum: an agent stream and a transcription by
+# the per-stream floors below, an image question and a 32-token query by the floor fitness judges
+# a lone one by. No request of the N may run out of context.
+
+# The pool, a set's shared memory: at least this much stays free at the warmed peak (fitness) and
+# at the peak of each model's N requests in flight (capacity). Admission judges the set's memory
+# budget by it too.
 # 2816 (2.75 GiB) since slice 8: the vision model's working memory grows to a fixed high-water
 # mark under image work, not a leak (docs/findings/memory-budget.md), and set A holds 2968-2991
 # MiB free at that mark; 3072 is the earlier value.
@@ -18,21 +24,23 @@ decode_tok_s = 20.0
 prefill_tok_s = 500.0
 # Time to first token of that 8k-token prompt, seconds, at the client.
 ttft_8k_s = 20.0
-# Decode of each of 4 streams in flight, tokens a second.
-stream4_decode_tok_s = 10.0
+# Decode of each of N agentic streams in flight (an 8192-token prompt, 512 out), tokens a second.
+stream_decode_tok_s = 10.0
 
 [vision]
-# One image question answered, ~100 tokens out, wall seconds at the client.
+# One image question answered, ~100 tokens out, wall seconds at the client: alone (fitness), and
+# each of N in flight (capacity).
 image_answer_s = 10.0
 
 [audio]
 # Transcription speed, audio seconds over wall seconds (RTFx), single stream.
 rtfx = 5.0
-# RTFx of each of 4 transcriptions in flight.
-stream4_rtfx = 1.0
+# RTFx of each of N transcriptions in flight.
+stream_rtfx = 1.0
 
 [embedding]
 # Throughput of one batch, prompt tokens a second at the client.
 throughput_tok_s = 4300.0
-# One 32-token query embedded, wall milliseconds at the client.
+# One 32-token query embedded, wall milliseconds at the client: alone (fitness), and each of N in
+# flight (capacity).
 query32_ms = 250.0

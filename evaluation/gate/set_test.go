@@ -3,6 +3,8 @@ package gate_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -26,23 +28,51 @@ var roleModels = map[string]string{
 	gate.RoleAgent: gptOSS, gate.RoleVision: gemma26B, gate.RoleAudio: gemmaE4B, gate.RoleEmbedding: embedding,
 }
 
-// TestSetRun runs set A's set stage as a set run: every stage before it is reported not run,
-// each role's tier 1 runs on its model alone and then at once, without its bar even where one
-// would fail it, and the stage passes on the pool's floor and no crossed answer.
+// TestSetRun runs set A's full run as a set run, continuing its screen: the set stage runs each
+// role's tier 1 on its model alone and then at once, without its bar even where one would fail it,
+// and passes on the pool's floor and no crossed answer; the deep stage runs each model's part,
+// then cold load once.
 func TestSetRun(t *testing.T) {
 	h := newHarness(t, "")
-	// A bar V*Bench's recorded score falls short of: the quality stage would fail it and stop it early.
+	screen := h.run(t, "", nil)
+	screened := len(h.uv.calls(t))
+	// A bar V*Bench's recorded score falls short of: a screen would fail it and stop it early.
 	h.runner.Bars = tier.Bars{"vision-vstar": {Value: 0.99}}
-	rep := h.run(t, "", nil)
-	want := []string{"admission not run", "fitness not run", "capacity not run", "quality not run", "set pass", "deep not run"}
+	h.runner.Full = true
+	rep := h.run(t, "", screen)
+	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q\n%+v", got, want, rep.Stages)
 	}
-	if rep.Model != "" || !equal(rep.Roles, gate.Roles) || !rep.Passed || rep.Reached != gate.StageSet {
-		t.Errorf("model %q roles %q passed %v reached %q; want a set run of every role, passed at set", rep.Model, rep.Roles, rep.Passed, rep.Reached)
+	if rep.Model != "" || !equal(rep.Roles, gate.Roles) || !rep.Passed || rep.Reached != gate.StageDeep || rep.Mode != gate.ModeFull {
+		t.Errorf("model %q roles %q passed %v reached %q; want a set run's full run of every role, passed", rep.Model, rep.Roles, rep.Passed, rep.Reached)
 	}
-	if r := rep.Stage(gate.StageQuality).Reason; !strings.Contains(r, "set run") {
-		t.Errorf("quality's reason %q; want it to name the set run", r)
+	// Every model's deep part, under its own directory, then cold load once, for the set.
+	var prefixed []string
+	for _, c := range rep.Stage(gate.StageDeep).Checks {
+		if c.Name == "prefix reuse" {
+			prefixed = append(prefixed, c.Model)
+		}
+	}
+	if want := []string{gptOSS, gemma26B, gemmaE4B}; !slices.Equal(slices.Sorted(slices.Values(prefixed)), slices.Sorted(slices.Values(want))) {
+		t.Errorf("prefix reuse checks of %q; want one for each generative model, %q", prefixed, want)
+	}
+	for _, m := range []string{gptOSS, gemma26B, gemmaE4B} {
+		if _, err := os.Stat(filepath.Join(h.runner.Dir, gate.Slug(m), "deep", "grid")); err != nil {
+			t.Errorf("%s's grid: %v", m, err)
+		}
+	}
+	if c := check(t, rep, gate.StageDeep, gate.RoleAgent, gate.Tau2Check("airline")); c.Model != gptOSS {
+		t.Errorf("τ2 airline %+v; want gpt-oss-120b's", c)
+	}
+	n := 0
+	for _, c := range rep.Stage(gate.StageDeep).Checks {
+		if strings.HasPrefix(c.Name, "cold load") {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("%d cold load checks; want one, recorded not run without the architect, once for the set", n)
 	}
 
 	for role, units := range setUnits {
@@ -106,8 +136,8 @@ func TestSetRun(t *testing.T) {
 			}
 		}
 	}
-	if n := len(h.uv.calls(t)); n != 0 {
-		t.Errorf("a set run ran %d quality calls", n)
+	if n := len(h.uv.calls(t)); n != screened {
+		t.Errorf("the full run ran %d quality calls; want none past the screen's, every unit run whole there", n-screened)
 	}
 }
 
@@ -123,12 +153,13 @@ func loads(t *testing.T, rep *gate.Report, workers float64) {
 	}
 }
 
-// TestSetModelRun shows a model's run takes the set stage after quality: the model's tier 1
+// TestSetModelRun shows a model's full run takes the set stage after quality: the model's tier 1
 // runs once, under load from the set's other role models, beside its quality tier 1 as the alone
 // figure, which it never reruns; the other roles run no tier, and their load stops with the
 // model's tiers. It resumes from the set stage.
 func TestSetModelRun(t *testing.T) {
 	h := newHarness(t, gemma26B)
+	h.runner.Full = true
 	first := h.run(t, "", nil)
 	if s := first.Stage(gate.StageSet); s.Status != gate.StatusPass {
 		t.Fatalf("set %s; want pass\n%+v", s.Status, s.Checks)
@@ -235,20 +266,21 @@ func TestSetModelRun(t *testing.T) {
 func TestSetModelRunGates(t *testing.T) {
 	t.Run("pool", func(t *testing.T) {
 		h := newHarness(t, gemma26B)
+		screen := h.run(t, "", nil)
 		var mu sync.Mutex
 		inSet := false
 		h.runner.Footprint = footprintFunc(func() int {
 			mu.Lock()
 			defer mu.Unlock()
-			// The set stage's load and crossing send nonce requests to the other roles' models;
-			// capacity sends them only to the model's.
-			if inSet || h.router.count("capacity true "+gptOSS)+h.router.count("capacity false "+gptOSS) > 0 {
+			// The full run's set stage runs the set/ calls; the screen ran none.
+			if inSet || len(h.uv.setCalls(t)) > 0 {
 				inSet = true
 				return 2700
 			}
 			return 3333
 		})
-		rep := h.run(t, "", nil)
+		h.runner.Full = true
+		rep := h.run(t, "", screen)
 		if s := rep.Stage(gate.StageSet).Status; s != gate.StatusFail || rep.Passed {
 			t.Errorf("set %s, passed %v; want failed", s, rep.Passed)
 		}
@@ -258,6 +290,7 @@ func TestSetModelRunGates(t *testing.T) {
 	})
 	t.Run("load refused", func(t *testing.T) {
 		h := newHarness(t, gemma26B)
+		h.runner.Full = true
 		first := h.run(t, "", nil)
 		h.router.refuse = gemmaE4B
 		rep := h.run(t, gate.StageSet, first)
@@ -271,51 +304,51 @@ func TestSetModelRunGates(t *testing.T) {
 	})
 }
 
-// TestSetGates shows the set stage fails on the pool under its floor while every tier runs at
-// once, on an answer carrying another request's nonce, and on a set model not loaded.
+// TestSetGates shows a screen, whose quality stage takes the set stage's concurrent phase, fails
+// that stage on the pool under its floor while every role's tiers run at once (a set run), and on
+// an answer carrying another request's nonce or on one that carries none, every role needing one
+// checked (a model run of the agent's model, whose capacity reaches only its own model and the
+// embedding model, so that only the pass's rounds reach the others); and a full run's set stage
+// fails on a set model not loaded.
 func TestSetGates(t *testing.T) {
 	t.Run("pool", func(t *testing.T) {
 		h := newHarness(t, "")
-		// Only the crossing probe, in the concurrent phase, sends nonce requests in a set run.
 		h.runner.Footprint = footprintFunc(func() int {
-			if h.router.count("capacity") > 0 {
+			if h.uv.evaluated() {
 				return 2700
 			}
 			return 3333
 		})
 		rep := h.run(t, "", nil)
-		if s := rep.Stage(gate.StageSet).Status; s != gate.StatusFail || rep.Passed {
-			t.Errorf("set %s, passed %v; want failed", s, rep.Passed)
+		if s := rep.Stage(gate.StageQuality).Status; s != gate.StatusFail || rep.Passed || rep.Finalist {
+			t.Errorf("quality %s, passed %v; want failed, no finalist", s, rep.Passed)
 		}
-		if p := check(t, rep, gate.StageSet, "", "peak pool free"); p.Passed || *p.Measured != 2700 {
+		if p := check(t, rep, gate.StageQuality, "", "peak pool free"); p.Passed || *p.Measured != 2700 {
 			t.Errorf("peak pool free %+v; want a failure at 2700", p)
 		}
-		if s := check(t, rep, gate.StageSet, gate.RoleAudio, "tier 1 slowdown"); s.Values["alone_pool_free_min_mib"] != 3333 {
-			t.Errorf("audio's alone pool %v; want 3333, the alone phase's, ungated", s.Values)
-		}
-		if r := rep.Stage(gate.StageDeep).Reason; r != "set failed" {
-			t.Errorf("deep's reason %q; want set failed", r)
+		if r := rep.Stage(gate.StageSet).Reason; r != "quality failed" {
+			t.Errorf("set's reason %q; want quality failed", r)
 		}
 	})
 	t.Run("crossing", func(t *testing.T) {
-		h := newHarness(t, "")
+		h := newHarness(t, gptOSS)
 		h.router.crossed = gemmaE4B
 		rep := h.run(t, "", nil)
-		x := check(t, rep, gate.StageSet, "", "no crossed answer")
+		x := check(t, rep, gate.StageQuality, "", "no crossed answer")
 		if x.Passed || !strings.Contains(x.Detail, "crossed: round 1: audio/w0/r0: the answer carries "+crossedNonce) {
 			t.Errorf("crossing %+v; want a failure naming the audio request and the foreign nonce", x)
 		}
-		if rep.Stage(gate.StageSet).Status != gate.StatusFail {
-			t.Error("the set stage passed a crossed answer")
+		if rep.Stage(gate.StageQuality).Status != gate.StatusFail {
+			t.Error("the screen's quality stage passed a crossed answer")
 		}
 	})
 	t.Run("unanswered", func(t *testing.T) {
 		// An empty answer carries no other request's content: recorded unanswered, not crossed;
 		// but a role with none checked proves nothing, and fails.
-		h := newHarness(t, "")
+		h := newHarness(t, gptOSS)
 		h.router.empty = gemma26B
 		rep := h.run(t, "", nil)
-		x := check(t, rep, gate.StageSet, "", "no crossed answer")
+		x := check(t, rep, gate.StageQuality, "", "no crossed answer")
 		if x.Passed || x.Values["crossed"] != 0 || x.Values["unanswered"] != x.Values["rounds"] ||
 			!strings.Contains(x.Detail, "nothing checked for vision") || !strings.Contains(x.Detail, "vision/w0/r0: the answer's text is empty") {
 			t.Errorf("crossing %+v; want no crossing, every vision answer unanswered, and a failure for nothing checked", x)
@@ -324,10 +357,10 @@ func TestSetGates(t *testing.T) {
 	t.Run("cut off", func(t *testing.T) {
 		// An answer that hit its max_tokens before any nonce carries nothing to cross: recorded
 		// unanswered, naming why, not crossed.
-		h := newHarness(t, "")
+		h := newHarness(t, gptOSS)
 		h.router.cutOff = gemma26B
 		rep := h.run(t, "", nil)
-		x := check(t, rep, gate.StageSet, "", "no crossed answer")
+		x := check(t, rep, gate.StageQuality, "", "no crossed answer")
 		if x.Values["crossed"] != 0 || x.Values["unanswered"] != x.Values["rounds"] ||
 			!strings.Contains(x.Detail, "vision/w0/r0: the answer hit its max_tokens after 10 tokens, with no nonce") {
 			t.Errorf("crossing %+v; want no crossing and every vision answer unanswered as cut off", x)
@@ -335,16 +368,17 @@ func TestSetGates(t *testing.T) {
 	})
 	t.Run("cut off crossed", func(t *testing.T) {
 		// A cut-off answer that carries a nonce not its own is still crossed.
-		h := newHarness(t, "")
+		h := newHarness(t, gptOSS)
 		h.router.cutOff, h.router.crossed = gemma26B, gemma26B
 		rep := h.run(t, "", nil)
-		x := check(t, rep, gate.StageSet, "", "no crossed answer")
+		x := check(t, rep, gate.StageQuality, "", "no crossed answer")
 		if x.Passed || x.Values["crossed"] == 0 || !strings.Contains(x.Detail, "crossed: round 1: vision/w0/r0: the answer carries "+crossedNonce) {
 			t.Errorf("crossing %+v; want a failure naming the cut-off vision answer's foreign nonce", x)
 		}
 	})
 	t.Run("unloaded", func(t *testing.T) {
 		h := newHarness(t, gptOSS)
+		h.runner.Full = true
 		first := h.run(t, "", nil)
 		h.router.status[gemmaE4B] = "unloaded"
 		rep := h.run(t, gate.StageSet, first)
@@ -360,7 +394,7 @@ func TestSetGates(t *testing.T) {
 	t.Run("from", func(t *testing.T) {
 		h := newHarness(t, "")
 		if _, err := h.runner.Run(t.Context(), gate.StageCapacity, nil); err == nil {
-			t.Error("a set run ran from capacity")
+			t.Error("a set run resumed from capacity with no run to resume")
 		}
 	})
 }

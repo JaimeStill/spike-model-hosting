@@ -150,6 +150,23 @@ func TestRouter(t *testing.T) {
 		}
 	})
 
+	// Each model serves its own slots, its section's parallel: /props reports them as
+	// total_slots.
+	t.Run("slots", func(t *testing.T) {
+		for _, id := range set.Models {
+			m := models[id]
+			t.Run(m.ID, func(t *testing.T) {
+				var got struct {
+					TotalSlots int `json:"total_slots"`
+				}
+				r.get(t, "/props?model="+url.QueryEscape(m.ID), &got)
+				if got.TotalSlots != m.Slots {
+					t.Errorf("%s total_slots = %d, want the profile's %d", m.ID, got.TotalSlots, m.Slots)
+				}
+			})
+		}
+	})
+
 	t.Run("chat", func(t *testing.T) {
 		text := r.chat(t, chatModel, "Reply with one word: ready.", 2048)
 		t.Logf("%s: %q", chatModel, text)

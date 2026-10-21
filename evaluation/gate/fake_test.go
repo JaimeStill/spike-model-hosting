@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -42,6 +44,17 @@ type fakeRouter struct {
 	cutOff string
 	// refuse is a model whose chat completions and embeddings fail with a server error.
 	refuse string
+	// slowTimed delays each timed request after the first, fitness's: each image question (the
+	// probe's "What shapes" question) and each lone 32-word embedding, so capacity's N of them at
+	// once answer slower than fitness's one.
+	slowTimed time.Duration
+	timedSeen int
+	// exhaust is a model whose nonce requests fail as llama.cpp's server fails a prompt longer
+	// than its slot's context: 400, exceed_context_size_error.
+	exhaust string
+	// unloadOnToolCall is a model the router lists unloaded from the first tool call on, fitness's
+	// first request, after the run's reload and warm-up.
+	unloadOnToolCall string
 
 	mu       sync.Mutex
 	requests []string
@@ -53,8 +66,35 @@ type fakeRouter struct {
 	words []string
 	// restarting is set while a fake restart has the router down.
 	restarting bool
-	// audio are the chat completions' bodies that carried an audio clip, in order.
-	audio []map[string]any
+	// audio are the chat completions' bodies that carried an audio clip, in order; nonced, the
+	// bodies of the chat completions that carried a nonce, by model.
+	audio  []map[string]any
+	nonced map[string][]map[string]any
+	// images are the image parts' data URLs, in order; longest is each model's longest chat
+	// prompt, and widest each model's largest embedding input, in words (the fake's tokens).
+	images  []string
+	longest map[string]int
+	widest  map[string]int
+	// embedded are the embedding inputs seen, in order, as sent: each after any prompt.
+	embedded []string
+
+	// presets, when set, is the router's presets file: GET /models?reload=1 reads it again,
+	// unloading each loaded model whose section changed since it loaded, and a load takes its
+	// model's section's parallel and c, which GET /props?model= reports as total_slots and
+	// n_ctx. sections are the sections each loaded model runs at; served, its slots and c.
+	presets  string
+	sections map[string]map[string]string
+	served   map[string]gate.Setting
+	// failReload is the GET /models?reload=1, counted from 1, that fails; reloads, those seen.
+	failReload, reloads int
+	// decodeAt, when set, is a nonce request's decode at its model's served slots; slowAt, at
+	// served slots it holds, the decode of the first nonce request served at them, the rest at
+	// decodeAt.
+	decodeAt func(slots int) float64
+	slowAt   map[int]float64
+	slowSeen map[int]bool
+	// exhaustAt says a model's nonce requests run out of context at its served slots.
+	exhaustAt func(model string, slots int) bool
 }
 
 var fakeNonce = regexp.MustCompile(`nonce-[0-9a-f]{16}`)
@@ -63,7 +103,8 @@ var fakeNonce = regexp.MustCompile(`nonce-[0-9a-f]{16}`)
 const crossedNonce = "nonce-0123456789abcdef"
 
 func newFakeRouter(t *testing.T, models ...string) *fakeRouter {
-	f := &fakeRouter{status: map[string]string{}, prefixes: map[string]bool{}, vocab: map[string]int{}, build: "b11669-620d2225c", decode: 50, prefill: 700}
+	f := &fakeRouter{status: map[string]string{}, prefixes: map[string]bool{}, vocab: map[string]int{}, build: "b11669-620d2225c", decode: 50, prefill: 700,
+		longest: map[string]int{}, widest: map[string]int{}, nonced: map[string][]map[string]any{}}
 	for _, m := range models {
 		f.status[m] = "loaded"
 	}
@@ -143,11 +184,24 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		m, _ := body["model"].(string)
+		// A load or unload takes effect at once, and is recorded as "load <model>" or
+		// "unload <model>".
+		if verb, ok := strings.CutPrefix(r.URL.Path, "/models/"); ok && (verb == "load" || verb == "unload") {
+			f.mu.Lock()
+			f.requests = append(f.requests, verb+" "+m)
+			f.status[m] = verb + "ed"
+			if verb == "load" && f.presets != "" {
+				f.apply(m)
+			}
+			f.mu.Unlock()
+			_, _ = w.Write([]byte(`{"success":true}`))
+			return
+		}
 		if r.URL.Query().Get("autoload") != "false" {
 			http.Error(w, "a model-routed request without autoload=false", http.StatusBadRequest)
 			return
 		}
-		m, _ := body["model"].(string)
 		f.mu.Lock()
 		status := f.status[m]
 		f.mu.Unlock()
@@ -163,6 +217,12 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 	reply := func(v any) { _ = json.NewEncoder(w).Encode(v) }
 	switch r.URL.Path {
 	case "/models":
+		if r.URL.Query().Get("reload") == "1" {
+			if err := f.reread(); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
 		f.record("models")
 		if f.down() {
 			http.Error(w, "restarting", http.StatusServiceUnavailable)
@@ -177,9 +237,26 @@ func (f *fakeRouter) serve(w http.ResponseWriter, r *http.Request) {
 		reply(map[string]any{"data": data})
 	case "/props":
 		f.record("props")
-		reply(map[string]any{"build_info": f.build})
+		props := map[string]any{"build_info": f.build}
+		if m := r.URL.Query().Get("model"); m != "" {
+			f.mu.Lock()
+			at, ok := f.served[m]
+			status := f.status[m]
+			f.mu.Unlock()
+			if !ok || status != "loaded" {
+				http.Error(w, "model not loaded: "+m, http.StatusBadRequest)
+				return
+			}
+			props["total_slots"], props["default_generation_settings"] = at.Slots, map[string]any{"n_ctx": at.C}
+		}
+		reply(props)
 	case "/v1/messages":
 		f.record("messages")
+		if f.unloadOnToolCall != "" {
+			f.mu.Lock()
+			f.status[f.unloadOnToolCall] = "unloaded"
+			f.mu.Unlock()
+		}
 		reply(map[string]any{"content": []map[string]any{{"type": "tool_use", "name": "get_weather", "input": map[string]any{"city": "Paris"}}}})
 	case "/metrics":
 		f.metrics(w, r.URL.Query())
@@ -233,10 +310,16 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 				text.WriteString(part["text"].(string))
 			case "image_url":
 				image = true
+				f.mu.Lock()
+				f.images = append(f.images, part["image_url"].(map[string]any)["url"].(string))
+				f.mu.Unlock()
 			case "input_audio":
 				audio = true
 			}
 		}
+	}
+	if strings.Contains(text.String(), "What shapes are in this image") {
+		f.timed()
 	}
 	answer := "ready"
 	switch {
@@ -245,8 +328,20 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 	case audio:
 		answer = "The access code is seven four two nine."
 	}
+	m, _ := body["model"].(string)
 	kind := "chat"
 	if n := fakeNonce.FindString(text.String()); n != "" {
+		f.mu.Lock()
+		f.nonced[m] = append(f.nonced[m], body)
+		slots := f.served[m].Slots
+		f.mu.Unlock()
+		if m == f.exhaust || (f.exhaustAt != nil && f.exhaustAt(m, slots)) {
+			f.record("exhausted " + m)
+			w.WriteHeader(http.StatusBadRequest)
+			reply(map[string]any{"error": map[string]any{"code": 400, "type": "exceed_context_size_error",
+				"message": "the request exceeds the available context size, try increasing it"}})
+			return
+		}
 		if body["model"] == f.crossed {
 			n = crossedNonce
 		}
@@ -267,11 +362,14 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 		f.audio = append(f.audio, body)
 		f.mu.Unlock()
 	}
+	f.mu.Lock()
+	f.longest[m] = max(f.longest[m], len(strings.Fields(text.String())))
+	f.mu.Unlock()
 	stream, _ := body["stream"].(bool)
 	f.record(fmt.Sprintf("%s %v %s", kind, stream, body["model"]))
 	timings := map[string]any{
 		"prompt_n": len(strings.Fields(text.String())), "prompt_per_second": f.prefill,
-		"predicted_n": 10, "predicted_per_second": f.decode,
+		"predicted_n": 10, "predicted_per_second": f.decodeOf(kind == "capacity", m), "prompt_ms": 120.0,
 	}
 	// A long prompt whose start was sent before finds all but its last ten words cached.
 	if words := strings.Fields(text.String()); len(words) > 1000 {
@@ -300,6 +398,17 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 	_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 }
 
+// timed counts a timed request and, after the first, waits slowTimed.
+func (f *fakeRouter) timed() {
+	f.mu.Lock()
+	f.timedSeen++
+	n := f.timedSeen
+	f.mu.Unlock()
+	if n > 1 {
+		time.Sleep(f.slowTimed)
+	}
+}
+
 func (f *fakeRouter) embeddings(body map[string]any, reply func(any)) {
 	f.record("embeddings")
 	var inputs []string
@@ -311,10 +420,28 @@ func (f *fakeRouter) embeddings(body map[string]any, reply func(any)) {
 			inputs = append(inputs, s.(string))
 		}
 	}
+	f.mu.Lock()
+	f.embedded = append(f.embedded, inputs...)
+	f.mu.Unlock()
+	// A timed query is 32 words of content, counted after its query prompt (set A's ends in
+	// "query: ") where it has one.
+	if len(inputs) == 1 {
+		content := inputs[0]
+		if i := strings.LastIndex(content, "query: "); i >= 0 {
+			content = content[i+len("query: "):]
+		}
+		if len(strings.Fields(content)) == 32 {
+			f.timed()
+		}
+	}
 	var data []map[string]any
 	tokens := 0
+	m, _ := body["model"].(string)
 	for i, in := range inputs {
 		tokens += len(strings.Fields(in))
+		f.mu.Lock()
+		f.widest[m] = max(f.widest[m], len(strings.Fields(in)))
+		f.mu.Unlock()
 		h := fnv.New64a()
 		_, _ = h.Write([]byte(in))
 		rng := rand.New(rand.NewPCG(h.Sum64(), 0))
@@ -328,13 +455,17 @@ func (f *fakeRouter) embeddings(body map[string]any, reply func(any)) {
 }
 
 // fakeFootprint returns the pool's free memory from free, one reading after another, the last
-// repeated, out of a 98304MiB pool.
+// repeated, out of a 98304MiB pool, with system RAM beside it: rssMiB for each of set A's models
+// and 1000 more of RAM used for each MiB less free.
 type fakeFootprint struct {
 	mu   sync.Mutex
 	free []int
 	n    int
 	err  error
 }
+
+// rssMiB is every model process's resident memory in fakeFootprint's readings.
+const rssMiB = 400
 
 func (f *fakeFootprint) Read(context.Context) (gate.Pool, error) {
 	f.mu.Lock()
@@ -344,7 +475,12 @@ func (f *fakeFootprint) Read(context.Context) (gate.Pool, error) {
 	}
 	free := f.free[min(f.n, len(f.free)-1)]
 	f.n++
-	return gate.Pool{UsedMiB: 98304 - free, TotalMiB: 98304}, nil
+	rss := map[string]int{}
+	for _, m := range []string{gptOSS, gemma26B, gemmaE4B, embedding} {
+		rss[m] = rssMiB
+	}
+	ram := &gate.RAM{UsedMiB: 100000 - free, AvailableMiB: 28000 + free, TotalMiB: 128076, RSSMiB: rss}
+	return gate.Pool{UsedMiB: 98304 - free, TotalMiB: 98304, RAM: ram}, nil
 }
 
 // fakeConform answers the conform tier with recorded trials, k a harness, and records each plan
@@ -412,4 +548,100 @@ func (f *fakeConform) Run(_ context.Context, plan passk.Plan) (passk.Result, err
 		res.Rows, res.Fits = append(res.Rows, fit.Row), append(res.Fits, fit)
 	}
 	return res, nil
+}
+
+// decodeOf is a chat completion's decode: decodeAt's at the model's served slots for a nonce
+// request, slowAt's for the first nonce request at slots it holds, and decode otherwise.
+func (f *fakeRouter) decodeOf(nonced bool, model string) float64 {
+	if !nonced || f.decodeAt == nil {
+		return f.decode
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	slots := f.served[model].Slots
+	if v, ok := f.slowAt[slots]; ok && !f.slowSeen[slots] {
+		if f.slowSeen == nil {
+			f.slowSeen = map[int]bool{}
+		}
+		f.slowSeen[slots] = true
+		return v
+	}
+	return f.decodeAt(slots)
+}
+
+// readPresets parses the presets file into its sections' keys, comments left out.
+func (f *fakeRouter) readPresets() (map[string]map[string]string, error) {
+	b, err := os.ReadFile(f.presets)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]map[string]string{}
+	var cur map[string]string
+	for line := range strings.Lines(string(b)) {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "" || strings.HasPrefix(line, ";"):
+		case strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]"):
+			cur = map[string]string{}
+			out[line[1:len(line)-1]] = cur
+		default:
+			k, v, _ := strings.Cut(line, "=")
+			if cur != nil {
+				cur[strings.TrimSpace(k)] = strings.TrimSpace(v)
+			}
+		}
+	}
+	return out, nil
+}
+
+// apply has model run at its section of the presets file, as a load does; f.mu is held.
+func (f *fakeRouter) apply(model string) {
+	secs, err := f.readPresets()
+	if err != nil {
+		return
+	}
+	slots, _ := strconv.Atoi(secs[model]["parallel"])
+	c, _ := strconv.Atoi(secs[model]["c"])
+	f.sections[model], f.served[model] = secs[model], gate.Setting{Slots: slots, C: c}
+	f.requests = append(f.requests, fmt.Sprintf("served %s %d %d", model, slots, c))
+}
+
+// reread reads the presets file again, as GET /models?reload=1 does: each loaded model whose
+// section changed since it loaded is unloaded ("reread-unload <model>"); none is loaded.
+func (f *fakeRouter) reread() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reloads++
+	if f.reloads == f.failReload {
+		return fmt.Errorf("fake: reload %d fails", f.reloads)
+	}
+	secs, err := f.readPresets()
+	if err != nil {
+		return err
+	}
+	f.requests = append(f.requests, "reread")
+	for m, s := range f.status {
+		if s == "loaded" && !maps.Equal(secs[m], f.sections[m]) {
+			f.status[m] = "unloaded"
+			f.requests = append(f.requests, "reread-unload "+m)
+		}
+	}
+	return nil
+}
+
+// usePresets makes path the router's presets file, holding data, and has every loaded model run
+// at its section.
+func (f *fakeRouter) usePresets(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.presets, f.sections, f.served = path, map[string]map[string]string{}, map[string]gate.Setting{}
+	for m, s := range f.status {
+		if s == "loaded" {
+			f.apply(m)
+		}
+	}
 }

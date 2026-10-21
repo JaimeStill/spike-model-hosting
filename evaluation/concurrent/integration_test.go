@@ -20,7 +20,7 @@ import (
 
 // TestLiveRun runs the streams at once against the router SPIKE_ROUTER_URL names, on the chat and
 // embedding models of the profile's set SPIKE_SET names, or else of its startup set, keeping the
-// profile's slots busy for two rounds. Pi joins when SPIKE_PI names its executable (such as
+// chat model's slots busy for two rounds. Pi joins when SPIKE_PI names its executable (such as
 // `MISE_ENV=consumers mise -C evaluation which pi`, from the repository root); without it the
 // model client's chat stream takes every slot. The models must be loaded already: the model client's requests carry autoload=false,
 // and Pi's provider, which can't, runs only beside them.
@@ -58,7 +58,7 @@ func TestLiveRun(t *testing.T) {
 	var chats []concurrent.ChatStream
 	if command := os.Getenv("SPIKE_PI"); command != "" {
 		state := t.TempDir()
-		workers := concurrent.SplitSlots(p.Slots, 2)
+		workers := concurrent.SplitSlots(p.Model(chatModel).Slots, 2)
 		modelChat.Workers = workers[1]
 		driver, err := consumers.Pi(command, base, state, chatModel, p.Model(chatModel).Consumers.Pi)
 		if err != nil {
@@ -69,7 +69,7 @@ func TestLiveRun(t *testing.T) {
 			Options: harness.Options{Provider: consumers.Provider, Model: chatModel, Dir: state, HarnessTools: []string{}},
 		}})
 	} else {
-		modelChat.Workers = p.Slots
+		modelChat.Workers = p.Model(chatModel).Slots
 	}
 	rep, err := concurrent.Run(t.Context(), concurrent.Config{
 		Rounds: 2,

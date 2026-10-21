@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -93,6 +94,38 @@ func Build(ctx context.Context, hc *http.Client, base string) (string, error) {
 	}
 	err := do(ctx, hc, http.MethodGet, base+"/props", nil, &got)
 	return got.BuildInfo, err
+}
+
+// ReloadPresets asks the router at base to read its presets file again, GET /models?reload=1,
+// with no restart: the router unloads each running model whose section changed and loads none, so
+// a model it unloaded is loaded again over Load.
+func ReloadPresets(ctx context.Context, hc *http.Client, base string) error {
+	var got json.RawMessage
+	return do(ctx, hc, http.MethodGet, base+"/models?reload=1", nil, &got)
+}
+
+// Served is what a loaded model's server reports it runs at, GET /props?model=<id>: its slots,
+// total_slots, and its context, default_generation_settings.n_ctx, the whole of it a unified KV
+// pool's slots share.
+type Served struct {
+	Slots int
+	NCtx  int
+}
+
+// ServedAt returns the slots and context the model id's server runs at, on the router at base;
+// the request carries autoload=false, so it never loads the model.
+func ServedAt(ctx context.Context, hc *http.Client, base, id string) (Served, error) {
+	var got struct {
+		TotalSlots int `json:"total_slots"`
+		Settings   struct {
+			NCtx int `json:"n_ctx"`
+		} `json:"default_generation_settings"`
+	}
+	u := base + "/props?autoload=false&model=" + url.QueryEscape(id)
+	if err := do(ctx, hc, http.MethodGet, u, nil, &got); err != nil {
+		return Served{}, err
+	}
+	return Served{Slots: got.TotalSlots, NCtx: got.Settings.NCtx}, nil
 }
 
 // Load asks the router at base to load the model id, POST /models/load. It returns once the

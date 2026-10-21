@@ -496,3 +496,31 @@ records it not run. The baseline's cold-load figures are the move to b11715's, t
 ([`llama-cpp-builds.md`](../../devices/strix-halo/llama-cpp-builds.md), "b11669 to b11715"):
 18.0 and 17.0 s warm, 20.8 and 21.0 s cold, until all four models were loaded, gpt-oss-120b last.
 
+
+## Set A's floors at N on b11734
+
+Capacity puts each role model's own slots in flight, N from its profile entry, and judges
+each of the N against the role's floor at N (`evaluation/floors.toml`). The agent's N streams
+are the agentic shape, an 8192-token prompt and 512 out, in place of the short nonce request
+the b11715 baseline sent. One set run screen (`-set a`) on `b11734-f3fb2fcdb`, 2026-10-19 21:11
+UTC, every model at its 4 slots, ran admission, fitness and capacity, and was interrupted once
+quality began. Every floor at N passed, and no request ran out of context:
+
+| Role | Floor at N | Floor | N = 4, slowest | Each of the 4 |
+|---|---|---|---|---|
+| agent | decode of each agentic stream | ≥ 10 tok/s | 10.15 | 11.21, 10.15, 17.59, 15.17 |
+| vision | each image question, 4 at once | ≤ 10 s | 5.22 | 5.22 each |
+| audio | RTFx of each transcription | ≥ 1 | 3.10 | 3.24, 3.24, 3.19, 3.10 |
+| embedding | each 32-token query, 4 at once | ≤ 250 ms | 24.2 | 23.5, 24.2, 23.8, 11.5 |
+
+The agent's streams prefilled 8296-8299 prompt tokens each and decoded 425, 506, 505 and 512
+tokens. Their slowest stream, at 10.15 tok/s, clears its floor by 1.5%: each stream decodes while
+the others prefill their 8k prompts, where the b11715 baseline's short requests decoded at
+21.3-21.9. Set A's agent model at 4 slots is at its floor in the agentic shape; the sweep that chooses
+each model's slots starts from here. Fitness alone, the same run: decode 52.2 tok/s, 8k
+prefill 1046 tok/s, TTFT 8.02 s, one image question 1.86 s, RTFx 12.3, throughput 18,556 tok/s,
+a 32-token query 28.0 ms.
+
+The pool, against the 2816 MiB floor: 3506 MiB free idle after the reload, 3068 at the warmed
+peak, and **3001** at capacity's peak, the least free reading of every role's run (31 readings
+over the agent's), 67 MiB under the warmed peak. The capacity stage took 81 s for the four models.

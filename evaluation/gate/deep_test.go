@@ -70,6 +70,7 @@ func near(a, b float64) bool { return math.Abs(a-b) < 1e-9 }
 // reuse; and cold load, recorded not run without the architect's restart, naming its commands.
 func TestDeepAgent(t *testing.T) {
 	h := newHarness(t, gptOSS)
+	h.runner.Full = true
 	rep := h.run(t, "", nil)
 	want := []string{"admission pass", "fitness pass", "capacity pass", "quality pass", "set pass", "deep pass"}
 	if got := statuses(rep); !equal(got, want) || !rep.Passed || rep.Reached != gate.StageDeep {
@@ -100,7 +101,7 @@ func TestDeepAgent(t *testing.T) {
 	}
 	for i, d := range gate.Tau2Domains {
 		args, _, _ := strings.Cut(tau2[i], "|")
-		for _, want := range []string{"--domain " + d, "--model " + gptOSS, "--trials 2", "--claude /pinned/claude",
+		for _, want := range []string{"--domain " + d, "--model " + gptOSS, "--trials 2", "--slots 4", "--claude /pinned/claude",
 			"--claude-config " + filepath.Join(h.uv.dir, "claude"), "agent-tau2-" + d + ".txt", "/deep/tau2/" + d} {
 			if !strings.Contains(args, want) {
 				t.Errorf("τ2 call %s lacks %q", args, want)
@@ -187,10 +188,12 @@ func TestDeepAgent(t *testing.T) {
 // stage leaves it not run, and a run can't resume at it past that failure.
 func TestDeepOnlyAfterGates(t *testing.T) {
 	h := newHarness(t, gptOSS)
-	// The vision model's answers cross in the set stage's rounds; capacity sends gpt-oss-120b's
-	// alone.
+	screen := h.run(t, "", nil)
+	// The vision model's answers cross in the full run's set stage's rounds, after the screen
+	// passed; capacity sends gpt-oss-120b's alone.
 	h.router.crossed = gemma26B
-	rep := h.run(t, "", nil)
+	h.runner.Full = true
+	rep := h.run(t, "", screen)
 	if s := rep.Stage(gate.StageDeep); s.Status != gate.StatusNotRun || s.Reason != "set failed" {
 		t.Fatalf("deep %+v after set %s; want not run, set failed", s, rep.Stage(gate.StageSet).Status)
 	}
@@ -208,6 +211,7 @@ func TestDeepOnlyAfterGates(t *testing.T) {
 // failed.
 func TestDeepBroken(t *testing.T) {
 	h := newHarness(t, gptOSS)
+	h.runner.Full = true
 	h.uv.fail = "retail"
 	// The airline recording, its first sample's simulator call failed.
 	testdata := t.TempDir()
@@ -263,7 +267,7 @@ func TestDeepBroken(t *testing.T) {
 // set is loaded again. The embedding model's deep stage is cold load alone: no τ2, no grid.
 func TestDeepColdLoad(t *testing.T) {
 	h := newHarness(t, embedding)
-	h.runner.Restarts = true
+	h.runner.Full, h.runner.Restarts = true, true
 	log := &restartLog{router: h.router}
 	h.runner.Log = log
 	rep := h.run(t, "", nil)

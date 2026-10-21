@@ -46,17 +46,20 @@ const probeRepeats = 5
 // the vision tiers run; a log written under another fails its check.
 var InspectEvalsVersion = mustPin("inspect-evals")
 
-// Vision runs one vision tier on a router's vision model and leaves Inspect AI's JSON logs, one a
-// task, in out (ReadTier). input is the tier list for a benchmark, or the probe's image for the
-// probe. A bar, a floor, stops a benchmark early once its pass rate can't reach it
-// (vision_quality.py's PassStop); nil runs the whole tier.
+// Vision runs one vision tier on a router's vision model, slots requests in flight (the model's
+// profile slots, Runner.slotsOf), and leaves Inspect AI's JSON logs, one a task, in out (ReadTier).
+// input is the tier list for a benchmark, or the probe's image for the probe. A bar, a floor, stops
+// a benchmark early once its pass rate can't reach it (vision_quality.py's PassStop); nil runs the
+// whole tier.
 type Vision interface {
-	Vision(ctx context.Context, router, model, tierName, input, out string, bar *float64) error
+	Vision(ctx context.Context, router, model, tierName, input, out string, slots int, bar *float64) error
 }
 
-// Vision runs the tier through vision_quality.py eval, and fails when uv does.
-func (u UV) Vision(ctx context.Context, router, model, tierName, input, out string, bar *float64) error {
-	args := []string{"eval", "--router", router, "--model", model, "--tier", tierName, "--output", out}
+// Vision runs the tier through vision_quality.py eval, slots as its --slots, and fails when uv
+// does.
+func (u UV) Vision(ctx context.Context, router, model, tierName, input, out string, slots int, bar *float64) error {
+	args := []string{"eval", "--router", router, "--model", model, "--tier", tierName, "--output", out,
+		"--slots", strconv.Itoa(slots)}
 	if tierName == "probe" {
 		args = append(args, "--image", input)
 	} else {
@@ -86,14 +89,14 @@ var cardScores = map[string]map[string]cardScore{
 	},
 }
 
-// visionTiers runs the vision role's tiers on t's model in order, and stops at the first that
-// fails.
+// visionTiers runs the vision role's tiers on t's model in order, each reused from the index when
+// the run may reuse its passed record (unit), and stops at the first that fails.
 func (r *Runner) visionTiers(ctx context.Context, t target) []Check {
 	var checks []Check
 	for _, vt := range VisionTiers {
-		ch := r.visionTier(ctx, t, vt)
-		checks = append(checks, ch)
-		if !ch.Passed || ctx.Err() != nil {
+		tierChecks := r.unit(t, RoleVision, VisionCheck(vt.Name), func() []Check { return []Check{r.visionTier(ctx, t, vt)} })
+		checks = append(checks, tierChecks...)
+		if !passed(tierChecks) || ctx.Err() != nil {
 			break
 		}
 	}
@@ -103,11 +106,14 @@ func (r *Runner) visionTiers(ctx context.Context, t target) []Check {
 // visionTier runs one vision tier on t's model into t's vision/<tier>, and judges it when t is
 // judged; otherwise it runs whole and is recorded, passed. The probe passes on all of its repeats,
 // pass^5, whatever the bars hold. A benchmark's score is judged against its floor, by check name
-// (vision-<tier>), under [bars]; the floor also stops it early (its screening fifth, then a 95%
-// Wilson upper bound on the pass rate under the floor); without one it runs whole and its score is
-// recorded. The check records the samples run and passed, the request time, the wall time, the
-// dataset's revision, the tasks' inspect_evals versions and Inspect's release, and the card's
-// figure beside a tier the card reports.
+// (vision-<tier>), under [bars]; in a screen the floor also stops it early on either side (its
+// screening fifth, then the 95% Wilson upper bound on the pass rate under the floor, failed, or
+// the lower bound on the mean score at or over it, passed); without one it runs whole and its
+// score is recorded. A full run reuses the screen's record of a tier it ran whole, and runs the
+// rest of one it stopped, from vision/<tier>/rest, judging the whole list. The check records the
+// samples run and passed, the request time, the wall time, the dataset's revision, the tasks'
+// inspect_evals versions and Inspect's release, and the card's figure beside a tier the card
+// reports.
 func (r *Runner) visionTier(ctx context.Context, tg target, t VisionTier) Check {
 	name := VisionCheck(t.Name)
 	if r.Vision == nil || tg.dir == "" || r.Tiers == "" {
@@ -124,11 +130,25 @@ func (r *Runner) visionTier(ctx context.Context, tg target, t VisionTier) Check 
 	case hasBar:
 		floor = &bar.Value
 	}
+	var screen Check
+	if tg.full {
+		c, ok := tg.screenCheck(RoleVision, name)
+		switch {
+		case !ok || !c.Passed:
+			return broken(name, RoleVision, errNoScreen(name))
+		case probe || c.Stop == nil:
+			return reused(c)
+		}
+		screen = c
+	}
 	dir := filepath.Join(tg.dir, "vision", t.Name)
 	out := filepath.Join(dir, "logs")
-	// A rerun into the same run directory (a resumed run) must not read the last run's logs.
-	if err := os.RemoveAll(dir); err != nil {
-		return broken(name, RoleVision, err)
+	// A rerun into the same run directory (a resumed run) must not read the last run's logs; a
+	// full run reads the screen's.
+	if !tg.full {
+		if err := os.RemoveAll(dir); err != nil {
+			return broken(name, RoleVision, err)
+		}
 	}
 	var list *tier.List
 	var input string
@@ -149,15 +169,25 @@ func (r *Runner) visionTier(ctx context.Context, tg target, t VisionTier) Check 
 		list = &l
 	}
 	began := time.Now()
-	err := r.Vision.Vision(ctx, r.Router, tg.model, t.Name, input, out, floor)
-	wall := time.Since(began).Seconds()
 	var res TierResult
-	if err == nil {
-		res, err = ReadTier(out)
+	var err error
+	if tg.full {
+		var screenOut string
+		if screenOut, err = tg.screenDir(screen, filepath.Join("vision", t.Name, "logs")); err == nil {
+			res, err = r.restTier(t.Name, *list, screenOut, filepath.Join(dir, restDir), func(listPath, restOut string) error {
+				return r.Vision.Vision(ctx, r.Router, tg.model, t.Name, listPath, restOut, r.slotsOf(tg.model), nil)
+			})
+		}
+	} else {
+		err = r.Vision.Vision(ctx, r.Router, tg.model, t.Name, input, out, r.slotsOf(tg.model), floor)
+		if err == nil {
+			res, err = ReadTier(out)
+		}
+		if err == nil {
+			err = res.matches(t.Name, list)
+		}
 	}
-	if err == nil {
-		err = res.matches(t.Name, list)
-	}
+	wall := time.Since(began).Seconds() + screen.Values["wall_s"]
 	if err != nil {
 		ch := broken(name, RoleVision, err)
 		ch.Values = map[string]float64{"wall_s": wall}
@@ -171,7 +201,7 @@ func (r *Runner) visionTier(ctx context.Context, tg target, t VisionTier) Check 
 	}
 	notes := []string{fmt.Sprintf("tier %d", t.Tier), fmt.Sprintf("%d of %d samples, %d passed", n, size, passes)}
 	if t.Metric == "ANLS" {
-		notes = append(notes, fmt.Sprintf("mean ANLS %.3f; a sample passes at ANLS >= 0.5, pass rate %.3f, the rate the early stop bounds", score, float64(passes)/float64(n)))
+		notes = append(notes, fmt.Sprintf("mean ANLS %.3f; a sample passes at ANLS >= 0.5, pass rate %.3f, the rate the fail side's bound bounds", score, float64(passes)/float64(n)))
 	}
 	var ch Check
 	switch {
@@ -184,14 +214,15 @@ func (r *Runner) visionTier(ctx context.Context, tg target, t VisionTier) Check 
 		notes = append(notes, fmt.Sprintf("pass^%d: every repeat must name the three shapes and colours, at the router's defaults", probeRepeats))
 	default:
 		var judged string
-		ch, judged = judgeTier(tg, name, RoleVision, score, t.Metric, bar, hasBar, len(res.Stopped) > 0, n, res.StopReason)
+		ch, judged = judgeTier(tg, name, RoleVision, score, t.Metric, bar, hasBar, tierStop(res, size))
 		notes = append(notes, judged)
 	}
 	ch.Values = map[string]float64{
 		"wall_s": wall, "request_s": res.RequestS, "samples": float64(n), "passes": float64(passes), "tier": float64(t.Tier),
 	}
-	if res.Upper != nil {
-		ch.Values["pass_rate_upper_bound"] = *res.Upper
+	boundValues(ch.Values, res)
+	if tg.full {
+		notes = append(notes, continued(ch.Values, screen))
 	}
 	if m := r.Profile.Model(tg.model); m != nil {
 		if card, ok := cardScores[m.CardURL][t.Name]; ok {

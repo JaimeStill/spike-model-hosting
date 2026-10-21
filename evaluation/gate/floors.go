@@ -46,23 +46,29 @@ func ParseRole(name string) (string, error) {
 
 // Floors are the absolute floors fitness and capacity judge a model against, per role, and the
 // pool's free memory every stage holds a set to. They are data, read from evaluation/floors.toml.
+// Capacity judges each request of the N in flight on a model, N its profile slots: the agent's and
+// the audio role's by their per-stream floors, the vision role's image question and the embedding
+// role's 32-token query by the same floors fitness judges a lone one by.
 type Floors struct {
 	Pool struct {
-		// FreeMiB is the pool's least free memory, idle and at the peak of 4 in flight.
+		// FreeMiB is the pool's least free memory: at the warmed peak (fitness), and at the peak of
+		// each model's N in flight (capacity).
 		FreeMiB float64 `toml:"free_mib"`
 	} `toml:"pool"`
 	Agent struct {
-		DecodeTokS        float64 `toml:"decode_tok_s"`
-		PrefillTokS       float64 `toml:"prefill_tok_s"`
-		TTFT8kS           float64 `toml:"ttft_8k_s"`
-		Stream4DecodeTokS float64 `toml:"stream4_decode_tok_s"`
+		DecodeTokS  float64 `toml:"decode_tok_s"`
+		PrefillTokS float64 `toml:"prefill_tok_s"`
+		TTFT8kS     float64 `toml:"ttft_8k_s"`
+		// StreamDecodeTokS is each of N agentic streams' decode, N the model's slots.
+		StreamDecodeTokS float64 `toml:"stream_decode_tok_s"`
 	} `toml:"agent"`
 	Vision struct {
 		ImageAnswerS float64 `toml:"image_answer_s"`
 	} `toml:"vision"`
 	Audio struct {
-		RTFx        float64 `toml:"rtfx"`
-		Stream4RTFx float64 `toml:"stream4_rtfx"`
+		RTFx float64 `toml:"rtfx"`
+		// StreamRTFx is each of N transcriptions' RTFx, N the model's slots.
+		StreamRTFx float64 `toml:"stream_rtfx"`
 	} `toml:"audio"`
 	Embedding struct {
 		ThroughputTokS float64 `toml:"throughput_tok_s"`
@@ -100,10 +106,10 @@ func (f Floors) Validate() error {
 		{"agent.decode_tok_s", f.Agent.DecodeTokS},
 		{"agent.prefill_tok_s", f.Agent.PrefillTokS},
 		{"agent.ttft_8k_s", f.Agent.TTFT8kS},
-		{"agent.stream4_decode_tok_s", f.Agent.Stream4DecodeTokS},
+		{"agent.stream_decode_tok_s", f.Agent.StreamDecodeTokS},
 		{"vision.image_answer_s", f.Vision.ImageAnswerS},
 		{"audio.rtfx", f.Audio.RTFx},
-		{"audio.stream4_rtfx", f.Audio.Stream4RTFx},
+		{"audio.stream_rtfx", f.Audio.StreamRTFx},
 		{"embedding.throughput_tok_s", f.Embedding.ThroughputTokS},
 		{"embedding.query32_ms", f.Embedding.Query32MS},
 	} {

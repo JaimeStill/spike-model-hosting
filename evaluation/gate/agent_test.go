@@ -52,7 +52,7 @@ func checkNames(s *gate.StageResult) []string {
 func TestQualityAgent(t *testing.T) {
 	h := newHarness(t, gptOSS)
 	rep := h.run(t, "", nil)
-	q := rep.Stage(gate.StageQuality)
+	q := units(rep.Stage(gate.StageQuality))
 	if q == nil || q.Status != gate.StatusPass || !equal(checkNames(q), agentChecks) {
 		t.Fatalf("quality %+v; want passed, checks %q", q, agentChecks)
 	}
@@ -80,7 +80,7 @@ func TestQualityAgent(t *testing.T) {
 	}
 	for i, at := range gate.AgentTiers[:2] {
 		want := fmt.Sprintf("run --project /module/evaluation/suites --locked --no-python-downloads --python /pinned/python python "+
-			"/module/evaluation/suites/agent_quality.py eval --router %s --model %s --tier %s --list %s --output %s|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
+			"/module/evaluation/suites/agent_quality.py eval --router %s --model %s --tier %s --list %s --output %s --slots 4|/state/cache/huggingface|/state/cache/mteb|/state/cache/asr|/state/cache/inspect_evals",
 			h.router.srv.URL, gptOSS, at.Name, filepath.Join(h.runner.Tiers, gate.AgentCheck(at.Name)+".txt"), filepath.Join(h.runner.Dir, "agent", at.Name, "logs"))
 		if calls[i] != want {
 			t.Errorf("call %d:\n got %s\nwant %s", i, calls[i], want)
@@ -145,14 +145,18 @@ func TestQualityAgentBars(t *testing.T) {
 	if got := statuses(rep); !equal(got, want) {
 		t.Fatalf("stages %q; want %q", got, want)
 	}
-	q := rep.Stage(gate.StageQuality)
+	q := units(rep.Stage(gate.StageQuality))
 	r := recordedAgent["bfcl-single-stopped"]
 	if len(q.Checks) != 1 {
 		t.Fatalf("checks %q; want the single-turn tier's alone, the stage ended there", checkNames(q))
 	}
 	c := q.Checks[0]
-	if c.Passed || *c.Floor != 0.99 || c.Values["samples"] != float64(r.samples) || !strings.Contains(c.Detail, fmt.Sprintf("early stop after %d: the 95%% upper bound", r.samples)) {
+	if c.Passed || *c.Floor != 0.99 || c.Values["samples"] != float64(r.samples) || !strings.Contains(c.Detail, fmt.Sprintf("early stop, failed, after %d of 10: the 95%% upper bound", r.samples)) {
 		t.Errorf("agent-bfcl-single %+v; want stopped early after %d, failed against >= 0.99", c, r.samples)
+	}
+	if s := c.Stop; s == nil || s.Side != gate.StopFail || s.Bound != "pass rate upper bound" || s.Ran != r.samples || s.Size != 10 ||
+		s.Value == nil || *s.Value != c.Values["pass_rate_upper_bound"] || !strings.Contains(s.Reason, "is below the bar 0.99") {
+		t.Errorf("agent-bfcl-single stop %+v; want failed on the pass rate's upper bound after %d of 10", s, r.samples)
 	}
 	if _, ok := c.Values["pass_rate_upper_bound"]; !ok {
 		t.Errorf("values %v; want the bound", c.Values)
@@ -167,8 +171,8 @@ func TestQualityAgentBars(t *testing.T) {
 	h = newHarness(t, gptOSS)
 	h.runner.Bars = tier.Bars{"agent-bfcl-multi": {Value: 0}}
 	rep = h.run(t, "", nil)
-	if c := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-bfcl-multi"); !c.Passed || *c.Floor != 0 || !strings.Contains(c.Detail, "early stop: ran in full") {
-		t.Errorf("agent-bfcl-multi %+v; want a pass against >= 0, run in full", c)
+	if c := check(t, rep, gate.StageQuality, gate.RoleAgent, "agent-bfcl-multi"); !c.Passed || *c.Floor != 0 || !strings.Contains(c.Detail, "early stop: undecided") || c.Stop != nil {
+		t.Errorf("agent-bfcl-multi %+v; want a pass against >= 0, its whole list run undecided", c)
 	}
 	if !rep.Passed {
 		t.Errorf("run failed; want passed\n%+v", rep.Stages)
@@ -183,7 +187,7 @@ func TestQualityAgentConform(t *testing.T) {
 	h := newHarness(t, gptOSS)
 	h.conform.trials["pi"][0] = passk.Trial{Report: conformReport("pi", map[string]conform.Status{"vision": conform.Fail})}
 	rep := h.run(t, "", nil)
-	q := rep.Stage(gate.StageQuality)
+	q := units(rep.Stage(gate.StageQuality))
 	if q.Status != gate.StatusFail || !equal(checkNames(q), agentChecks) || rep.Passed {
 		t.Fatalf("quality %+v; want failed, every check made", q)
 	}
@@ -218,7 +222,7 @@ func TestQualityAgentConformDrops(t *testing.T) {
 		State:    filepath.Join(state, "conform"), ClaudeConfig: filepath.Join(state, "claude"),
 	}
 	rep := h.run(t, "", nil)
-	q := rep.Stage(gate.StageQuality)
+	q := units(rep.Stage(gate.StageQuality))
 	if q.Status != gate.StatusFail || !equal(checkNames(q), agentChecks) {
 		t.Fatalf("quality %+v; want failed, a check a harness and the verdict", q)
 	}
@@ -253,7 +257,7 @@ func TestQualityAgentBroken(t *testing.T) {
 		"a ceiling": {func(h *harness) { h.runner.Bars = tier.Bars{"agent-bfcl-single": {Value: 0.5, AtMost: true}} },
 			"agent-bfcl-single", "its bar belongs under [bars]"},
 		"conform errs":       {func(h *harness) { h.conform.err = errors.New("no cell") }, "agent-conform", "no cell"},
-		"set model unloaded": {func(h *harness) { h.router.status[gemmaE4B] = "unloaded" }, "agent-conform", gemmaE4B},
+		"set model unloaded": {func(h *harness) { h.router.unloadOnToolCall = gemmaE4B }, "agent-conform", gemmaE4B},
 		"no conform runner":  {func(h *harness) { h.runner.Conform = nil }, "agent-conform", "no conform runner"},
 	}
 	for name, tc := range cases {
@@ -261,7 +265,7 @@ func TestQualityAgentBroken(t *testing.T) {
 			h := newHarness(t, gptOSS)
 			tc.setup(h)
 			rep := h.run(t, "", nil)
-			q := rep.Stage(gate.StageQuality)
+			q := units(rep.Stage(gate.StageQuality))
 			if q.Status != gate.StatusFail {
 				t.Fatalf("quality %+v; want failed", q)
 			}

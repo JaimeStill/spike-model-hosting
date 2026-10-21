@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"os"
 	"path"
 	"regexp"
 	"slices"
@@ -44,9 +45,8 @@ type Profile struct {
 	Engine    Engine `toml:"engine"`
 	// Bind is BindTailnet or BindLoopback.
 	Bind string `toml:"bind"`
-	// Slots is the number of requests each model serves at once (llama.cpp's parallel).
-	Slots int `toml:"slots"`
-	// KV is KVUnified or KVPerSlot.
+	// KV is KVUnified or KVPerSlot, for every model: a model's own Slots share its pool, or
+	// each takes its own.
 	KV string `toml:"kv"`
 	// MemoryBandwidthGBs is the host class's memory bandwidth in GB/s (10^9 bytes a second), such
 	// as Strix Halo's 256: the ceiling a decode's speed is compared with, never gated on. It is
@@ -193,8 +193,8 @@ type Defaults struct {
 type MemoryBudget struct {
 	// PoolMiB is the memory pool the models load into.
 	PoolMiB int `toml:"pool_mib"`
-	// MeasuredMiB is the pool used with every model in the set loaded and Slots requests in
-	// flight on each. It, EstimatedMiB, or both is set.
+	// MeasuredMiB is the pool used with every model in the set loaded and its Slots requests
+	// in flight on each. It, EstimatedMiB, or both is set.
 	MeasuredMiB int `toml:"measured_mib"`
 	// EstimatedMiB is the same figure estimated from the models' file sizes and their caches'
 	// costs, for a set not yet measured. The estimate's arithmetic is kept in a comment beside
@@ -242,7 +242,7 @@ var piThinkingLevels = []string{"off", "minimal", "low", "medium", "high", "xhig
 // reservedArgs are the presets keys the profile renders from its typed fields, which a model's
 // raw Args may not set. hf-repo renders from the model's ID; hf and hfr are its short aliases.
 var reservedArgs = []string{
-	"jinja", "n-gpu-layers", "metrics", "checkpoint-min-step", "parallel", "kv-unified",
+	"jinja", "n-gpu-layers", "metrics", "checkpoint-min-step", "parallel", "np", "kv-unified", "kvu",
 	"load-on-startup", "hf-repo", "hf", "hfr", "c", "temp", "top-p", "top-k", "min-p",
 	"chat-template-kwargs", "mtmd-batch-max-tokens",
 }
@@ -305,6 +305,13 @@ type Model struct {
 	BitsPerWeight float64 `toml:"bits_per_weight"`
 	// CReason says why the model runs at C. It renders as a comment above the model's section.
 	CReason string `toml:"c_reason"`
+	// Slots is the number of requests the model serves at once, at least 1: llama.cpp's
+	// parallel, rendered into the model's own section. With KVUnified its slots share one KV
+	// pool sized to C, so C bounds a slot's context and the slots together.
+	Slots int `toml:"slots"`
+	// SlotsReason says why the model serves Slots requests at once. It renders as a comment
+	// above the model's section.
+	SlotsReason string `toml:"slots_reason"`
 	// MtmdBatchMaxTokens caps the image tokens the model's image encoder takes in one batch
 	// (llama-server's --mtmd-batch-max-tokens, 1024 by default), so images that would batch
 	// together are encoded one batch at a time: the encoder's compute buffer, which grows to the
@@ -330,6 +337,10 @@ type Model struct {
 	// ArgsReason says why the model sets Args; required when it sets any. It renders as a comment
 	// above the model's section.
 	ArgsReason string `toml:"args_reason"`
+	// Prompts are the prompts the model's card tells a client to send with its inputs, nil for
+	// a model whose card gives none. They are the clients' configuration, not the router's, so
+	// they render into no preset.
+	Prompts *Prompts `toml:"prompts"`
 	// Consumers is the reasoning setting each coding agent the spike drives sends when the
 	// model is a set's chat model; the zero value leaves each agent at its own default. It is
 	// the consumers' configuration, not the router's, so it renders into no preset.
@@ -378,6 +389,24 @@ type Sampling struct {
 	Reasoning string `toml:"reasoning"`
 	// Reason says why the model samples at these values. It renders as a comment above the
 	// model's section.
+	Reason string `toml:"reason"`
+}
+
+// Prompts are a model's card prompts, each one traced to Source: what the evaluation's clients
+// send with the model's inputs, read from here alone. Each field belongs to a role, and only a
+// model that declares the role sets it.
+type Prompts struct {
+	// Source is the page the prompts come from: the model card, or the file it defers to.
+	Source string `toml:"source"`
+	// Embedding are an embedding model's task prompts, by the prompt name MTEB resolves (a task
+	// type such as STS, a prompt type, query or document, or a type-prompt compound such as
+	// Retrieval-query), each prefixed to the input it applies to. Only a model that declares
+	// RoleEmbedding sets them.
+	Embedding map[string]string `toml:"embedding"`
+	// ASR is the instruction sent before a clip to have it transcribed, the audio role's prompt.
+	// Only a model that declares RoleAudio sets it, and a set's audio model must.
+	ASR string `toml:"asr"`
+	// Reason says why the prompts are these: what of the card's is kept, and what is left out.
 	Reason string `toml:"reason"`
 }
 
@@ -448,10 +477,20 @@ func RouterTag(tag string) string {
 // errors, each naming the field at fault by its TOML key path; a key the schema doesn't define
 // is one of them.
 func Load(path string) (*Profile, error) {
-	var p Profile
-	md, err := toml.DecodeFile(path, &p)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("profile: %w", err)
+	}
+	return Parse(data, path)
+}
+
+// Parse decodes and validates a profile from data, the TOML Load reads; name is the file's,
+// for its errors.
+func Parse(data []byte, name string) (*Profile, error) {
+	var p Profile
+	md, err := toml.Decode(string(data), &p)
+	if err != nil {
+		return nil, fmt.Errorf("profile: %s: %w", name, err)
 	}
 	var errs []error
 	for _, key := range md.Undecoded() {
@@ -463,7 +502,7 @@ func Load(path string) (*Profile, error) {
 		errs = append(errs, fmt.Errorf("%s: not a key the schema defines", key))
 	}
 	if err := errors.Join(append(errs, p.Validate())...); err != nil {
-		return nil, fmt.Errorf("profile %s: %w", path, err)
+		return nil, fmt.Errorf("profile %s: %w", name, err)
 	}
 	return &p, nil
 }
@@ -505,7 +544,6 @@ func (p *Profile) Validate() error {
 	required("engine.backend", p.Engine.Backend)
 	build("engine.min_build", p.Engine.MinBuild)
 	oneOf("bind", p.Bind, BindTailnet, BindLoopback)
-	positive("slots", p.Slots)
 	oneOf("kv", p.KV, KVUnified, KVPerSlot)
 	if p.MemoryBandwidthGBs < 0 {
 		errs = append(errs, fmt.Errorf("memory_bandwidth_gb_s: %v is below 0", p.MemoryBandwidthGBs))
@@ -548,6 +586,8 @@ func (p *Profile) Validate() error {
 			errs = append(errs, fmt.Errorf("%s: %d is over the card's context, %d", field("c"), m.C, m.CardContext))
 		}
 		required(field("c_reason"), m.CReason)
+		positive(field("slots"), m.Slots)
+		required(field("slots_reason"), m.SlotsReason)
 		errs = append(errs, m.validateImageBatch(field("mtmd_batch_max_tokens"))...)
 		switch {
 		case m.ActiveParamsB < 0 || m.BitsPerWeight < 0:
@@ -590,6 +630,7 @@ func (p *Profile) Validate() error {
 			required(field("args_reason"), m.ArgsReason)
 		}
 		errs = append(errs, m.validateConsumers(field("consumers"))...)
+		errs = append(errs, m.validatePrompts(field("prompts"))...)
 	}
 
 	if len(p.Sets) == 0 {
@@ -689,6 +730,9 @@ func (s Set) validateRoles(prefix string, models map[string]Model) []error {
 			errs = append(errs, fmt.Errorf("%s: %q is not one of the set's models", field, r.id))
 		case !slices.Contains(models[r.id].Roles, r.role):
 			errs = append(errs, fmt.Errorf("%s: %q doesn't declare the %s role", field, r.id, r.role))
+		case r.role == RoleAudio && (models[r.id].Prompts == nil || models[r.id].Prompts.ASR == ""):
+			// The audio role's requests are transcriptions, which carry the model's instruction.
+			errs = append(errs, fmt.Errorf("%s: %q gives no prompts.asr to transcribe with", field, r.id))
 		}
 	}
 	return errs
@@ -766,6 +810,38 @@ func (m Model) validateConsumers(prefix string) []error {
 		errs = append(errs, fmt.Errorf("%s.pi: %q is not one of Pi's thinking levels %q", prefix, c.Pi, piThinkingLevels))
 	}
 	if c.Reason == "" {
+		errs = append(errs, fmt.Errorf("%s.reason: required", prefix))
+	}
+	return errs
+}
+
+// validatePrompts reports a prompt on a role the model doesn't declare, an empty prompt, a
+// prompts table that sets none, and one without its source or reason, under the key path
+// prefix. A model without prompts has nothing to report.
+func (m Model) validatePrompts(prefix string) []error {
+	p := m.Prompts
+	if p == nil {
+		return nil
+	}
+	var errs []error
+	if len(p.Embedding) == 0 && p.ASR == "" {
+		errs = append(errs, fmt.Errorf("%s: sets neither embedding nor asr", prefix))
+	}
+	if len(p.Embedding) > 0 && !slices.Contains(m.Roles, RoleEmbedding) {
+		errs = append(errs, fmt.Errorf("%s.embedding: only a model with the %s role takes embedding prompts", prefix, RoleEmbedding))
+	}
+	for _, name := range slices.Sorted(maps.Keys(p.Embedding)) {
+		if p.Embedding[name] == "" {
+			errs = append(errs, fmt.Errorf("%s.embedding.%s: empty; leave out a prompt the card doesn't give", prefix, name))
+		}
+	}
+	if p.ASR != "" && !slices.Contains(m.Roles, RoleAudio) {
+		errs = append(errs, fmt.Errorf("%s.asr: only a model with the %s role transcribes", prefix, RoleAudio))
+	}
+	if p.Source == "" {
+		errs = append(errs, fmt.Errorf("%s.source: required", prefix))
+	}
+	if p.Reason == "" {
 		errs = append(errs, fmt.Errorf("%s.reason: required", prefix))
 	}
 	return errs

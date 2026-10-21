@@ -55,11 +55,30 @@ type TierResult struct {
 	// sample that makes many; Requests counts their model requests (Inspect's turn_count).
 	WorkingS float64
 	Requests int
-	// Stopped are the samples early stopping skipped, and StopReason why; Upper is the 95% upper
-	// bound on the pass rate when the run ended. All three come with a bar only.
-	Stopped    []string
-	StopReason string
-	Upper      *float64
+	// Stopped are the samples early stopping skipped, StopReason why, and StopSide the side it
+	// stopped the tier on, StopFail or StopPass; Upper is the 95% upper bound on the pass rate when
+	// the run ended, and Lower the 95% lower bound on the mean score. All come with a bar only.
+	Stopped      []string
+	StopReason   string
+	StopSide     string
+	Upper, Lower *float64
+}
+
+// plus returns the run of v's samples and then o's, the rest of v's tier a full run adds: the
+// samples, scores and times of both, and no early stop, since together they run the tier whole.
+func (v TierResult) plus(o TierResult) TierResult {
+	out := v
+	out.Tasks = slices.Clone(v.Tasks)
+	for _, t := range o.Tasks {
+		if !slices.Contains(out.Tasks, t) {
+			out.Tasks = append(out.Tasks, t)
+		}
+	}
+	out.IDs = slices.Concat(v.IDs, o.IDs)
+	out.Scores = slices.Concat(v.Scores, o.Scores)
+	out.RequestS, out.WorkingS, out.Requests = v.RequestS+o.RequestS, v.WorkingS+o.WorkingS, v.Requests+o.Requests
+	out.Stopped, out.StopReason, out.StopSide, out.Upper, out.Lower = nil, "", "", nil, nil
+	return out
 }
 
 // Score is the mean of the samples' scores: the accuracy, or the mean ANLS.
@@ -178,13 +197,19 @@ func ReadTier(out string) (TierResult, error) {
 	var stop struct {
 		Stopped    []string `json:"stopped"`
 		Reason     string   `json:"reason"`
+		Side       string   `json:"side"`
 		UpperBound *float64 `json:"upper_bound"`
+		LowerBound *float64 `json:"lower_bound"`
 	}
 	switch err := readJSON(filepath.Join(out, earlyStopFile), &stop, true); {
 	case err == nil:
-		res.Stopped, res.StopReason, res.Upper = stop.Stopped, stop.Reason, stop.UpperBound
+		res.Stopped, res.StopReason, res.StopSide = stop.Stopped, stop.Reason, stop.Side
+		res.Upper, res.Lower = stop.UpperBound, stop.LowerBound
 	case !errors.Is(err, os.ErrNotExist):
 		return res, err
+	}
+	if err := stopSide(len(res.Stopped), res.StopSide); err != nil {
+		return res, fmt.Errorf("%s: %w", filepath.Join(out, earlyStopFile), err)
 	}
 	if len(res.Scores) == 0 {
 		return res, fmt.Errorf("%s: no sample scored", out)

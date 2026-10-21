@@ -19,10 +19,14 @@ import (
 
 // target is where a quality unit (an MTEB task, an ASR set, a vision or BFCL tier) runs: the
 // model it runs on, the directory its output goes under, and whether its bar judges it and stops
-// it early, as in the quality stage, or it runs whole and is recorded, as in the set stage.
+// it early, as in the quality stage, or it runs whole and is recorded, as in the set stage. A
+// full run's quality stage (full) continues the screen's quality stage (screen): it reuses each
+// unit the screen ran whole and runs the rest of each one the screen stopped.
 type target struct {
 	model, dir string
 	judged     bool
+	full       bool
+	screen     *StageResult
 }
 
 // unjudgedNote is the note a unit the set stage runs carries in place of its bar's.
@@ -115,7 +119,9 @@ const (
 	phaseConcurrent = "concurrent"
 )
 
-// set runs the set stage against the set's loaded models, in one of two forms.
+// set runs the set stage against the set's loaded models, in a full run only: a screen's quality
+// stage runs its tiers at once inside the same concurrent window, which stands in for the stage's
+// concurrent phase. It takes one of two forms.
 //
 // A set run (no Model) runs each role's tier 1 (TierOne) on the model the set assigns it, first
 // alone, one role after another, then every role's at once (setRun).
@@ -205,11 +211,13 @@ func (r *Runner) setRun(ctx context.Context, roles []assignment) []Check {
 	return append(checks, w.gates(r.Floors.Pool.FreeMiB, "every role's tier 1 ran at once")...)
 }
 
-// setModelRun is a model run's set stage. Its alone figures are the quality stage's tier 1
-// records, the same units on the same lists at the same settings, so it doesn't run them alone
-// again. Its own roles' tier 1s run at once while every other role of the set carries load
-// (load): the load starts with the tiers and stops when they finish, so the other models load
-// the pool for exactly the window the model's tiers run, and run no tier of their own.
+// setModelRun is a model run's set stage. Its alone figures are the quality stage's tier 1 records,
+// the same units on the same lists at the same settings, so it doesn't run them alone again: a
+// model run's quality pass runs only the model's own roles, the set's other models idle but for the
+// crossing rounds, and its full run's records are each list whole, the screen's samples and the
+// rest together. Its own roles' tier 1s run at once while every other role of the set carries load
+// (load): the load starts with the tiers and stops when they finish, so the other models load the
+// pool for exactly the window the model's tiers run, and run no tier of their own.
 func (r *Runner) setModelRun(ctx context.Context, rep *Report, roles []assignment) []Check {
 	alone, err := qualityTierOne(rep.Stage(StageQuality), rep.Roles)
 	if err != nil {
@@ -325,9 +333,10 @@ func (w concurrentWindow) gates(floor float64, what string) []Check {
 		return append(checks, broken("peak pool free", "", w.readErr))
 	}
 	peak := measure("peak pool free", "", float64(w.low.FreeMiB()), "MiB", AtLeast, floor)
-	peak.Values = map[string]float64{"readings": float64(w.readings), "phase_wall_s": w.wallS}
-	peak.Detail = fmt.Sprintf("%d of %d MiB used at the least free of %d readings over the %.0fs %s",
-		w.low.UsedMiB, w.low.TotalMiB, w.readings, w.wallS, what)
+	peak.Values = poolValues(w.low)
+	peak.Values["readings"], peak.Values["phase_wall_s"] = float64(w.readings), w.wallS
+	peak.Detail = fmt.Sprintf("%d of %d MiB used at the least free of %d readings over the %.0fs %s%s",
+		w.low.UsedMiB, w.low.TotalMiB, w.readings, w.wallS, what, ramDetail(w.low))
 	return append(checks, peak)
 }
 
@@ -364,7 +373,7 @@ func (r *Runner) newLoad(c *client, a assignment) *load {
 		}
 		return l
 	}
-	rec := &recorder{c: c, model: a.model, role: a.role, media: r.Media}
+	rec := &recorder{c: c, model: a.model, role: a.role, media: r.Media, asr: r.asrPrompt(a.model)}
 	l.send = func(ctx context.Context, n uint64) (int, error) {
 		comp, err := c.complete(ctx, rec.body(concurrent.Prompt(fmt.Sprintf("nonce-%016x", n))))
 		return comp.Timings.PredictedN, err
@@ -538,11 +547,12 @@ func (r *Runner) cross(ctx context.Context, c *client, roles []assignment, done 
 	for _, a := range roles {
 		res.roles = append(res.roles, a.role)
 		if a.role == RoleEmbedding {
-			cfg.Embed = append(cfg.Embed, concurrent.EmbedStream{Name: a.role, Embedder: embedder{c, a.model}, Inputs: capacityInputs})
+			_, document := r.embedPrompts(a.model)
+			cfg.Embed = append(cfg.Embed, concurrent.EmbedStream{Name: a.role, Embedder: embedder{c, a.model, document}, Inputs: capacityInputs})
 			continue
 		}
 		cfg.Chat = append(cfg.Chat, concurrent.ChatStream{
-			Name: a.role, Chatter: &recorder{c: c, model: a.model, role: a.role, media: r.Media, cutOff: true}, Workers: 1,
+			Name: a.role, Chatter: &recorder{c: c, model: a.model, role: a.role, media: r.Media, asr: r.asrPrompt(a.model), cutOff: true}, Workers: 1,
 		})
 	}
 	for {

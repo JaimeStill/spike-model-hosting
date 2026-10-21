@@ -489,3 +489,179 @@ laptop on 2026-10-19:
   router failed to connect for 134 s (`curl: (28) Failed to connect`), then went through. The
   router's unit stayed up throughout (active since the boot), and the reload completed. The
   cause wasn't found.
+
+## b11715 to b11734, 2026-10-19
+
+- **From:** b11715 (`b11715-9d1878a43`), installed by `evaluation`, on the OS update's driver.
+- **To:** b11734 (`b11734-f3fb2fcdb`), the newest b-tag when `screen`'s BUILD began. Its Vulkan
+  x64 asset is `llama-b11734-bin-ubuntu-vulkan-x64.tar.gz`, sha256
+  `2c8b590c325960eb474c08c7a3b02b3c8eda054aa03352ed864948dc4ae1668d`.
+- **Reviewed:** the 19 commits in `b11715...b11734` (`gh api
+  repos/ggml-org/llama.cpp/compare/b11715...b11734`), read for Vulkan on gfx1151, the router
+  (`server-models`, the presets and their reload), tool-call parsing, mtmd's vision and audio,
+  and the embeddings endpoint. Where a question needed the source, the review read it at the
+  `b11734` tag. No commit in the range touches `tools/server/`, `tools/mtmd/`, `common/` (so
+  neither `common/arg.cpp`, `common/preset.cpp` nor `common/parsers/`), `src/llama-graph.cpp`,
+  or the Gemma 4, gpt-oss and EmbeddingGemma graphs. 32 of the range's 55 changed files are in
+  the Hexagon, CUDA, SYCL, CANN and WebGPU backends; most of the rest are tests, CI, scripts,
+  conversion and the web UI.
+
+### What the notes change for set A
+
+- **Vulkan.** One line, from [#28851](https://github.com/ggml-org/llama.cpp/pull/28851)
+  (non-contiguous `SUM` on CPU, CUDA, Vulkan and WebGPU): Vulkan's `supports_op` takes `SUM`
+  over any contiguously allocated F32 tensor, where it shared `SUM_ROWS`'s contiguous-rows test
+  before. No graph set A runs calls `ggml_sum`: `src/models/gemma4.cpp`, `openai-moe.cpp`,
+  `gemma-embedding2.cpp`, `src/llama-graph.cpp`, `tools/mtmd/clip.cpp`, and the four Gemma 4
+  projectors under `tools/mtmd/models/` have none at `b11734`. Nothing else in the Vulkan
+  backend changes.
+- **The router.** Unchanged: no commit touches `tools/server/`. Loading, unloading, the presets,
+  `load-on-startup`, `--models-max`, `GET /models?reload=1` and `DELETE /models` behave as on
+  b11715. A reload re-reads the file `--models-preset` names, unloads a running model whose
+  section changed, and never loads one (`server-models.cpp`, `load_models`); `DELETE /models`
+  removes only a model whose source is the cache, and refuses a preset's model ("not removable
+  (not from cache)").
+- **Tool-call parsing.** Unchanged: `common/parsers/` and the chat code have no commit. The
+  `<|constrain|>` final that fails gpt-oss's peg-native parse (`tool-reliability.md`) fails the
+  same way; [#25332](https://github.com/ggml-org/llama.cpp/pull/25332) is open and unchanged
+  since 2026-07-06.
+- **mtmd, vision and audio.** Unchanged: no commit touches `tools/mtmd/`. Gemma 4's image
+  warm-up reservation, `--mtmd-batch-max-tokens` and the `GEMMA4UA` audio path are as on b11715.
+- **The embeddings endpoint.** Unchanged. [#30607](https://github.com/ggml-org/llama.cpp/pull/30607)
+  adds bidirectional attention and a `dense_2` output projection to the Qwen3 graph, for Qwen3
+  embedding GGUFs that carry them; EmbeddingGemma 2's graph is untouched.
+- **The RAM prompt cache.** Unchanged; [#27624](https://github.com/ggml-org/llama.cpp/pull/27624)
+  is open and unchanged since 2026-10-10.
+- **Graphs and CPU.** [#30791](https://github.com/ggml-org/llama.cpp/pull/30791) vectorizes the
+  CPU's SiLU and `expf`; set A runs every layer on the GPU, so only a CPU fallback would see it.
+  [#30105](https://github.com/ggml-org/llama.cpp/pull/30105), Vulkan's F32 expert down-projection,
+  is open and unchanged since 2026-10-08, so Mistral Small 4's disqualification stands.
+- **Tools.** [#30497](https://github.com/ggml-org/llama.cpp/pull/30497) makes `gguf-split` and
+  `export-lora` refuse a truncated GGUF; the router uses neither.
+- **Sampling defaults, flags and preset keys.** Unchanged: `common/` has no commit in the range,
+  so no flag or preset key is added, renamed or removed. No note requires a preset change or a
+  higher minimum build. The presets the move installs differ from the installed ones only in two
+  reason comments that `evaluation`'s editor rewrote after b11715's install (the 26B-A4B's c and
+  Mistral Small 4's c); the unit is unchanged.
+
+### The move
+
+The root commands, in the order the architect runs them in one sitting, are the runbook's
+"Moving to a new build" ([`README.md`](README.md)), with the preset directory's write access and
+the deletions of "The models the host keeps". The rendered presets' sha256 is
+`9c983739f3142f01a92726b56d286150c3f21c3df50f8953c957a815401962ea`; the unit's is
+`83b0a95c16769d0ee7abb7f6b9e9aec9ccb61d7f57831f508465645e31c51554`, the installed one. The
+architect ran steps a to d on 2026-10-19, with no output differing from the runbook's.
+
+- **The install.** b11734 is installed at `/opt/llama.cpp/b11734` (`llama-server --version`:
+  `version: 0.7.0-dev (build 11734, commit f3fb2fcdb)`). The rendered `models.ini` and the unit
+  are installed, so the installed presets are the committed render (`9c983739`). The b11715
+  files are kept as `/etc/llama-router/*.b11715`.
+- **The preset directory and the deletions.** `/etc/llama-router` is `drwxrwxr-x
+  root:<group>`, the service user's group, and `models.ini` is still `root:root` `0644`. The
+  cache's `hub` holds the five models' directories the profile keeps (set A's four and
+  Nemotron 3.5 Super, still unscreened), with no Mistral Small 4 directory and no retired
+  directory beside the cache; the models drive went from 356G used to 155G. `GET /models` still
+  lists Mistral Small 4, a preset, unloaded, now with no sidecars on disk. `/opt/llama.cpp` holds
+  b11715, b11734 and `current`.
+- **The switch.** `current` points at b11734 and `llama-router` restarted at 19:27:01 UTC. The
+  `evaluate coldload -set a` watch saw the router up in 0.5s and all four of set A's models
+  loaded in 16.5s (EmbeddingGemma 2 2.0s, gemma-4-E4B 3.3s, 26B-A4B 4.8s, gpt-oss-120b 16.5s),
+  with no manual load; `/props` reports `b11734-f3fb2fcdb`. The new build's files had just been
+  written, so this isn't a warm or cold measurement, and the move's cold-load pair (the
+  runbook's step e) waits for the deep stage's `-restart`.
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a: every package ok, in 8.8s.
+- **The idle pool.** With set A loaded and idle after the restart, `amdgpu_top -p --no-pc` read
+  `GTT 94798/98304 MiB` at 19:27:45 UTC: 3506 MiB free, above the 2816 MiB floor.
+- **Fitness, every role.** As at the OS update: each role's run started from a reload of set A
+  over the API (30 s idle, then a footprint reading of 3506 MiB free each time) with `TMPDIR` in
+  `.state/tmp`, and was interrupted once its quality stage had begun. Admission, fitness and
+  capacity passed for every role:
+
+  | Role | Fitness | Capacity | Measured against the floors |
+  |---|---|---|---|
+  | embedding | 0.7s | 0.5s | 17,657 tok/s; 32-token query 13 ms |
+  | audio | 0.5s | 2.0s | RTFx 12.4; slowest of 4 streams 3.18 |
+  | vision | 7.1s | 10.1s | one image question 1.8 s |
+  | agent | 15.2s | 5.0s | decode 50.5 tok/s; 8k prefill 1048 tok/s, TTFT 8.0 s; slowest of 4 streams 23.5 tok/s |
+
+  The idle pool read 3464 to 3491 MiB free at fitness, and the least free at capacity's peak was
+  3446 MiB (the agent's), against the 2816 MiB floor. The figures sit with the OS update's on
+  b11715; the embedding's throughput and query time read faster, from one run each.
+
+### Per-model slots, 2026-10-19
+
+`screen`'s slice 2 moved the slots from the profile's one host-wide value into each model's
+entry, rendered as each section's own `parallel` beside `[*]`'s `kv-unified = true`; every model
+keeps 4, so set A's values are unchanged. The new render, sha256
+`591c0ddbf57c04d3af6576dc8f951801d4c3d6a852dedd92b2d75a08be6f40b8`, replaced `9c983739` with no
+root command and no restart, by the runbook's "The preset file's write access": written beside
+`models.ini` in `/etc/llama-router`, renamed over it, and applied with `GET /models?reload=1`.
+
+- **The install.** `sha256sum /etc/llama-router/models.ini` on the Framework reads `591c0ddb…`,
+  the committed render. The file is now the service user's (`-rw-r--r-- <user>:<group>`), as a
+  rename leaves it, until the next install replaces it with a root-owned one.
+- **The reload.** It unloaded nothing: each model's arguments are the same as before
+  (`--parallel 4` and `--kv-unified` on each), so set A stayed loaded, and `/props` reports
+  `total_slots` 4 for each of its models.
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a, with its new slots check (each model's `total_slots` against its profile entry).
+
+### Set A's swept slots and c, 2026-10-20
+
+`screen`'s slice 8 swept set A whole (`evaluate sweep -set a`) and committed each model's chosen
+slots and c ([`../../docs/findings/slots.md`](../../docs/findings/slots.md)): gpt-oss-120b 2 slots,
+c = 17664; Gemma 4 26B-A4B 8, c = 41472; gemma-4-E4B 16, c = 31488; EmbeddingGemma 2 16,
+c = 8192. The sweep installed each model's render as it committed it, with no root command and
+no restart, by the runbook's "The preset file's write access"; before it began, the profile's
+reasons were rewritten as model facts, installed as render `b987489d` the same way.
+
+- **The install.** The committed render is sha256
+  `6643c687c39a48ea518fab9c47e63aaa9ac842573419abaca2d75c340a87083e`; `sha256sum
+  /etc/llama-router/models.ini` on the Framework reads the same, with no temporary file beside
+  it, the file still the service user's (`-rw-r--r-- <user>:<group>`) until the next install.
+  It replaced `591c0ddb`.
+- **The reload.** Each model's section changed, so each reload unloaded and the sweep loaded
+  again only the model it committed; `/props` reports `total_slots` and `n_ctx` 2 and 17664,
+  8 and 41472, 16 and 31488, 16 and 8192.
+- **The pool.** Idle after a reload of the set, 6463 MiB free; at the warmed peak 6015 MiB, at
+  capacity's peak 5965 MiB, against the 2816 MiB floor (up from 3506 idle at four slots each,
+  mostly gpt-oss-120b's c falling from 131072 to 17664).
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a, each model's `total_slots` matching its profile entry.
+
+### Set A's pre-sweep slots and c restored, 2026-10-21
+
+By the goal record's redirect of 2026-10-21, the startup set went back to the settings it ran on
+before the sweep, the sweep's result kept in
+[`../../docs/findings/slots.md`](../../docs/findings/slots.md) ("The startup set restored"):
+4 slots each; c = 131072 (gpt-oss-120b), 32768 (Gemma 4 26B-A4B), 32768 (gemma-4-E4B), 8192
+(EmbeddingGemma 2). Installed with `evaluate sweep -restore -set a`, with no root command and no
+restart, by the runbook's "The preset file's write access".
+
+- **The install.** The committed render is sha256
+  `84086e3c02bf63658a58d0e3e7926a976f7fd27f135f6fe7584b0c427567c08c`, its keys the pre-sweep
+  render's; `sha256sum /etc/llama-router/models.ini` on the Framework reads the same, with no
+  temporary file beside it, the file the service user's until the next install. It replaced
+  `6643c687`.
+- **The reload.** The restore reloaded set A and reported every model serving at its committed
+  setting; `/props` reports `total_slots` 4 for each, `n_ctx` 131072, 32768, 32768 and 8192.
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a.
+
+### The Mistral reason corrected, 2026-10-21
+
+The Mistral Small 4 entry's `c_reason`, which renders as a comment above its section, now cites
+the pool's 2.75GiB floor (2816MiB, `evaluation/floors.toml`) in place of the 3GiB it had before
+slice 8; no key line changed. Installed with `evaluate sweep -restore -set a`, with no root
+command and no restart.
+
+- **The install.** The committed render is sha256
+  `a65fd306088ea3897f586645b2592c07e5fe3e578b50ca7e82a081c945097260`, its keys
+  `84086e3c`'s; `sha256sum /etc/llama-router/models.ini` on the Framework reads the same, with no
+  temporary file beside it. It replaced `84086e3c`.
+- **The reload.** The restore reported every model of set A serving at its committed setting;
+  `/props` reports `total_slots` 4 for each, `n_ctx` 131072, 32768, 32768 and 8192.
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a.

@@ -209,7 +209,9 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 		return concurrent.Report{}, err
 	}
 
-	workers := concurrent.SplitSlots(p.Slots, 3)
+	// The chat streams share the chat model's own slots.
+	slots := p.Model(chatModel).Slots
+	workers := concurrent.SplitSlots(slots, 3)
 	cfg := concurrent.Config{
 		Rounds:         o.rounds,
 		RequestTimeout: o.timeout,
@@ -240,7 +242,7 @@ func runOnce(ctx context.Context, o options, stdout io.Writer) (concurrent.Repor
 		},
 	}
 	if _, err := fmt.Fprintf(stdout, "router %s, build %s, set %s\nchat %s on %d slots: pi %d, claude %d, model-chat %d workers, %d rounds\nembed %s: %d inputs, batch after batch until the chats finish, at least %d rounds\n\n",
-		o.router, build, set.Name, chatModel, p.Slots, workers[0], workers[1], workers[2], o.rounds, embedModel, len(inputs), o.rounds); err != nil {
+		o.router, build, set.Name, chatModel, slots, workers[0], workers[1], workers[2], o.rounds, embedModel, len(inputs), o.rounds); err != nil {
 		return concurrent.Report{}, err
 	}
 	rep, err := concurrent.Run(ctx, cfg)

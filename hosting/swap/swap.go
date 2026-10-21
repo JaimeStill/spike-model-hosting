@@ -58,16 +58,23 @@ type Report struct {
 	Total time.Duration
 }
 
+// withDefaults returns cfg with each zero field at its default: a new HTTP client,
+// DefaultInterval, DefaultLoadTimeout and DefaultUnloadTimeout.
+func (cfg Config) withDefaults() Config {
+	cfg.HTTP = cmp.Or(cfg.HTTP, &http.Client{})
+	cfg.Interval = cmp.Or(cfg.Interval, DefaultInterval)
+	cfg.LoadTimeout = cmp.Or(cfg.LoadTimeout, DefaultLoadTimeout)
+	cfg.UnloadTimeout = cmp.Or(cfg.UnloadTimeout, DefaultUnloadTimeout)
+	return cfg
+}
+
 // Run swaps the router to cfg.Models: it unloads every loaded model the incoming set doesn't
 // hold, then loads each of the set's models that isn't loaded, and checks the router ends with
 // exactly the set loaded. It fails before any request that changes the router when the router
 // doesn't list one of the set's models. A step that fails stops the swap, and a load is never
 // sent while an unload is unfinished. The Report holds the steps run, even when Run fails.
 func Run(ctx context.Context, cfg Config) (rep Report, err error) {
-	cfg.HTTP = cmp.Or(cfg.HTTP, &http.Client{})
-	cfg.Interval = cmp.Or(cfg.Interval, DefaultInterval)
-	cfg.LoadTimeout = cmp.Or(cfg.LoadTimeout, DefaultLoadTimeout)
-	cfg.UnloadTimeout = cmp.Or(cfg.UnloadTimeout, DefaultUnloadTimeout)
+	cfg = cfg.withDefaults()
 	start := time.Now()
 	defer func() { rep.Total = time.Since(start) }()
 
@@ -113,6 +120,37 @@ func Run(ctx context.Context, cfg Config) (rep Report, err error) {
 		}
 	}
 	return rep, check(ctx, cfg)
+}
+
+// Reload unloads each of cfg.Models and loads it again, so every one starts from a fresh load:
+// a model keeps the largest working memory it has needed until it is reloaded. It fails before
+// any request that changes the router unless the router lists every one of them loaded, and
+// leaves every other model as it is. Every unload finishes before the first load, in cfg.Models'
+// order, and the reload ends by checking each is listed loaded. The Report holds the steps run,
+// even when Reload fails; it keeps none.
+func Reload(ctx context.Context, cfg Config) (rep Report, err error) {
+	cfg = cfg.withDefaults()
+	start := time.Now()
+	defer func() { rep.Total = time.Since(start) }()
+
+	if err := router.CheckLoaded(ctx, cfg.HTTP, cfg.Router, cfg.Models...); err != nil {
+		return rep, fmt.Errorf("a reload starts from every model loaded: %w", err)
+	}
+	for _, id := range cfg.Models {
+		s := unload(ctx, cfg, id)
+		rep.Unloads = append(rep.Unloads, s)
+		if s.Err != nil {
+			return rep, fmt.Errorf("unloading %s: %w", id, s.Err)
+		}
+	}
+	for _, id := range cfg.Models {
+		s := load(ctx, cfg, id, router.StatusUnloaded)
+		rep.Loads = append(rep.Loads, s)
+		if s.Err != nil {
+			return rep, fmt.Errorf("loading %s: %w", id, s.Err)
+		}
+	}
+	return rep, router.CheckLoaded(ctx, cfg.HTTP, cfg.Router, cfg.Models...)
 }
 
 // unload unloads id and polls until the router lists it unloaded.

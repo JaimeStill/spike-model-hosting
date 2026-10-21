@@ -3,18 +3,27 @@ or a seeded tier list of a stock inspect_evals benchmark, V*Bench, DocVQA or MMM
 
     uv run --project evaluation/suites python evaluation/suites/vision_quality.py eval \
         --router http://framework:8080 --model ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0 \
-        --tier vstar --list evaluation/tiers/vision-vstar.txt --output DIR [--bar 0.7]
+        --tier vstar --list evaluation/tiers/vision-vstar.txt --slots 4 --output DIR [--bar 0.7]
 
     uv run --project evaluation/suites python evaluation/suites/vision_quality.py eval \
-        --router ... --model ... --tier probe --image hosting/probe/testdata/shapes.png --output DIR
+        --router ... --model ... --tier probe --image hosting/probe/testdata/shapes.png --slots 4 --output DIR
 
     uv run --project evaluation/suites python evaluation/suites/vision_quality.py ids --tier mmmu
+
+    uv run --project evaluation/suites python evaluation/suites/vision_quality.py peak \
+        --tiers evaluation/tiers --output DIR
 
 eval runs the tier through Inspect's stock openai-api provider, which sends each image as an
 OpenAI chat image_url part, the router's shape, and writes one Inspect JSON log a task under DIR;
 evaluate's quality stage (package evaluation/gate) reads them. ids prints the benchmark's
 dataset, as a tier list's "# dataset" header, then every sample ID of it the tier draws from: the
-pool the command evaluation/cmd/tierlist draws a tier list from.
+pool the command evaluation/cmd/tierlist draws a tier list from. peak finds the largest image,
+by pixels, that the benchmarks' committed tier lists (vision-<tier>.txt under --tiers) send, and
+copies it into DIR as peak.<ext> beside peak.json, which names its tier, sample, file and size:
+the image evaluate's warm-up sends the vision model before a run, to drive its image encoder to
+its high-water mark. The server caps each image at its ubatch's tokens and encodes each in a batch
+of its own (the profile's mtmd-batch-max-tokens), so the largest image is the largest batch the
+encoder runs.
 
 The benchmarks are inspect_evals' own tasks, unforked: the tier's samples are picked with
 Inspect's sample-id filtering, and the generation settings and the early stop are set on the
@@ -41,23 +50,31 @@ Generation: the benchmarks at temperature 0 with reasoning off (the Gemma 4 temp
 enable_thinking, which defaults to on; templates without the switch ignore it), the prompt cache
 on, and room for an answer; the probe as a client sends it, at the router's defaults, the card's
 sampling and the template's default reasoning, since pass^5 measures the served model's
-reliability. Four requests in flight, the profile's slots; the early stop judges samples as they
-complete.
+reliability. --slots requests in flight, the model's slots (slots.py); the early stop judges
+samples as they complete.
 
-Early stop (pass_stop.py's PassStop, shared with agent_quality.py, with a bar): the tier's screening fifth runs whole, then, before each
-further sample, the tier stops once the one-sided 95% Wilson upper bound on its pass rate is
-below the bar. A sample passes at a score of 0.5 or more: a correct choice, or an ANLS of 0.5 or more, which ANLS's own threshold makes any ANLS above 0.
-The bar judges the tier's mean score, the accuracy or the mean ANLS; a sample's ANLS is never
-above its pass, so the mean ANLS is never above the pass rate, and a bound that puts the pass
-rate under the bar puts the mean ANLS under it too. The tier's account of its early stop, the
-samples it stopped and why, is written beside the logs as early_stop.json.
+Early stop (pass_stop.py's PassStop, shared with agent_quality.py, with a bar): the tier's
+screening fifth runs whole, then, before each further sample, the tier stops failed once the
+one-sided 95% Wilson upper bound on its pass rate is below the bar, and passed once the Wilson
+lower bound on its mean score is at or over it; between the two it runs on. A sample passes at a
+score of 0.5 or more: a correct choice, or an ANLS of 0.5 or more, which ANLS's own threshold
+makes any ANLS above 0. The bar judges the tier's mean score, the accuracy or the mean ANLS; a
+sample's ANLS is never above its pass, so the mean ANLS is never above the pass rate, and a
+bound that puts the pass rate under the bar puts the mean ANLS under it too; the lower bound is
+on the mean score itself. The tier's account of its early stop, the samples it stopped, why, and
+the side it stopped on, is written beside the logs as early_stop.json. Without a bar the list
+runs whole: evaluate's full run sends the samples its screen didn't run as a list of their own,
+with no bar, and a task that holds none of them is left out.
 """
 
 import argparse
 import contextlib
 import json
+import shutil
 import sys
 from pathlib import Path
+
+from PIL import Image
 
 from inspect_ai import Task, task, task_with
 from inspect_ai import eval as inspect_eval
@@ -75,6 +92,7 @@ from inspect_evals.vstar_bench.vstar_bench import HUGGINGFACE_REPO_ID as VSTAR_R
 from inspect_evals.vstar_bench.vstar_bench import VSTAR_BENCH_DATASET_REVISION
 
 from pass_stop import EARLY_STOP_FILE, PassStop, read_list
+from slots import add_slots
 
 # The tiers' tasks, in the order they run, and each one's dataset as a tier list's header names
 # it.
@@ -108,9 +126,6 @@ PROBE_PROMPT = "Describe this image in one sentence."
 PROBE_WORDS = ["circle", "square", "triangle", "red", "blue", "green"]
 PROBE_REPEATS = 5
 
-# The router's slots: the requests a tier keeps in flight.
-SLOTS = 4
-
 
 @scorer(metrics=[accuracy()])
 def names_shapes():
@@ -138,18 +153,60 @@ def vision_probe(image: str):
                 config=GenerateConfig(max_tokens=4096))
 
 
-def main():
+def peak(tiers: Path, output: Path) -> dict:
+    """The largest image, by pixels, any benchmark's tier list sends, copied into output beside
+    peak.json; the first of equal size, in BENCHMARKS' and each list's order, wins."""
+    best = None
+    for name, (makers, dataset) in BENCHMARKS.items():
+        path = tiers / f"vision-{name}.txt"
+        listed, ids = read_list(path)
+        if listed != dataset:
+            raise SystemExit(f"{path} is drawn from {listed!r}, not the tier's {dataset!r}")
+        want = set(ids)
+        # The loaders print their progress to stdout, which holds the result alone.
+        with contextlib.redirect_stdout(sys.stderr):
+            samples = [s for make in makers for s in make().dataset if str(s.id) in want]
+        for s in samples:
+            messages = s.input if isinstance(s.input, list) else []
+            for m in messages:
+                for c in m.content if isinstance(m.content, list) else []:
+                    if not isinstance(c, ContentImage):
+                        continue
+                    with Image.open(c.image) as im:
+                        width, height = im.size
+                    if best is None or width * height > best["width"] * best["height"]:
+                        best = {"tier": f"vision-{name}", "id": str(s.id), "source": c.image, "width": width, "height": height}
+    if best is None:
+        raise SystemExit(f"no image in the tier lists under {tiers}")
+    output.mkdir(parents=True, exist_ok=True)
+    best["file"] = "peak" + Path(best["source"]).suffix.lower()
+    shutil.copyfile(best["source"], output / best["file"])
+    (output / "peak.json").write_text(json.dumps(best, indent=1) + "\n")
+    return best
+
+
+def parser() -> argparse.ArgumentParser:
+    """The command's arguments: ids, peak, or eval with the model's --slots, the requests a tier
+    keeps in flight."""
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     pi = sub.add_parser("ids", help="print every sample ID of a benchmark")
     pi.add_argument("--tier", required=True, choices=BENCHMARKS)
+    pp = sub.add_parser("peak", help="find the largest image the tier lists send")
+    pp.add_argument("--tiers", required=True)
+    pp.add_argument("--output", required=True)
     pe = sub.add_parser("eval", help="run a tier with Inspect and write its JSON logs")
     for flag in ("--router", "--model", "--tier", "--output"):
         pe.add_argument(flag, required=True)
     pe.add_argument("--list", help="the tier list, for a benchmark")
     pe.add_argument("--image", help="the probe's image, for the probe")
     pe.add_argument("--bar", type=float)
-    a = p.parse_args()
+    add_slots(pe)
+    return p
+
+
+def main():
+    a = parser().parse_args()
 
     if a.cmd == "ids":
         makers, dataset = BENCHMARKS[a.tier]
@@ -158,6 +215,10 @@ def main():
             ids = [str(s.id) for make in makers for s in make().dataset]
         print(f"# dataset {dataset}")
         print("\n".join(ids))
+        return
+
+    if a.cmd == "peak":
+        print(json.dumps(peak(Path(a.tiers), Path(a.output))))
         return
 
     if a.tier == "probe":
@@ -172,8 +233,11 @@ def main():
             raise SystemExit(f"{a.list} is drawn from {listed!r}, not the tier's {dataset!r}")
         stop = PassStop(a.bar, len(ids)) if a.bar is not None else None
         tasks = [task_with(make(), config=GENERATE, early_stopping=stop) for make in makers]
-        # Each ID scoped to the task that holds it, so no task warns of IDs that are another's.
+        # Each ID scoped to the task that holds it, so no task warns of IDs that are another's;
+        # a task holding none of the list's, as a full run's rest can leave V*Bench's, is left out.
         held = {t.name: {str(s.id) for s in t.dataset} for t in tasks}
+        tasks = [t for t in tasks if held[t.name] & set(ids)]
+        held = {t.name: held[t.name] for t in tasks}
         sample_id = [f"{name}:{i}" for name, owned in held.items() for i in ids if i in owned]
         if len(sample_id) != len(ids):
             missing = sorted(set(ids) - set().union(*held.values()))
@@ -189,7 +253,7 @@ def main():
     )
     logs = inspect_eval(
         tasks, model=model, sample_id=sample_id, log_dir=a.output, log_format="json", metadata=metadata,
-        max_tasks=1, max_connections=SLOTS, max_samples=SLOTS, display="plain", log_images=False,
+        max_tasks=1, max_connections=a.slots, max_samples=a.slots, display="plain", log_images=False,
     )
     for log in logs:
         if log.status != "success":

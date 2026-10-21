@@ -7,10 +7,13 @@
 // time.
 //
 // The schema:
-//   - Profile is a decoded profile; Load reads and validates one, and Profile.Validate reports
-//     what a profile built in code is missing.
+//   - Profile is a decoded profile; Load reads and validates one, Parse decodes and validates
+//     one from its TOML, and Profile.Validate reports what a profile built in code is missing.
+//   - SetSetting edits one model's Setting in a profile's TOML, its slots, c and their reasons,
+//     every other byte kept, and checks the result parses with those four values alone changed:
+//     how evaluate's set sweep commits a chosen setting.
 //   - Engine is the serving engine and its minimum build; Engine.Repository names its upstream.
-//   - Defaults, Model, Sampling, Set and MemoryBudget are the profile's tables.
+//   - Defaults, Model, Sampling, Prompts, Set and MemoryBudget are the profile's tables.
 //   - A Set names up to MaxSetModels of the profile's models, at least one a chat model, with
 //     its own MemoryBudget: measured on a build, or estimated for a set not yet measured.
 //     Exactly one set is the startup set, which Profile.StartupSet returns, and every model is
@@ -22,16 +25,23 @@
 //   - Each Model declares its roles and its licence beside its origin; a Model of OriginChina,
 //     the origin STANDARDS restricts (Model.OriginRestricted), records why it was chosen in
 //     OriginReason, which no other Model sets. Each declares its card's context
-//     (CardContext, which C may not pass), optionally its active parameters and bits per weight
-//     (ActiveParamsB, BitsPerWeight: the bytes a decoded token reads), and an embedding model
-//     its output width, Dims; Profile.Model looks one up by router ID. A vision Model may cap
-//     the image tokens its encoder takes in one batch (MtmdBatchMaxTokens, with its reason). A
+//     (CardContext, which C may not pass), the requests it serves at once (Slots, at least 1,
+//     with its SlotsReason; KV, unified or per-slot, stays the profile's, for every model),
+//     optionally its active parameters and bits per weight (ActiveParamsB, BitsPerWeight: the
+//     bytes a decoded token reads), and an embedding model its output width, Dims;
+//     Profile.Model looks one up by router ID. A vision Model may cap the image tokens its
+//     encoder takes in one batch (MtmdBatchMaxTokens, with its reason). A
 //     profile's optional MemoryBandwidthGBs is its host class's memory bandwidth, the ceiling
 //     decode is compared with. RouterTag is the tag the router lists a model by, the one a
 //     Model's ID must end with.
 //   - A chat Model's ConsumerReasoning is the reasoning setting the coding agents send with its
 //     requests, Pi's thinking level and OpenCode's options, each one its template accepts. It
 //     configures the consumers, not the router, and renders into no preset.
+//   - A Model's Prompts are its card's prompts, with their Source and Reason: an embedding
+//     model's task prompts by MTEB prompt name (Embedding), and an audio model's ASR
+//     instruction (ASR). Each belongs to a role the model declares, and a set's audio model gives
+//     ASR. evaluate's clients read them from here alone (the MTEB encoder, and the ASR task,
+//     fitness, capacity and the set stage), and they render into no preset.
 //   - HostStrixHalo and HostNvidiaCUDA, EngineLlamaCPP, BindTailnet and BindLoopback, KVUnified
 //     and KVPerSlot, KindGenerative and KindEmbedding, RoleChat, RoleVision, RoleAudio and
 //     RoleEmbedding, and ReasoningLow, ReasoningMedium and ReasoningHigh are the values its
@@ -47,7 +57,13 @@
 //
 // The renders:
 //   - Profile.RenderPresets writes the router's --models-preset INI file, every model's section
-//     with hf-repo = its ID, and load-on-startup only for the startup set's models.
+//     with hf-repo = its ID, its own parallel = its Slots, and load-on-startup only for the
+//     startup set's models; [*] holds the shared defaults and the profile's KV mode.
+//     Profile.PresetSection returns the preset one model runs at, [*] and its own section, key
+//     lines alone: the bytes evaluate keys the model's results by.
+//   - Profile.Override returns a copy of the profile with one model at the slots and c it is
+//     given, validated: its RenderPresets is the render with that override, every other section
+//     the profile's own. evaluate's sweep renders each step this way.
 //   - Profile.RenderUnit writes the router's systemd unit, with a Host's values; Host.Validate
 //     reports a Host value that is missing or that the unit can't carry.
 //   - EngineBinary, PresetsPath and RouterPort are the install layout every unit renders.
