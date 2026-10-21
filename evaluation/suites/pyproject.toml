@@ -16,6 +16,10 @@
 # mpmath (inspect_evals' bfcl extra), which the lock holds at 1.3.0 through sympy (<1.4); pinning
 # it here would hold a package behind its newest for currency to report. The .venv uv syncs here
 # is untracked.
+#
+# Held while set A's bars stand, the pins they were measured on: inspect-ai (the framework every
+# Inspect bar ran on), inspect-evals, mteb, openai, and pillow (13 is a new major). Currency
+# reports each behind its newest, and bumping one rebaselines the roles it affects.
 [project]
 name = "spike-suites"
 version = "0.0.0"

@@ -7,7 +7,7 @@ monorepo_root = true
 config_roots = ["hosting", "evaluation", "devices/strix-halo"]
 
 [tools]
-go = "1.27.2"
+go = "1.27.3"
 golangci-lint = "2.15.0"
 jq = "1.8.2"
 shellcheck = "0.11.0"
