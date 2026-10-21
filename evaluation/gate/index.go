@@ -230,6 +230,7 @@ func (r *Runner) method() (string, error) {
 	return sha256Hex(b), nil
 }
 
+// sha256Hex is b's SHA-256, in hex.
 func sha256Hex(b []byte) string {
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:])

@@ -94,10 +94,10 @@ func (u UV) Task(ctx context.Context, router, model, task string, prompts map[st
 		return err
 	}
 	path := filepath.Join(out, "prompts.json")
-	if err := os.MkdirAll(out, 0o755); err != nil {
+	if err := os.MkdirAll(out, 0o750); err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, append(js, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(path, append(js, '\n'), 0o600); err != nil {
 		return err
 	}
 	if err := u.run(ctx, "mteb_quality.py", "--router", router, "--model", model, "--task", task,

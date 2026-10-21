@@ -3,6 +3,7 @@ package gate
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -133,7 +134,7 @@ func ParseRAM(free, ps []byte) (RAM, error) {
 		found = true
 	}
 	if !found {
-		return RAM{}, fmt.Errorf("free's output holds no Mem: line")
+		return RAM{}, errors.New("free's output holds no Mem: line")
 	}
 	for line := range strings.SplitSeq(string(ps), "\n") {
 		rss, args, ok := strings.Cut(strings.TrimSpace(line), " ")

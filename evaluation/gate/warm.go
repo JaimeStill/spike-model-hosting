@@ -1,11 +1,11 @@
 package gate
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -172,10 +172,7 @@ func (r *Runner) warm(ctx context.Context) (*Warm, error) {
 		return w, fmt.Errorf("reloading set %s: %w", r.Set.Name, err)
 	}
 
-	settle := r.Settle
-	if settle == 0 {
-		settle = defaultSettle
-	}
+	settle := cmp.Or(r.Settle, defaultSettle)
 	select {
 	case <-ctx.Done():
 		return w, ctx.Err()
@@ -342,9 +339,8 @@ func (r *Runner) warmedCheck(w *Warm) Check {
 	ch.Values = poolValues(p)
 	ch.Detail = fmt.Sprintf("%d of %d MiB used after the warm-up%s", p.UsedMiB, p.TotalMiB, ramDetail(p))
 	if w.Idle != nil {
-		maps.Copy(ch.Values, map[string]float64{
-			"idle_pool_free_mib": float64(w.Idle.FreeMiB()), "warm_growth_mib": float64(p.UsedMiB - w.Idle.UsedMiB),
-		})
+		ch.Values["idle_pool_free_mib"] = float64(w.Idle.FreeMiB())
+		ch.Values["warm_growth_mib"] = float64(p.UsedMiB - w.Idle.UsedMiB)
 		ch.Detail += fmt.Sprintf("; idle after the reload, %d MiB free", w.Idle.FreeMiB())
 	}
 	return ch

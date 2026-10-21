@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"context"
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os/exec"
 	"path"
@@ -81,9 +80,3 @@ func (s SSHPresets) run(ctx context.Context, script string, stdin []byte) ([]byt
 
 // shellQuote quotes s as one word for a POSIX shell.
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
-
-// sum is data's SHA-256, in hex.
-func sum(data []byte) string {
-	h := sha256.Sum256(data)
-	return hex.EncodeToString(h[:])
-}

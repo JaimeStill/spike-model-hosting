@@ -58,16 +58,23 @@ type Report struct {
 	Total time.Duration
 }
 
+// withDefaults returns cfg with each zero field at its default: a new HTTP client,
+// DefaultInterval, DefaultLoadTimeout and DefaultUnloadTimeout.
+func (cfg Config) withDefaults() Config {
+	cfg.HTTP = cmp.Or(cfg.HTTP, &http.Client{})
+	cfg.Interval = cmp.Or(cfg.Interval, DefaultInterval)
+	cfg.LoadTimeout = cmp.Or(cfg.LoadTimeout, DefaultLoadTimeout)
+	cfg.UnloadTimeout = cmp.Or(cfg.UnloadTimeout, DefaultUnloadTimeout)
+	return cfg
+}
+
 // Run swaps the router to cfg.Models: it unloads every loaded model the incoming set doesn't
 // hold, then loads each of the set's models that isn't loaded, and checks the router ends with
 // exactly the set loaded. It fails before any request that changes the router when the router
 // doesn't list one of the set's models. A step that fails stops the swap, and a load is never
 // sent while an unload is unfinished. The Report holds the steps run, even when Run fails.
 func Run(ctx context.Context, cfg Config) (rep Report, err error) {
-	cfg.HTTP = cmp.Or(cfg.HTTP, &http.Client{})
-	cfg.Interval = cmp.Or(cfg.Interval, DefaultInterval)
-	cfg.LoadTimeout = cmp.Or(cfg.LoadTimeout, DefaultLoadTimeout)
-	cfg.UnloadTimeout = cmp.Or(cfg.UnloadTimeout, DefaultUnloadTimeout)
+	cfg = cfg.withDefaults()
 	start := time.Now()
 	defer func() { rep.Total = time.Since(start) }()
 
@@ -122,10 +129,7 @@ func Run(ctx context.Context, cfg Config) (rep Report, err error) {
 // order, and the reload ends by checking each is listed loaded. The Report holds the steps run,
 // even when Reload fails; it keeps none.
 func Reload(ctx context.Context, cfg Config) (rep Report, err error) {
-	cfg.HTTP = cmp.Or(cfg.HTTP, &http.Client{})
-	cfg.Interval = cmp.Or(cfg.Interval, DefaultInterval)
-	cfg.LoadTimeout = cmp.Or(cfg.LoadTimeout, DefaultLoadTimeout)
-	cfg.UnloadTimeout = cmp.Or(cfg.UnloadTimeout, DefaultUnloadTimeout)
+	cfg = cfg.withDefaults()
 	start := time.Now()
 	defer func() { rep.Total = time.Since(start) }()
 

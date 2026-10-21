@@ -233,8 +233,8 @@ func (s *Sweep) Run(ctx context.Context) (rep *SweepReport, err error) {
 	if err != nil {
 		return nil, err
 	}
-	if installed != sum(committed) {
-		return nil, fmt.Errorf("the installed presets' SHA-256 is %s, not the committed render's %s: evaluate sweep -restore installs the committed render", installed, sum(committed))
+	if installed != sha256Hex(committed) {
+		return nil, fmt.Errorf("the installed presets' SHA-256 is %s, not the committed render's %s: evaluate sweep -restore installs the committed render", installed, sha256Hex(committed))
 	}
 
 	rep = &SweepReport{
@@ -336,7 +336,7 @@ func (s *Sweep) step(ctx context.Context, roles []string, target, n int, bisecti
 		return st, err
 	}
 	data = append(fmt.Appendf(nil, "; evaluate sweep's step: %s at %d slots, c = %d, not the committed render.\n; evaluate sweep -restore installs the committed render.\n", r.Model, n, st.C), data...)
-	st.SHA256 = sum(data)
+	st.SHA256 = sha256Hex(data)
 	r.logf("evaluate: sweep %s at %d slots, c = %d\n", r.Model, n, st.C)
 	if st.Served, err = s.apply(ctx, prof, data); err != nil {
 		return st, err
@@ -376,8 +376,8 @@ func (s *Sweep) apply(ctx context.Context, prof *profile.Profile, data []byte) (
 	if err != nil {
 		return nil, err
 	}
-	if got != sum(data) {
-		return nil, fmt.Errorf("the installed presets' SHA-256 is %s, not the render's %s", got, sum(data))
+	if got != sha256Hex(data) {
+		return nil, fmt.Errorf("the installed presets' SHA-256 is %s, not the render's %s", got, sha256Hex(data))
 	}
 	if err := router.ReloadPresets(ctx, r.HTTP, r.Router); err != nil {
 		return nil, err
@@ -457,7 +457,7 @@ func (s *Sweep) Restore(ctx context.Context) (*Restore, error) {
 	if err != nil {
 		return &Restore{Err: err.Error()}, fmt.Errorf("%w: %v", ErrRestore, err)
 	}
-	res := &Restore{SHA256: sum(data)}
+	res := &Restore{SHA256: sha256Hex(data)}
 	fail := func(err error) (*Restore, error) {
 		res.Err = err.Error()
 		return res, fmt.Errorf("%w: %v; run evaluate sweep -restore, or install the committed render by the runbook", ErrRestore, err)
