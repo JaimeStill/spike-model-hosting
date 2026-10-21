@@ -513,20 +513,40 @@ func TestSweepRefusesUncommitted(t *testing.T) {
 	h.checkRestored(t, &gate.SweepReport{Restore: res})
 }
 
-// TestLoadTargets shows the committed targets load, each role's target its prompt and answer, and
-// a file missing a role's target or holding a key the schema doesn't define fails.
+// TestLoadTargets shows the committed targets load, each role's target read from its own table,
+// its prompt and answer together, an embedding's answer 0, and a file missing a role's target or
+// holding a key the schema doesn't define fails.
 func TestLoadTargets(t *testing.T) {
-	tg := targets(t)
-	for role, want := range map[string]int{gate.RoleAgent: 8806, gate.RoleVision: 5172, gate.RoleAudio: 1956, gate.RoleEmbedding: 8192} {
+	targets(t)
+	good := filepath.Join(t.TempDir(), "targets.toml")
+	var text strings.Builder
+	for i, role := range []string{gate.RoleAgent, gate.RoleVision, gate.RoleAudio, gate.RoleEmbedding} {
+		out := 100 * (i + 1)
+		if role == gate.RoleEmbedding {
+			out = 0
+		}
+		fmt.Fprintf(&text, "[%s]\nin = %d\nout = %d\nsource = \"measured\"\n", role, 1000*(i+1), out)
+	}
+	if err := os.WriteFile(good, []byte(text.String()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	tg, err := gate.LoadTargets(good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for role, want := range map[string]int{gate.RoleAgent: 1100, gate.RoleVision: 2200, gate.RoleAudio: 3300, gate.RoleEmbedding: 4000} {
 		if got := tg.Of(role).Tokens(); got != want {
 			t.Errorf("%s target %d tokens; want %d", role, got, want)
 		}
+	}
+	if got := tg.Of("reasoning"); got != (gate.Target{}) {
+		t.Errorf("a role the targets don't hold: %+v; want the zero Target", got)
 	}
 	bad := filepath.Join(t.TempDir(), "targets.toml")
 	if err := os.WriteFile(bad, []byte("[agent]\nin = 8192\nout = 512\nsource = \"x\"\nextra = 1\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := gate.LoadTargets(bad)
+	_, err = gate.LoadTargets(bad)
 	if err == nil || !strings.Contains(err.Error(), "agent.extra") || !strings.Contains(err.Error(), "vision.in") {
 		t.Errorf("LoadTargets(bad) = %v; want the undefined key and the missing roles named", err)
 	}

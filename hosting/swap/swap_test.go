@@ -311,7 +311,7 @@ func TestReload(t *testing.T) {
 	}
 
 	g := newFake([]string{"a"}, []string{"d"})
-	if _, err := swap.Reload(t.Context(), config(g.start(t), "a", "d")); err == nil || !strings.Contains(err.Error(), "d") {
+	if _, err := swap.Reload(t.Context(), config(g.start(t), "a", "d")); err == nil || !strings.Contains(err.Error(), "lists d as") {
 		t.Errorf("Reload of a set not wholly loaded = %v; want an error naming d", err)
 	}
 	if len(g.commands) != 0 {

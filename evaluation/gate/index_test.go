@@ -2,6 +2,7 @@ package gate_test
 
 import (
 	"bytes"
+	"cmp"
 	"os"
 	"path/filepath"
 	"slices"
@@ -47,17 +48,10 @@ func reusedFrom(rep *gate.Report, stage string) []string {
 	var out []string
 	if s := rep.Stage(stage); s != nil {
 		for _, c := range s.Checks {
-			out = append(out, strings.Join([]string{c.Model, c.Role, c.Name, cmpOr(c.ReusedFrom, "-")}, " "))
+			out = append(out, strings.Join([]string{c.Model, c.Role, c.Name, cmp.Or(c.ReusedFrom, "-")}, " "))
 		}
 	}
 	return out
-}
-
-func cmpOr(s, or string) string {
-	if s == "" {
-		return or
-	}
-	return s
 }
 
 // wantReused fails t unless every check of stage is reused from run when keep says so of it, and
@@ -207,7 +201,8 @@ func TestIndexChangedSection(t *testing.T) {
 		}
 		setCalls := len(h.uv.setCalls(t))
 
-		// The same keys: every keyed stage reused, the set stage whole; deep, never kept, measured again.
+		// The same keys: every keyed stage reused, the set stage whole; deep, never kept, measured
+		// again.
 		same := h.runAs(t, state, "run2", "", nil)
 		if !same.Passed {
 			t.Fatalf("second full run %q; want passed", statuses(same))

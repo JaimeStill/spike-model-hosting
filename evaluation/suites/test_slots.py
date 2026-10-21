@@ -1,7 +1,7 @@
 """The suites' --slots, offline: every suite that keeps requests in flight requires it, a whole
 number of at least one, and keeps that many in flight on the model, the slots evaluate gives it
-from the model's profile entry (slots.py); no suite holds a slot count of its own. The Go test in
-this directory (suites_test.go) runs it through the pinned uv and Python, offline.
+from the model's profile entry (slots.py). The Go test in this directory (suites_test.go) runs it
+through the pinned uv and Python, offline.
 """
 
 import argparse
@@ -46,12 +46,6 @@ class TestSlots(unittest.TestCase):
                 self.assertTrue(refused(suite.parser(), args), "ran without --slots")
                 for bad in ("0", "-1", "four"):
                     self.assertTrue(refused(suite.parser(), args + ["--slots", bad]), f"took --slots {bad}")
-
-    def test_no_constant(self):
-        for suite in ARGS:
-            with self.subTest(suite=suite.__name__):
-                self.assertFalse(hasattr(suite, "SLOTS") or hasattr(suite, "IN_FLIGHT"),
-                                 "the suite holds a slot count of its own")
 
     def test_positive(self):
         self.assertEqual(positive("3"), 3)

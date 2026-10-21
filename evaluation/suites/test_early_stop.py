@@ -10,7 +10,7 @@ import unittest
 
 from inspect_ai.scorer import Score, SampleScore
 
-from asr_quality import WERStop, wer_bounds, wer_lower_bound, wer_upper_bound
+from asr_quality import WERStop, wer_bounds
 from pass_stop import FAIL, PASS, PassStop, lower_bound, upper_bound
 
 
@@ -155,15 +155,15 @@ class WERStopTest(unittest.TestCase):
     def test_lower_bound(self):
         """The utterance-clustered lower bound at a point worked by hand: errors 1 and 3 over 10
         words each, a corpus WER of 0.2 with a standard error of 0.1."""
-        self.assertAlmostEqual(wer_lower_bound([1, 3], [10, 10]), 0.2 - 1.6448536269514722 * 0.1, places=9)
-        self.assertEqual(wer_lower_bound([4], [10]), 0.0)
-        self.assertEqual(wer_lower_bound([0, 0], [10, 10]), 0.0)
+        self.assertAlmostEqual(wer_bounds([1, 3], [10, 10])[0], 0.2 - 1.6448536269514722 * 0.1, places=9)
+        self.assertEqual(wer_bounds([4], [10])[0], 0.0)
+        self.assertEqual(wer_bounds([0, 0], [10, 10])[0], 0.0)
 
     def test_upper_bound(self):
         """The upper bound mirrors the lower at the same point, R + z SE; one utterance bounds
         nothing."""
-        self.assertAlmostEqual(wer_upper_bound([1, 3], [10, 10]), 0.2 + 1.6448536269514722 * 0.1, places=9)
-        self.assertEqual(wer_upper_bound([4], [10]), math.inf)
+        self.assertAlmostEqual(wer_bounds([1, 3], [10, 10])[1], 0.2 + 1.6448536269514722 * 0.1, places=9)
+        self.assertEqual(wer_bounds([4], [10])[1], math.inf)
         self.assertEqual(wer_bounds([0, 0], [10, 10]), (0.0, 0.0))
 
     def test_stops_after_screening(self):
@@ -185,7 +185,7 @@ class WERStopTest(unittest.TestCase):
         stop = WERStop(0.5)
         self.assertEqual(run_wer(stop, mixed), 2)
         self.assertEqual((stop.stopped_at, stop.side), (2, PASS))
-        self.assertAlmostEqual(stop.bound, wer_upper_bound([1, 2], [10, 10]))
+        self.assertAlmostEqual(stop.bound, 0.15 + 1.6448536269514722 * 0.05, places=9)
         self.assertIn("upper bound 0.2322 on the WER is at or under the bar 0.5", stop.reason)
 
     def test_straddles_on(self):

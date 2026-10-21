@@ -326,13 +326,11 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 	case audio:
 		answer = "The access code is seven four two nine."
 	}
+	m, _ := body["model"].(string)
 	kind := "chat"
 	if n := fakeNonce.FindString(text.String()); n != "" {
-		m, _ := body["model"].(string)
 		f.mu.Lock()
 		f.nonced[m] = append(f.nonced[m], body)
-		f.mu.Unlock()
-		f.mu.Lock()
 		slots := f.served[m].Slots
 		f.mu.Unlock()
 		if m == f.exhaust || (f.exhaustAt != nil && f.exhaustAt(m, slots)) {
@@ -363,7 +361,6 @@ func (f *fakeRouter) chat(w http.ResponseWriter, body map[string]any, reply func
 		f.mu.Unlock()
 	}
 	f.mu.Lock()
-	m, _ := body["model"].(string)
 	f.longest[m] = max(f.longest[m], len(strings.Fields(text.String())))
 	f.mu.Unlock()
 	stream, _ := body["stream"].(bool)

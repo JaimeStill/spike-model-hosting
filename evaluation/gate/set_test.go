@@ -48,10 +48,16 @@ func TestSetRun(t *testing.T) {
 		t.Errorf("model %q roles %q passed %v reached %q; want a set run's full run of every role, passed", rep.Model, rep.Roles, rep.Passed, rep.Reached)
 	}
 	// Every model's deep part, under its own directory, then cold load once, for the set.
-	for _, m := range []string{gptOSS, gemma26B, gemmaE4B} {
-		if c := check(t, rep, gate.StageDeep, "", "prefix reuse"); c.Model == "" {
-			t.Errorf("prefix reuse %+v; want it naming its model", c)
+	var prefixed []string
+	for _, c := range rep.Stage(gate.StageDeep).Checks {
+		if c.Name == "prefix reuse" {
+			prefixed = append(prefixed, c.Model)
 		}
+	}
+	if want := []string{gptOSS, gemma26B, gemmaE4B}; !slices.Equal(slices.Sorted(slices.Values(prefixed)), slices.Sorted(slices.Values(want))) {
+		t.Errorf("prefix reuse checks of %q; want one for each generative model, %q", prefixed, want)
+	}
+	for _, m := range []string{gptOSS, gemma26B, gemmaE4B} {
 		if _, err := os.Stat(filepath.Join(h.runner.Dir, gate.Slug(m), "deep", "grid")); err != nil {
 			t.Errorf("%s's grid: %v", m, err)
 		}

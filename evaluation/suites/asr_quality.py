@@ -223,16 +223,6 @@ def wer_bounds(errors: list[int], words: list[int]) -> tuple[float, float]:
     return max(0.0, r - Z95 * se), r + Z95 * se
 
 
-def wer_lower_bound(errors: list[int], words: list[int]) -> float:
-    """The one-sided 95% lower bound on a corpus WER (wer_bounds)."""
-    return wer_bounds(errors, words)[0]
-
-
-def wer_upper_bound(errors: list[int], words: list[int]) -> float:
-    """The one-sided 95% upper bound on a corpus WER (wer_bounds)."""
-    return wer_bounds(errors, words)[1]
-
-
 class WERStop:
     """Inspect early stopping on a WER bar, lower being better: the screening fifth runs whole,
     then, before each further utterance, the set stops failed once the lower bound on its corpus

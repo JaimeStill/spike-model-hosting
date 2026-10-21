@@ -49,17 +49,17 @@ func TestPython(t *testing.T) {
 	}
 }
 
-// TestCachesOff shows the suites' own result caches stay off, so a unit evaluate runs is a real
-// rerun and evaluate's results index (package gate) is the only reuse: no script reuses Inspect
-// logs (eval_set, eval_retry) or caches model output (a generate cache, CachePolicy), and every
-// MTEB evaluation runs without its result cache (cache=None).
-func TestCachesOff(t *testing.T) {
+// TestNoLogReuse guards, by the scripts' source, that no suite reuses Inspect logs (eval_set,
+// eval_retry) or caches model output (a generate cache, CachePolicy), so a unit evaluate runs is a
+// real rerun and evaluate's results index (package gate) is the only reuse. It reads source, not
+// behavior: a guard against the APIs being taken up, which only a live run could show otherwise.
+// MTEB's result cache is shown off at its call, in test_caches.py.
+func TestNoLogReuse(t *testing.T) {
 	scripts, err := filepath.Glob("*.py")
 	if err != nil || len(scripts) == 0 {
 		t.Fatalf("the suites' scripts: %q, %v", scripts, err)
 	}
 	reuse := regexp.MustCompile(`\beval_set\b|\beval_retry\b|\bCachePolicy\b|\bcache\s*=\s*True\b`)
-	mtebCalls := 0
 	for _, path := range scripts {
 		if strings.HasPrefix(path, "test_") {
 			continue
@@ -68,18 +68,8 @@ func TestCachesOff(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		src := string(b)
-		if m := reuse.FindString(src); m != "" {
+		if m := reuse.FindString(string(b)); m != "" {
 			t.Errorf("%s uses %q: a cache or log reuse of the suite's own", path, m)
 		}
-		for _, call := range regexp.MustCompile(`mteb\.evaluate\([^)]*\)`).FindAllString(src, -1) {
-			mtebCalls++
-			if !regexp.MustCompile(`\bcache\s*=\s*None\b`).MatchString(call) {
-				t.Errorf("%s: %s runs with MTEB's result cache; want cache=None", path, call)
-			}
-		}
-	}
-	if mtebCalls == 0 {
-		t.Error("no script calls mteb.evaluate; the check of its cache checks nothing")
 	}
 }
