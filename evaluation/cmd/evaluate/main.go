@@ -28,9 +28,9 @@
 //     restoring the committed render after, -restore alone restoring it (package sweepstep).
 //
 // An interrupt, SIGINT or SIGTERM, cancels the run or the step. Each step's package documents its
-// flags, its environment fallbacks, and its exit status: 0 when it passes, 1 when it fails or can't run, and 2 on a usage error, as the gated run's does.
-// evaluate itself exits 2 when neither flags nor a step, or an unknown step, are named, and 0 on
-// -h.
+// flags, its environment fallbacks, and its exit status: 0 when it passes, 1 when it fails or can't
+// run, and 2 on a usage error, as the gated run's does. evaluate itself exits 2 when neither flags
+// nor a step, or an unknown step, are named, and 0 on -h.
 package main
 
 import (

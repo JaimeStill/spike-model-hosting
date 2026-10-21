@@ -35,9 +35,10 @@ from slots import add_slots
 NO_TITLE = "title: none"
 
 # Inputs a request, each request well inside what one answer carries; the requests in flight are
-# --slots, the model's slots (slots.py). Each input is one sequence of at most the model's c = b = ub = 8192
-# tokens, so the router never splits one across physical batches; a longer one fails its request,
-# and so the task, rather than being cut short silently. None of the four tasks has one.
+# --slots, the model's slots (slots.py). Each input is one sequence of at most the model's
+# c = b = ub = 8192 tokens, so the router never splits one across physical batches; a longer one
+# fails its request, and so the task, rather than being cut short silently. None of the four
+# tasks has one.
 BATCH = 64
 
 

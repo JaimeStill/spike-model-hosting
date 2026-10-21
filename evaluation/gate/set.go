@@ -211,13 +211,13 @@ func (r *Runner) setRun(ctx context.Context, roles []assignment) []Check {
 	return append(checks, w.gates(r.Floors.Pool.FreeMiB, "every role's tier 1 ran at once")...)
 }
 
-// setModelRun is a model run's set stage. Its alone figures are the quality stage's tier 1
-// records, the same units on the same lists at the same settings, so it doesn't run them alone
-// again: a model run's quality pass runs only the model's own roles, the set's other models idle
-// but for the crossing rounds, and its full run's records are each list whole, the screen's
-// samples and the rest together. Its own roles' tier 1s run at once while every other role of the set carries load
-// (load): the load starts with the tiers and stops when they finish, so the other models load
-// the pool for exactly the window the model's tiers run, and run no tier of their own.
+// setModelRun is a model run's set stage. Its alone figures are the quality stage's tier 1 records,
+// the same units on the same lists at the same settings, so it doesn't run them alone again: a
+// model run's quality pass runs only the model's own roles, the set's other models idle but for the
+// crossing rounds, and its full run's records are each list whole, the screen's samples and the
+// rest together. Its own roles' tier 1s run at once while every other role of the set carries load
+// (load): the load starts with the tiers and stops when they finish, so the other models load the
+// pool for exactly the window the model's tiers run, and run no tier of their own.
 func (r *Runner) setModelRun(ctx context.Context, rep *Report, roles []assignment) []Check {
 	alone, err := qualityTierOne(rep.Stage(StageQuality), rep.Roles)
 	if err != nil {

@@ -25,13 +25,12 @@
 //     audio role's longest clip in the committed tier lists, which Peaks finds, and the embedding
 //     role's largest input, its c less embedReserve) and reads the pool at that warmed peak. Every
 //     pool floor is judged at the warmed peak.
-//   - Fitness smokes each role the set assigns the model with the probe's request for it (a
-//     tool call, an image, an audio clip, an embedding), measures the role's single-stream
-//     floors from llama.cpp's timings or the client's clock, and judges the pool at the warmed
-//     peak, the idle reading beside it. The audio
-//     clip goes as the quality stage's ASR task sends one: the model's ASR prompt, from the
-//     profile, first, the clip after, at temperature 0 with reasoning off, the request
-//     capacity's audio streams send too.
+//   - Fitness smokes each role the set assigns the model with the probe's request for it (a tool
+//     call, an image, an audio clip, an embedding), measures the role's single-stream floors from
+//     llama.cpp's timings or the client's clock, and judges the pool at the warmed peak, the idle
+//     reading beside it. The audio clip goes as the quality stage's ASR task sends one: the model's
+//     ASR prompt, from the profile, first, the clip after, at temperature 0 with reasoning off, the
+//     request capacity's audio streams send too.
 //   - Capacity puts N requests in flight on the model per role, N its slots from the profile
 //     (Runner.slotsOf), through the concurrent package's run, and judges each of the N against
 //     the role's floor at N: the agent's streams in the agentic shape (an 8192-token prompt, 512
@@ -53,26 +52,25 @@
 //     (Stop): its side, its bound and the samples run. A full run sends the samples the screen
 //     stopped as a list of their own, the tier's rest/list.txt, without a bar, and judges the whole
 //     list.
-//   - Quality runs the agent role's tiers (AgentTiers), cheapest first, and stops at the first
-//     tier that fails. Tier 1 is BFCL's single-turn questions, 100 seeded across its 13
-//     leaderboard categories; tier 2 its multi-turn conversations, 20 seeded across its 4; both
-//     inspect_evals' stock bfcl task through the suites project's agent_quality.py, Inspect AI's
-//     openai-api provider at the model's slots in flight (--slots), at the router's defaults (the card's
-//     sampling, the template's reasoning) with parallel tool calls allowed. Each tier's accuracy
-//     is judged against its floor, by check name (agent-<tier>), under [bars] in
-//     evaluation/bars.toml, and recorded, never failing, without one; a floor stops the tier
-//     early on either side as the vision tiers' does. Each check records the samples run and passed, their
-//     model requests and working time, the wall time, the data's Gorilla commit, the task's
-//     inspect_evals version and Inspect's release. Tier 3 is harness fit: conform's pass^5
-//     through every pinned harness (passk.Harnesses: Pi, Claude Code, OpenCode) on the set's
-//     roles (passk.Runner), each held to one absolute bar (passk.Judge): every applicable
-//     capability 5/5 and 0 invalid requests, a capability the harness reports n/a excluded and
-//     noted. A harness drops at its first failed trial; the tier ends once every harness has
-//     dropped or run all five. Each harness's fit is recorded, agent-conform-<harness>: whether
-//     it fits, the trials it ran, each cell's passes, its invalid requests, why its first failed
-//     trial failed and its wall time. The tier's verdict, agent-conform, fails only when no
-//     harness fits. Its recordings and table, the fit profile, go in the run directory's
-//     conform/.
+//   - Quality runs the agent role's tiers (AgentTiers), cheapest first, and stops at the first tier
+//     that fails. Tier 1 is BFCL's single-turn questions, 100 seeded across its 13 leaderboard
+//     categories; tier 2 its multi-turn conversations, 20 seeded across its 4; both inspect_evals'
+//     stock bfcl task through the suites project's agent_quality.py, Inspect AI's openai-api
+//     provider at the model's slots in flight (--slots), at the router's defaults (the card's
+//     sampling, the template's reasoning) with parallel tool calls allowed. Each tier's accuracy is
+//     judged against its floor, by check name (agent-<tier>), under [bars] in evaluation/bars.toml,
+//     and recorded, never failing, without one; a floor stops the tier early on either side as the
+//     vision tiers' does. Each check records the samples run and passed, their model requests and
+//     working time, the wall time, the data's Gorilla commit, the task's inspect_evals version and
+//     Inspect's release. Tier 3 is harness fit: conform's pass^5 through every pinned harness
+//     (passk.Harnesses: Pi, Claude Code, OpenCode) on the set's roles (passk.Runner), each held to
+//     one absolute bar (passk.Judge): every applicable capability 5/5 and 0 invalid requests, a
+//     capability the harness reports n/a excluded and noted. A harness drops at its first failed
+//     trial; the tier ends once every harness has dropped or run all five. Each harness's fit is
+//     recorded, agent-conform-<harness>: whether it fits, the trials it ran, each cell's passes,
+//     its invalid requests, why its first failed trial failed and its wall time. The tier's
+//     verdict, agent-conform, fails only when no harness fits. Its recordings and table, the fit
+//     profile, go in the run directory's conform/.
 //   - Quality runs the embedding role's MTEB tasks (EmbeddingTasks: STSBenchmark,
 //     Banking77Classification, SciFact, NFCorpus), each in full, through the uv project
 //     evaluation/suites, whose encoder sends the router's /v1/embeddings with EmbeddingGemma 2's
@@ -85,88 +83,86 @@
 //     150 seeded utterances each, the tier lists in evaluation/tiers, through the suites project's
 //     Inspect AI task, asr_quality.py, which sends each clip with the card's ASR prompt, given it
 //     as --prompt, through Inspect's openai-api provider, one at a time. Each set's corpus WER
-//     (every word error over every reference word, after the leaderboard's English normalizer)
-//     is judged against its ceiling, by tier name (asr-<set>), under [bars_at_most] in
-//     evaluation/bars.toml, and recorded, never failing, without one. A ceiling also stops the
-//     set early: after the screening fifth, failed once the one-sided 95% lower bound on the WER
-//     (a ratio estimator's, utterance-clustered) is above it, or passed once the upper bound is at
-//     or under it. Each check records the RTFx (the
-//     audio's seconds over the requests'), the utterances, errors and words, the wall time, the
-//     dataset's revision, the normalizer's source and Inspect's release, and, for a set the
-//     model's card reports, the card's figure beside ours.
+//     (every word error over every reference word, after the leaderboard's English normalizer) is
+//     judged against its ceiling, by tier name (asr-<set>), under [bars_at_most] in
+//     evaluation/bars.toml, and recorded, never failing, without one. A ceiling also stops the set
+//     early: after the screening fifth, failed once the one-sided 95% lower bound on the WER (a
+//     ratio estimator's, utterance-clustered) is above it, or passed once the upper bound is at or
+//     under it. Each check records the RTFx (the audio's seconds over the requests'), the
+//     utterances, errors and words, the wall time, the dataset's revision, the normalizer's source
+//     and Inspect's release, and, for a set the model's card reports, the card's figure beside
+//     ours.
 //   - Quality runs the vision role's tiers (VisionTiers), cheapest first, through the suites
 //     project's vision_quality.py, Inspect AI's openai-api provider at the model's slots in flight,
-//     and stops at the first tier that fails. Tier 1 is the probe's image and question five
-//     times, at the router's defaults, passing on all five (pass^5, whatever the bars hold), and
-//     V*Bench, 100 seeded questions; tier 2 DocVQA, 150 seeded validation questions; tier 3
-//     MMMU, 200 seeded validation multiple-choice questions across its 30 subjects. The
-//     benchmarks are inspect_evals' stock tasks, their samples picked by Inspect's sample-id
-//     filtering from the tier lists in evaluation/tiers, at temperature 0 with reasoning off.
-//     Each benchmark's score, the accuracy or DocVQA's mean ANLS, is judged against its floor,
-//     by check name (vision-<tier>), under [bars] in evaluation/bars.toml, and recorded, never
-//     failing, without one. A floor also stops the tier early: after the screening fifth, failed
-//     once the one-sided 95% Wilson upper bound on the pass rate is under it, a sample passing at
-//     a score of 0.5 or more (a mean ANLS is never above that pass rate, so the bound holds for
-//     it too), or passed once the Wilson lower bound on the mean score is at or over it. Each check records the samples run and passed, the request and wall time, the
-//     dataset's revision, the tasks' inspect_evals versions and Inspect's release, and, for a
-//     tier the model's card reports, the card's figure beside ours.
-//   - Set, a full run's alone, runs tier 1s (TierOne) on the set's role models, all of them
-//     loaded: the agent's BFCL
-//     single-turn, the vision probe and V*Bench, the audio role's LibriSpeech test-clean and the
-//     embedding role's STSBenchmark, the cheapest of its MTEB tasks, through the quality stage's
-//     suites, whole and without their bars. A set run runs each role's alone, role after role,
-//     then every role's at once. A model run takes each of its roles' alone figure, score and
-//     wall time, from its quality stage's tier 1 records, the same lists at the same settings,
-//     and runs only its own roles' tier 1s, at once, while each of the set's other role models
-//     carries load for exactly that window: capacity's request for the role, sent one after
-//     another by Runner.LoadWorkers workers (one by default: one a role keeps every model
-//     resident and interleaving, and memory and crossing don't depend on how hard), started
-//     with the model's tiers and stopped when they finish, and recorded as load (requests
-//     answered and errored, requests and tokens a second), never as a scored tier. Each unit's
-//     score and wall time are recorded, the concurrent one beside the alone one's with its
-//     change and slowdown, and each role's tier 1 slowdown, never judged. The stage gates the
-//     concurrent phase: the pool's least free memory, read as capacity reads it, against the
-//     pool's floor, and no crossed answer, from rounds of capacity's nonce requests sent to every
-//     role's model at once, every Runner.CrossEvery, while the tiers run, each answer carrying
-//     its own nonce and no other and each embedding vector its own input's (a screen's quality
-//     pass judges the same two over its tiers); a request that
-//     errored, came back empty, or hit its max_tokens (finish_reason "length") carrying no nonce
-//     at all is recorded unanswered, not crossed, so long as each role had one checked; only an
-//     answer carrying a nonce not its own is crossed. The vision role's nonce request allows 1024
-//     tokens. A load whose every finished request errored fails it too. Its output is in the
-//     run's set/alone and set/concurrent. A model's full run resumed at the set stage needs the
-//     quality records it reuses, and is refused without them.
-//   - Deep, a full run's alone, records and never judges; a measurement that couldn't be taken fails it, as in every
-//     stage. For the agent role it runs τ2 airline and retail (Tau2Domains), 12 seeded tasks each
-//     (evaluation/tiers/agent-tau2-<domain>.txt), each task Tau2Trials times, through the suites
-//     project's tau2_quality.py: inspect_evals' stock τ2 tasks, unforked, the model under test
-//     through Inspect's openai-api provider, the simulated user Sonnet through the laptop's pinned
-//     Claude Code on the subscription login, claude_code.py's claude-code/sonnet provider (claude
-//     -p, tools off, its own system prompt, no session persistence). inspect_evals' airline
-//     scorer has no model grader, so the simulator is the only Claude Code use. Each domain
-//     records pass^1 and pass^2 (τ-bench's C(c,k)/C(n,k) a task, averaged), the wall and working
-//     time, the simulator's calls and the model Claude Code reported for them, and the model's
-//     own failed calls; a simulator call that failed past its retries makes the domain a
-//     measurement that couldn't be taken, since the stock task carries on with a silent user.
-//     The tau2 simulator check rolls the calls and reported models up. For a generative model it
-//     runs the GuideLLM grid (GridCells: short 512/256 and agentic 8192/512 at 1 and 4 streams,
-//     as evaluation/scripts/baseline.sh does, the prompt cut by the card's tokenizer), each cell's
+//     and stops at the first tier that fails. Tier 1 is the probe's image and question five times,
+//     at the router's defaults, passing on all five (pass^5, whatever the bars hold), and V*Bench,
+//     100 seeded questions; tier 2 DocVQA, 150 seeded validation questions; tier 3 MMMU, 200 seeded
+//     validation multiple-choice questions across its 30 subjects. The benchmarks are
+//     inspect_evals' stock tasks, their samples picked by Inspect's sample-id filtering from the
+//     tier lists in evaluation/tiers, at temperature 0 with reasoning off. Each benchmark's score,
+//     the accuracy or DocVQA's mean ANLS, is judged against its floor, by check name
+//     (vision-<tier>), under [bars] in evaluation/bars.toml, and recorded, never failing, without
+//     one. A floor also stops the tier early: after the screening fifth, failed once the one-sided
+//     95% Wilson upper bound on the pass rate is under it, a sample passing at a score of 0.5 or
+//     more (a mean ANLS is never above that pass rate, so the bound holds for it too), or passed
+//     once the Wilson lower bound on the mean score is at or over it. Each check records the
+//     samples run and passed, the request and wall time, the dataset's revision, the tasks'
+//     inspect_evals versions and Inspect's release, and, for a tier the model's card reports, the
+//     card's figure beside ours.
+//   - Set, a full run's alone, runs tier 1s (TierOne) on the set's role models, all of them loaded:
+//     the agent's BFCL single-turn, the vision probe and V*Bench, the audio role's LibriSpeech
+//     test-clean and the embedding role's STSBenchmark, the cheapest of its MTEB tasks, through the
+//     quality stage's suites, whole and without their bars. A set run runs each role's alone, role
+//     after role, then every role's at once. A model run takes each of its roles' alone figure,
+//     score and wall time, from its quality stage's tier 1 records, the same lists at the same
+//     settings, and runs only its own roles' tier 1s, at once, while each of the set's other role
+//     models carries load for exactly that window: capacity's request for the role, sent one after
+//     another by Runner.LoadWorkers workers (one by default: one a role keeps every model resident
+//     and interleaving, and memory and crossing don't depend on how hard), started with the model's
+//     tiers and stopped when they finish, and recorded as load (requests answered and errored,
+//     requests and tokens a second), never as a scored tier. Each unit's score and wall time are
+//     recorded, the concurrent one beside the alone one's with its change and slowdown, and each
+//     role's tier 1 slowdown, never judged. The stage gates the concurrent phase: the pool's least
+//     free memory, read as capacity reads it, against the pool's floor, and no crossed answer, from
+//     rounds of capacity's nonce requests sent to every role's model at once, every
+//     Runner.CrossEvery, while the tiers run, each answer carrying its own nonce and no other and
+//     each embedding vector its own input's (a screen's quality pass judges the same two over its
+//     tiers); a request that errored, came back empty, or hit its max_tokens (finish_reason
+//     "length") carrying no nonce at all is recorded unanswered, not crossed, so long as each role
+//     had one checked; only an answer carrying a nonce not its own is crossed. The vision role's
+//     nonce request allows 1024 tokens. A load whose every finished request errored fails it too.
+//     Its output is in the run's set/alone and set/concurrent. A model's full run resumed at the
+//     set stage needs the quality records it reuses, and is refused without them.
+//   - Deep, a full run's alone, records and never judges; a measurement that couldn't be taken
+//     fails it, as in every stage. For the agent role it runs τ2 airline and retail (Tau2Domains),
+//     12 seeded tasks each (evaluation/tiers/agent-tau2-<domain>.txt), each task Tau2Trials times,
+//     through the suites project's tau2_quality.py: inspect_evals' stock τ2 tasks, unforked, the
+//     model under test through Inspect's openai-api provider, the simulated user Sonnet through the
+//     laptop's pinned Claude Code on the subscription login, claude_code.py's claude-code/sonnet
+//     provider (claude -p, tools off, its own system prompt, no session persistence).
+//     inspect_evals' airline scorer has no model grader, so the simulator is the only Claude Code
+//     use. Each domain records pass^1 and pass^2 (τ-bench's C(c,k)/C(n,k) a task, averaged), the
+//     wall and working time, the simulator's calls and the model Claude Code reported for them, and
+//     the model's own failed calls; a simulator call that failed past its retries makes the domain
+//     a measurement that couldn't be taken, since the stock task carries on with a silent user. The
+//     tau2 simulator check rolls the calls and reported models up. For a generative model it runs
+//     the GuideLLM grid (GridCells: short 512/256 and agentic 8192/512 at 1 and 4 streams, as
+//     evaluation/scripts/baseline.sh does, the prompt cut by the card's tokenizer), each cell's
 //     client figures beside the engine's from /metrics; and prefix reuse, a PrefixTokens prefix
 //     then four warm requests, as evaluate prefix sends them. Last, cold load: with
-//     Runner.Restarts, it asks for two restarts, ColdLoadWarm and then ColdLoadCold, root
-//     commands the architect runs on the router's host, and times each with the coldload
-//     package's Tracker until every model of the set (the startup set) is loaded again; without
-//     it, it is recorded not run, naming the commands. Its output is in the run's deep/. A set
-//     run takes each model's τ2, grid and prefix reuse in turn, under the run directory's
-//     <Slug(model)>/deep, then cold load once.
+//     Runner.Restarts, it asks for two restarts, ColdLoadWarm and then ColdLoadCold, root commands
+//     the architect runs on the router's host, and times each with the coldload package's Tracker
+//     until every model of the set (the startup set) is loaded again; without it, it is recorded
+//     not run, naming the commands. Its output is in the run's deep/. A set run takes each model's
+//     τ2, grid and prefix reuse in turn, under the run directory's <Slug(model)>/deep, then cold
+//     load once.
 //
-// The sweep (Sweep) is no stage: it chooses one model's slots and c on the router, the rest of
-// its set loaded at their own settings, N through SweepSteps until a step fails, then one
-// bisection. Each step's c is N times the model's per-session target (Targets), rounded up to a
-// multiple of 256 and capped at the card's context, where a session short of its target fails on
-// context with no request; an embedding model's c stays its committed c (llama.cpp keeps it no
-// KV pool), its steps sweeping the slots alone. Each other step renders the profile with the
-// override
+// The sweep (Sweep) is no stage: it chooses one model's slots and c on the router, the rest of its
+// set loaded at their own settings, N through SweepSteps until a step fails, then one bisection.
+// Each step's c is N times the model's per-session target (Targets), rounded up to a multiple of
+// 256 and capped at the card's context, where a session short of its target fails on context with
+// no request; an embedding model's c stays its committed c (llama.cpp keeps it no KV pool), its
+// steps sweeping the slots alone. Each other step renders the profile with the override
 // (profile.Profile.Override), installs it (Presets), has the router read it again
 // (router.ReloadPresets), loads the model again and checks its server runs at the step's setting,
 // then warms the set as a run does (Warm, its 8192-token prompt cut to a smaller c) and runs
@@ -187,31 +183,31 @@
 //
 // A run given an Index reuses the passed results it holds and records its own. A model's results
 // are kept under its ModelKey: the model, the router's build and the SHA-256 of its preset section
-// (profile.Profile.PresetSection), with its card's prompts and consumer reasoning beside them.
-// Each role's fitness and capacity records of a model are one entry, and so is each quality unit
-// (an MTEB task, an ASR set, a vision or BFCL tier), except harness fit, which sends to every role's
+// (profile.Profile.PresetSection), with its card's prompts and consumer reasoning beside them. Each
+// role's fitness and capacity records of a model are one entry, and so is each quality unit (an
+// MTEB task, an ASR set, a vision or BFCL tier), except harness fit, which sends to every role's
 // model and is kept under the set's key, a SHA-256 over the set's role assignments and each of its
-// models' keys; the set stage of a run (its model, or the set run) is one entry under the set's
-// key too. Every entry is kept under the method's key as well, the floors, bars, suites' pins,
-// tier lists and probe media, and holds a copy of its checks, so it outlives its run directory. A
-// unit whose entry matches is reused, each check naming the run it was measured in
-// (Check.ReusedFrom): a screen reuses a full run's entry or else a screen's, and a full run only a
-// full run's. A failed unit is never kept. A changed profile thus reruns the roles of the models
-// whose sections changed, harness fit and the set stage. Admission, the reload and warm-up, the
-// deep stage and the gates of the whole set's pool are measured in every run: fitness's warmed
-// peak, and a screen's quality pass's two gates, over the units it runs or, when it reuses them
-// all, one crossing round. Capacity's peak, the model's own slots in flight, is kept with its
-// role's record: the warmed peak, measured fresh, holds every model's KV, fixed when it loads. A
-// full run continuing a screen that reused a stopped tier reads that tier's screen output from the
-// run that measured it. Runner.Fresh reuses nothing and still records.
+// models' keys; the set stage of a run (its model, or the set run) is one entry under the set's key
+// too. Every entry is kept under the method's key as well, the floors, bars, suites' pins, tier
+// lists and probe media, and holds a copy of its checks, so it outlives its run directory. A unit
+// whose entry matches is reused, each check naming the run it was measured in (Check.ReusedFrom): a
+// screen reuses a full run's entry or else a screen's, and a full run only a full run's. A failed
+// unit is never kept. A changed profile thus reruns the roles of the models whose sections changed,
+// harness fit and the set stage. Admission, the reload and warm-up, the deep stage and the gates of
+// the whole set's pool are measured in every run: fitness's warmed peak, and a screen's quality
+// pass's two gates, over the units it runs or, when it reuses them all, one crossing round.
+// Capacity's peak, the model's own slots in flight, is kept with its role's record: the warmed
+// peak, measured fresh, holds every model's KV, fixed when it loads. A full run continuing a screen
+// that reused a stopped tier reads that tier's screen output from the run that measured it.
+// Runner.Fresh reuses nothing and still records.
 //
 // The API:
-//   - Runner runs the stages, judging quality by its Bars (package tier's) and the conform tier
-//     by harness fit, and keeping the suites' output in its Dir; Runner.Run returns the
-//     Report, a screen's or, with Runner.Full, a full run's (ModeScreen, ModeFull), continuing a
-//     prior screen that made a finalist, and resumes from a named stage by reusing a prior run's
-//     passed results for the stages before it. Runner.Roles are the roles the set assigns the model, or every role for
-//     a set run, a Runner with no Model, whose directory is named for SetSubject. ErrNotLoaded
+//   - Runner runs the stages, judging quality by its Bars (package tier's) and the conform tier by
+//     harness fit, and keeping the suites' output in its Dir; Runner.Run returns the Report, a
+//     screen's or, with Runner.Full, a full run's (ModeScreen, ModeFull), continuing a prior screen
+//     that made a finalist, and resumes from a named stage by reusing a prior run's passed results
+//     for the stages before it. Runner.Roles are the roles the set assigns the model, or every role
+//     for a set run, a Runner with no Model, whose directory is named for SetSubject. ErrNotLoaded
 //     marks a refused run. TierOne names a role's tier 1 units, which the set stage runs.
 //   - Stages and the Stage* constants name the stages; Roles and the Role* constants name the
 //     roles, RoleAgent being the profile's chat role (ProfileRole, ParseRole).
@@ -228,10 +224,10 @@
 //     finalist and, for a full run, when its screen started; each check its measured value beside
 //     the floor it was judged against (AtLeast or AtMost), in a set run the model it judges, and,
 //     for a tier a screen stopped early, its Stop, the side (StopFail or StopPass), bound and
-//     samples run; each stage ending StatusPass, StatusFail or StatusNotRun; Ceiling compares the measured decode with the speed the
-//     host's memory bandwidth allows the model, recorded and never gated. WriteReport,
-//     ReadReport and WriteSummary write and read it; RunDir and LatestRun place it under the
-//     state root, as <state>/evaluate/<UTC time>-<Slug(model)>/ReportFile.
+//     samples run; each stage ending StatusPass, StatusFail or StatusNotRun; Ceiling compares the
+//     measured decode with the speed the host's memory bandwidth allows the model, recorded and
+//     never gated. WriteReport, ReadReport and WriteSummary write and read it; RunDir and LatestRun
+//     place it under the state root, as <state>/evaluate/<UTC time>-<Slug(model)>/ReportFile.
 //   - Footprint reads the pool, a Pool, with the host's system RAM beside it, a RAM; SSH reads
 //     both over ssh, amdgpu_top, free -b and ps, and ParseFootprint parses that reading,
 //     ParseAmdgpuTop its pool and ParseRAM its RAM.
@@ -254,8 +250,8 @@
 //     writes it for a reader.
 //   - Presets is the router's presets file, which a sweep installs and sums; SSHPresets reaches it
 //     over ssh, a temporary file in its directory renamed over it. Targets are the roles'
-//     per-session targets, each a Target, data in evaluation/targets.toml, which LoadTargets
-//     reads.
+//     per-session targets, each a Target, data in evaluation/targets.toml, which LoadTargets reads;
+//     Targets.Of returns a role's, and Target.Tokens the context one session at it holds.
 //   - MTEB runs one MTEB task, ASR one ASR set's tier, Vision one vision tier and Agent one BFCL
 //     tier; UV runs each through the suites project (SuitesDir) with uv, each suite but the ASR
 //     task (one clip at a time) given its model's slots as --slots. uv, and GuideLLM, start in a

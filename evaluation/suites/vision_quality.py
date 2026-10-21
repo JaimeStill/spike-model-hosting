@@ -50,8 +50,8 @@ Generation: the benchmarks at temperature 0 with reasoning off (the Gemma 4 temp
 enable_thinking, which defaults to on; templates without the switch ignore it), the prompt cache
 on, and room for an answer; the probe as a client sends it, at the router's defaults, the card's
 sampling and the template's default reasoning, since pass^5 measures the served model's
-reliability. --slots requests in flight, the model's slots (slots.py); the early stop judges samples as they
-complete.
+reliability. --slots requests in flight, the model's slots (slots.py); the early stop judges
+samples as they complete.
 
 Early stop (pass_stop.py's PassStop, shared with agent_quality.py, with a bar): the tier's
 screening fifth runs whole, then, before each further sample, the tier stops failed once the

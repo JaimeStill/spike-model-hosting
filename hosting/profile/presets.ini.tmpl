@@ -5,8 +5,9 @@
   render as parallel in its own section, after its c; the router applies [*] and then a model's
   section, so the section's value is the one the model runs at. Setting parallel turns
   kv-unified's auto default off, so a unified KV pool, the host class's for every model, is
-  stated explicitly in [*], and a per-slot one is the absence of the key. The startup set's models load when the router starts
-  (load-on-startup), so the set's memory is committed up front, not on a model's first request.
+  stated explicitly in [*], and a per-slot one is the absence of the key. The startup set's
+  models load when the router starts (load-on-startup), so the set's memory is committed up
+  front, not on a model's first request.
   Every other model renders without the key, which the router reads as false (it loads a model
   at startup only when the key is present and truthy), so it stays unloaded until a load
   request over the router's API. Each section names its own weights, hf-repo = its router ID:

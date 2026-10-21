@@ -38,9 +38,10 @@ airline tasks, 114 retail). Telecom is left out: its simulated user needs tools.
     Code use.
 
 Each task runs --trials times (Inspect's epochs), so the log holds one sample a task and trial,
-from which evaluate takes pass^k. --slots samples run at once, the model's slots (slots.py); the simulator
-keeps at most its provider's two calls in flight, whatever the eval's max_connections. The log's metadata names the domain, its
-dataset, the trials, the simulator, and the Claude Code version that simulated.
+from which evaluate takes pass^k. --slots samples run at once, the model's slots (slots.py);
+the simulator keeps at most its provider's two calls in flight, whatever the eval's
+max_connections. The log's metadata names the domain, its dataset, the trials, the simulator,
+and the Claude Code version that simulated.
 """
 
 import argparse

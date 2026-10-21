@@ -37,13 +37,12 @@ type harness struct {
 	runner    *gate.Runner
 }
 
-// newHarness returns a runner for model in set A (testdata/profile.toml) against a fake router
-// with set A loaded, the
-// test floors (testdata/floors.toml), a pool with 3333MiB free, as set A left it idle on b11669, no bars, a fake uv
-// that answers each MTEB task, ASR set, vision tier, BFCL tier and τ2 domain with its recorded
-// result, a fake conform run in which Pi fits and Claude Code and OpenCode drop at their first
-// trial, and a fake GuideLLM that answers every cell with a recorded one; the architect isn't at
-// hand to restart the router.
+// newHarness returns a runner for model in set A (testdata/profile.toml) against a fake router with
+// set A loaded, the test floors (testdata/floors.toml), a pool with 3333MiB free, as set A left it
+// idle on b11669, no bars, a fake uv that answers each MTEB task, ASR set, vision tier, BFCL tier
+// and τ2 domain with its recorded result, a fake conform run in which Pi fits and Claude Code and
+// OpenCode drop at their first trial, and a fake GuideLLM that answers every cell with a recorded
+// one; the architect isn't at hand to restart the router.
 func newHarness(t *testing.T, model string) *harness {
 	t.Helper()
 	p, err := profile.Load(strixHalo)
@@ -338,8 +337,9 @@ func TestFloors(t *testing.T) {
 
 // TestTranscriptionRequest shows the warm-up's transcription, fitness's timed one and capacity's
 // are one shape, the quality stage's ASR task's: the model's ASR prompt, read from the profile,
-// first and the clip after it, at temperature 0, with reasoning and the prompt cache off; capacity's carries its
-// nonce request after the clip. TestQualityAudio shows the ASR task is given the same prompt.
+// first and the clip after it, at temperature 0, with reasoning and the prompt cache off;
+// capacity's carries its nonce request after the clip. TestQualityAudio shows the ASR task is given
+// the same prompt.
 func TestTranscriptionRequest(t *testing.T) {
 	h := newHarness(t, gemmaE4B)
 	// A changed prompt in the profile is the one every request sends.

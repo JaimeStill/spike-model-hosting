@@ -47,9 +47,10 @@ const probeRepeats = 5
 var InspectEvalsVersion = mustPin("inspect-evals")
 
 // Vision runs one vision tier on a router's vision model, slots requests in flight (the model's
-// profile slots, Runner.slotsOf), and leaves Inspect AI's JSON logs, one a task, in out (ReadTier). input is the tier list for a benchmark, or the probe's image for the
-// probe. A bar, a floor, stops a benchmark early once its pass rate can't reach it
-// (vision_quality.py's PassStop); nil runs the whole tier.
+// profile slots, Runner.slotsOf), and leaves Inspect AI's JSON logs, one a task, in out (ReadTier).
+// input is the tier list for a benchmark, or the probe's image for the probe. A bar, a floor, stops
+// a benchmark early once its pass rate can't reach it (vision_quality.py's PassStop); nil runs the
+// whole tier.
 type Vision interface {
 	Vision(ctx context.Context, router, model, tierName, input, out string, slots int, bar *float64) error
 }

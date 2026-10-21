@@ -25,9 +25,9 @@
 //
 // A set run names -set on the command line and neither -role nor -model: its screen takes every
 // model of the set through admission, fitness and capacity in turn, alone, each check naming its
-// model, then every role's quality tiers at once; its full run's set stage runs every role's
-// tier 1 alone and then at once, and its deep stage each model's part, then cold load once. It
-// needs every model of the set loaded. Its report is <state>/evaluate/<UTC time>-set-<name>/report.json.
+// model, then every role's quality tiers at once; its full run's set stage runs every role's tier 1
+// alone and then at once, and its deep stage each model's part, then cold load once. It needs every
+// model of the set loaded. Its report is <state>/evaluate/<UTC time>-set-<name>/report.json.
 //
 // The run stops at the first stage that fails. -from starts it at a later stage, reusing the
 // results of the stages before it from an earlier run of the same model (or set run) and mode:
@@ -63,44 +63,42 @@
 //
 // The embedding role's quality stage runs MTEB, and the audio, vision and agent roles' run Inspect
 // AI on the ASR sets', vision tiers' and BFCL tiers' lists (evaluation/tiers), through the uv
-// project evaluation/suites, with uv and Python from -uv and -python, or SPIKE_UV and
-// SPIKE_PYTHON, or else the consumers mise environment's pins. MTEB's output for each task goes
-// in the run directory's mteb/<task>, Inspect's JSON log for each ASR set in its asr/<set>, each
-// vision tier's logs in its vision/<tier>/logs and each BFCL tier's in its agent/<tier>/logs; the
-// datasets download into the state directory's cache/. The set stage runs the same suites on
-// tier 1s, its output under the run directory's set/alone/ (a set run's) and set/concurrent/,
-// laid out as the quality stage's. A full run's rest of a tier the screen stopped runs from the
-// tier's directory's rest/, its list there as list.txt. The agent role's conform tier, harness fit, runs every pinned
+// project evaluation/suites, with uv and Python from -uv and -python, or SPIKE_UV and SPIKE_PYTHON,
+// or else the consumers mise environment's pins. MTEB's output for each task goes in the run
+// directory's mteb/<task>, Inspect's JSON log for each ASR set in its asr/<set>, each vision tier's
+// logs in its vision/<tier>/logs and each BFCL tier's in its agent/<tier>/logs; the datasets
+// download into the state directory's cache/. The set stage runs the same suites on tier 1s, its
+// output under the run directory's set/alone/ (a set run's) and set/concurrent/, laid out as the
+// quality stage's. A full run's rest of a tier the screen stopped runs from the tier's directory's
+// rest/, its list there as list.txt. The agent role's conform tier, harness fit, runs every pinned
 // harness (Pi, Claude Code and OpenCode), each -pi, -claude and -opencode, or SPIKE_PI,
-// SPIKE_CLAUDE and SPIKE_OPENCODE, or else the consumers mise environment's pin, their state
-// under the state directory's conform/, Claude Code's login in its claude/ (as evaluate conform
-// keeps them), and the run's recordings and conform table, the fit profile, in the run
-// directory's conform/.
+// SPIKE_CLAUDE and SPIKE_OPENCODE, or else the consumers mise environment's pin, their state under
+// the state directory's conform/, Claude Code's login in its claude/ (as evaluate conform keeps
+// them), and the run's recordings and conform table, the fit profile, in the run directory's
+// conform/.
 //
-// The deep stage, reached in a full run once every gate passed, runs the agent role's τ2 airline and retail
-// through the same uv project, their simulated user the pinned Claude Code (-claude,
+// The deep stage, reached in a full run once every gate passed, runs the agent role's τ2 airline
+// and retail through the same uv project, their simulated user the pinned Claude Code (-claude,
 // SPIKE_CLAUDE or the pin) on the state directory's claude/ login, each domain's Inspect log and
-// its summary in the run directory's deep/tau2/<domain>; then, for a generative model, the
-// GuideLLM grid, with GuideLLM from -guidellm, or SPIKE_GUIDELLM, or else the consumers mise
-// environment's pin, its tokenizers fetched into the state directory's hf/ and its files in the
-// run directory's deep/grid; then prefix reuse; then cold load. Cold load restarts the router
-// twice, root commands the run can't take: with -restart, the architect is at hand, and the run
-// asks for each restart on stderr, naming its command, and times it; without it, cold load is
-// recorded not run, naming the commands. -full -from deep runs the deep stage alone again on a full
-// run whose gates all passed.
+// its summary in the run directory's deep/tau2/<domain>; then, for a generative model, the GuideLLM
+// grid, with GuideLLM from -guidellm, or SPIKE_GUIDELLM, or else the consumers mise environment's
+// pin, its tokenizers fetched into the state directory's hf/ and its files in the run directory's
+// deep/grid; then prefix reuse; then cold load. Cold load restarts the router twice, root commands
+// the run can't take: with -restart, the architect is at hand, and the run asks for each restart on
+// stderr, naming its command, and times it; without it, cold load is recorded not run, naming the
+// commands. -full -from deep runs the deep stage alone again on a full run whose gates all passed.
 //
 // The router comes from -router or SPIKE_ROUTER_URL. The model must be loaded already, and, for a
 // run that resumes nothing, every model of the set: the run checks GET /models first, and refuses
-// an unloaded model before any stage; every request carries autoload=false, so it never loads
-// one. A run that resumes nothing starts from freshly loaded models: once admission passes it
-// unloads and loads the set's models over the router's API,
-// waits 30 s, reads the idle pool, sends each model its high-water requests (an 8192-token
-// prompt to each generative model, the vision role's largest image and the audio role's longest
-// clip in the tier lists, found through the suites project into the run directory's warm/, the
-// embedding role's largest input), and reads the pool at that warmed peak, which the pool's floor
-// is judged at. Each reading carries the host's system RAM: used and available, and each model
-// process's RSS. A run resumed with -from on the same run directory, or a full run continuing its
-// screen, reloads nothing.
+// an unloaded model before any stage; every request carries autoload=false, so it never loads one.
+// A run that resumes nothing starts from freshly loaded models: once admission passes it unloads
+// and loads the set's models over the router's API, waits 30 s, reads the idle pool, sends each
+// model its high-water requests (an 8192-token prompt to each generative model, the vision role's
+// largest image and the audio role's longest clip in the tier lists, found through the suites
+// project into the run directory's warm/, the embedding role's largest input), and reads the pool
+// at that warmed peak, which the pool's floor is judged at. Each reading carries the host's system
+// RAM: used and available, and each model process's RSS. A run resumed with -from on the same run
+// directory, or a full run continuing its screen, reloads nothing.
 //
 // It exits 0 when every stage that ran passed, 1 when one failed or the run can't start, and 2
 // on a usage error.

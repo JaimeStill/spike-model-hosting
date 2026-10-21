@@ -384,7 +384,8 @@ func reuse(rep, prior *Report, start int) error {
 	if prior.Model != rep.Model || prior.Set != rep.Set {
 		return fmt.Errorf("the run to resume is of %s in set %s, not %s in set %s", prior.Model, prior.Set, rep.Model, rep.Set)
 	}
-	// A full run continues a screen (rep.Screened) or resumes a full run; a screen resumes a screen.
+	// A full run continues a screen (rep.Screened) or resumes a full run; a screen resumes a
+	// screen.
 	want := rep.Mode
 	if rep.Screened != nil {
 		want = ModeScreen

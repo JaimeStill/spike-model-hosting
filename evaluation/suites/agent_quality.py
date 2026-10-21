@@ -37,8 +37,8 @@ into INSPECT_EVALS_CACHE_DIR's BFCL/ on first use.
 Generation: the agent model as it is served, at the router's defaults: the card's sampling and
 the template's default reasoning (gpt-oss's medium), since BFCL measures the model as the
 consumers get it; no temperature, reasoning or token limit is set, only parallel tool calls
-allowed (GENERATE). --slots requests in flight, the model's slots (slots.py); the early stop judges samples
-as they complete.
+allowed (GENERATE). --slots requests in flight, the model's slots (slots.py); the early stop
+judges samples as they complete.
 
 Early stop (pass_stop.py's PassStop, with a bar): the tier's screening fifth runs whole, then,
 before each further sample, the tier stops failed once the one-sided 95% Wilson upper bound on
