@@ -3,7 +3,7 @@
 `evaluate sweep` ([`../evaluation.md`](../evaluation.md), "The sweep") chooses one model's slots
 and context, the rest of its set loaded and idle at their own settings. This page records each
 sweep's table and the N it chose. A chosen N is a finding until a commit puts it in the profile;
-set A's are committed (below, "Set A, swept whole").
+set A's were committed and then set back (below, "The startup set restored").
 
 ## Set A, swept whole, b11734, 2026-10-20
 
@@ -27,6 +27,23 @@ the same; no temporary file left), and `/props` reports each model at its commit
 
 **Set A supports 2 concurrent agent sessions on the Strix Halo**: gpt-oss-120b's chosen N. Not yet
 confirmed by the set stage, which `screen`'s slice 9 runs.
+
+### The startup set restored, 2026-10-21
+
+The goal record's redirect of 2026-10-21 keeps the sweep's result as this page's finding and sets
+the startup set back to the settings set A ran on before the sweep: 4 slots each, c = 131072 for
+gpt-oss-120b, 32768 for Gemma 4 26B-A4B and gemma-4-E4B, and 8192 for EmbeddingGemma 2. The agent's
+chosen N rests on its per-session target, 8806 tokens, and that target isn't yet settled for real
+agent sessions; until it is, the startup set doesn't run at what it chose. Each model's reasons in
+the profile keep its facts and say what the sweep chose and why the set doesn't run at it. The
+committed render, sha256 `84086e3c02bf63658a58d0e3e7926a976f7fd27f135f6fe7584b0c427567c08c`
+(its keys the pre-sweep render's), was installed with `evaluate sweep -restore -set a` and
+verified: the host's `sha256sum` reads the same, `/props` reports `total_slots` 4 and `n_ctx`
+131072, 32768, 32768 and 8192, and the probe passed. The 2 sessions above are the sweep's finding,
+not what the installed set serves.
+
+`.state/evaluate/index.json` is left as it is: its entries keyed by the swept presets no longer
+match any model's key, so none is reused at the restored settings.
 
 ### gpt-oss-120b (agent)
 

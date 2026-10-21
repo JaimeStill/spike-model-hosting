@@ -630,3 +630,22 @@ reasons were rewritten as model facts, installed as render `b987489d` the same w
   mostly gpt-oss-120b's c falling from 131072 to 17664).
 - **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
   set a, each model's `total_slots` matching its profile entry.
+
+### Set A's pre-sweep slots and c restored, 2026-10-21
+
+By the goal record's redirect of 2026-10-21, the startup set went back to the settings it ran on
+before the sweep, the sweep's result kept in
+[`../../docs/findings/slots.md`](../../docs/findings/slots.md) ("The startup set restored"):
+4 slots each; c = 131072 (gpt-oss-120b), 32768 (Gemma 4 26B-A4B), 32768 (gemma-4-E4B), 8192
+(EmbeddingGemma 2). Installed with `evaluate sweep -restore -set a`, with no root command and no
+restart, by the runbook's "The preset file's write access".
+
+- **The install.** The committed render is sha256
+  `84086e3c02bf63658a58d0e3e7926a976f7fd27f135f6fe7584b0c427567c08c`, its keys the pre-sweep
+  render's; `sha256sum /etc/llama-router/models.ini` on the Framework reads the same, with no
+  temporary file beside it, the file the service user's until the next install. It replaced
+  `6643c687`.
+- **The reload.** The restore reloaded set A and reported every model serving at its committed
+  setting; `/props` reports `total_slots` 4 for each, `n_ctx` 131072, 32768, 32768 and 8192.
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a.
