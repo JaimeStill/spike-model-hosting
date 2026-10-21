@@ -2,9 +2,12 @@
 # against the 96GiB GTT pool of a ~90-96GB unified-memory host. Set A, the startup set, is four
 # models; its settings are personal-agents' 96GiB preset (profiles/unified-96gb.ini) and the
 # recipes it copies (reference/model-tiers.md, "~90-96GB (unified memory)"). The mistral and
-# nemotron sets are the main-model candidates, each a vision MoE that takes set A's chat and
-# image roles beside set A's gemma-4-E4B and EmbeddingGemma 2; they load only when swapped in
-# over the router's API (hosting/cmd/swap). Each model's reasons say why it takes its values.
+# nemotron sets were the main-model candidates, each a vision MoE that takes set A's chat and
+# image roles beside set A's gemma-4-E4B and EmbeddingGemma 2, loaded only when swapped in over
+# the router's API (hosting/cmd/swap). The mistral set stays only as the disqualified entry:
+# Mistral Small 4 failed main-model's fitness (speed, on b11669), and its files are deleted from
+# the host, so a load would download them again (~35 min). Each model's reasons say why it takes
+# its values.
 #
 # Each model runs its official embedded chat template at its card's sampling. Set A's models
 # set no reasoning effort (the template's default); a candidate sets the one its card
@@ -414,7 +417,8 @@ c_reason = """
 The Mistral Small 4 candidate's main model, unsloth's UD-Q4_K_XL (no ggml-org or mistralai GGUF
 exists); the router loads its mmproj alongside. Its card states a 256k (262144) context; c =
 131072 is gpt-oss-120b's, so the candidates compare at set A's main-model context, and 262144
-would leave the pool under main-model's 3GiB floor. Its KV at this c is estimated at 2.8-5.1GiB.
+would leave the pool under its 2.75GiB floor (2816MiB, evaluation/floors.toml). Its KV at this c
+is estimated at 2.8-5.1GiB.
 """
 slots = 4
 slots_reason = """

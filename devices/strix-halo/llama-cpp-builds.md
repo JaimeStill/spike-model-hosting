@@ -649,3 +649,19 @@ restart, by the runbook's "The preset file's write access".
   setting; `/props` reports `total_slots` 4 for each, `n_ctx` 131072, 32768, 32768 and 8192.
 - **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
   set a.
+
+### The Mistral reason corrected, 2026-10-21
+
+The Mistral Small 4 entry's `c_reason`, which renders as a comment above its section, now cites
+the pool's 2.75GiB floor (2816MiB, `evaluation/floors.toml`) in place of the 3GiB it had before
+slice 8; no key line changed. Installed with `evaluate sweep -restore -set a`, with no root
+command and no restart.
+
+- **The install.** The committed render is sha256
+  `a65fd306088ea3897f586645b2592c07e5fe3e578b50ca7e82a081c945097260`, its keys
+  `84086e3c`'s; `sha256sum /etc/llama-router/models.ini` on the Framework reads the same, with no
+  temporary file beside it. It replaced `84086e3c`.
+- **The reload.** The restore reported every model of set A serving at its committed setting;
+  `/props` reports `total_slots` 4 for each, `n_ctx` 131072, 32768, 32768 and 8192.
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a.
