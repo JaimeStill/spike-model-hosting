@@ -233,10 +233,13 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 			t.Errorf("[%s]: in %s, not rendered", name, pinned)
 			continue
 		}
-		// A model whose slots and c evaluate's sweep chose (its slots_reason ends with the sweep's
-		// "Swept: " paragraph) runs at its own, not the pinned preset's.
+		// A model whose slots and c evaluate's sweep chose (its slots_reason ends with the paragraph
+		// the sweep writes, "Swept: <N> slots, chosen by evaluate sweep ...") runs at its own, not the
+		// pinned preset's. A "Swept: " paragraph that records a sweep the startup set doesn't run at
+		// (set A's since the redirect of 2026-10-21) exempts nothing.
 		swept := false
-		if m := p.Model(name); m != nil && strings.Contains(m.SlotsReason, "\n\nSwept: ") {
+		if m := p.Model(name); m != nil && strings.Contains(m.SlotsReason, "\n\nSwept: ") &&
+			strings.Contains(m.SlotsReason, " slots, chosen by evaluate sweep on ") {
 			swept = true
 		}
 		for key, w := range wantKeys {
@@ -381,8 +384,8 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 		},
 		{
 			"a context over the card's",
-			replace(t, text, "card_context = 131072\nactive_params_b = 5.1", "card_context = 16384\nactive_params_b = 5.1"),
-			"models[0].c: 17664 is over the card's context, 16384",
+			replace(t, text, "card_context = 131072\nactive_params_b = 5.1", "card_context = 65536\nactive_params_b = 5.1"),
+			"models[0].c: 131072 is over the card's context, 65536",
 		},
 		{
 			"active parameters without bits per weight",

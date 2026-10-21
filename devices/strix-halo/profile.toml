@@ -143,25 +143,24 @@ card_context = 131072
 active_params_b = 5.1
 bits_per_weight = 4.34
 kind = "generative"
-c = 17664
+c = 131072
 c_reason = """
 The harness model. Its trained context_length, 131072, is the ceiling c may reach: its KV cache
 costs 36,864 bytes/token (18 of 36 layers hold a full-attention cache; the rest are 128-token
 sliding windows), 4.5GiB at c = 131072, beside ~59GiB of MXFP4 weights.
 
-Swept: c = 17664 is 2 sessions of the agent role's per-session target, 8806 tokens
-(evaluation/targets.toml), rounded up to a multiple of 256: the context evaluate sweep's step at 2
-ran, on b11734-f3fb2fcdb, 2026-10-20.
+Swept: evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, chose c = 17664 at 2 slots; its result is
+recorded in docs/findings/slots.md. The startup set keeps its pre-sweep c = 131072 until the
+per-session target for real agent sessions is settled (the goal record's redirect, 2026-10-21).
 """
-slots = 2
+slots = 4
 slots_reason = """
 Each slot is one agent session at once. The slots share the model's one KV pool of c tokens
 ([*]'s kv-unified), so c grows with them.
 
-Swept: 2 slots, chosen by evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, in set a beside the
-settings chosen before it: the smaller of the largest N that held every floor at N, the pool floor
-and every session's context (4) and the knee at 2. Bound by knee: past it total throughput gains
-under 10% a step (the knee). The sweep's table is in docs/findings/slots.md.
+Swept: evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, chose 2 slots, bound by the knee; its result
+is recorded in docs/findings/slots.md. The startup set keeps its pre-sweep 4 slots until the
+per-session target for real agent sessions is settled (the goal record's redirect, 2026-10-21).
 """
 
 [models.sampling]
@@ -193,7 +192,7 @@ card_context = 262144
 active_params_b = 3.8
 bits_per_weight = 4.63
 kind = "generative"
-c = 41472
+c = 32768
 c_reason = """
 The vision model; the router loads its Q8_0 mmproj alongside. 5 of its 30 layers hold a
 full-attention cache (20,480 bytes/token, 0.625GiB at c = 32768); the rest are 1024-token sliding
@@ -201,19 +200,18 @@ windows. The shared budget binds here, not its trained 262144: at c = 65536 and 
 loaded with four requests in flight on each left 2.61GiB of the pool free, under the 2.75GiB pool
 floor (docs/findings/memory-budget.md).
 
-Swept: c = 41472 is 8 sessions of the vision role's per-session target, 5172 tokens
-(evaluation/targets.toml), rounded up to a multiple of 256: the context evaluate sweep's step at 8
-ran, on b11734-f3fb2fcdb, 2026-10-20.
+Swept: evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, chose c = 41472 at 8 slots; its result is
+recorded in docs/findings/slots.md. The startup set keeps its pre-sweep c = 32768 until the
+per-session target for real agent sessions is settled (the goal record's redirect, 2026-10-21).
 """
-slots = 8
+slots = 4
 slots_reason = """
 Each slot is one image request at once. The slots share the model's one KV pool of c tokens
 ([*]'s kv-unified), so c grows with them.
 
-Swept: 8 slots, chosen by evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, in set a beside the
-settings chosen before it: the smaller of the largest N that held every floor at N, the pool floor
-and every session's context (8) and no knee. Bound by floor: the next step failed a floor at N. The
-sweep's table is in docs/findings/slots.md.
+Swept: evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, chose 8 slots, bound by the image floor; its
+result is recorded in docs/findings/slots.md. The startup set keeps its pre-sweep 4 slots until the
+per-session target for real agent sessions is settled (the goal record's redirect, 2026-10-21).
 """
 # The flag is --mtmd-batch-max-tokens in common/arg.cpp from b11452 (the minimum build) through
 # b11734; its default is 1024.
@@ -260,25 +258,24 @@ card_context = 131072
 active_params_b = 4.5
 bits_per_weight = 8.53
 kind = "generative"
-c = 31488
+c = 32768
 c_reason = """
 The audio model; the router loads its Q8_0 mmproj alongside. 4 of its 42 layers hold their own
 full-attention cache (the last 18 reuse earlier layers' KV), 16,384 bytes/token, 0.5GiB at
 c = 32768; its trained context is 131072.
 
-Swept: c = 31488 is 16 sessions of the audio role's per-session target, 1956 tokens
-(evaluation/targets.toml), rounded up to a multiple of 256: the context evaluate sweep's step at 16
-ran, on b11734-f3fb2fcdb, 2026-10-20.
+Swept: evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, chose c = 31488 at 16 slots; its result is
+recorded in docs/findings/slots.md. The startup set keeps its pre-sweep c = 32768 until the
+per-session target for real agent sessions is settled (the goal record's redirect, 2026-10-21).
 """
-slots = 16
+slots = 4
 slots_reason = """
 Each slot is one transcription at once. The slots share the model's one KV pool of c tokens
 ([*]'s kv-unified), so c grows with them.
 
-Swept: 16 slots, chosen by evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, in set a beside the
-settings chosen before it: the smaller of the largest N that held every floor at N, the pool floor
-and every session's context (16) and no knee. Bound by top: it is the sweep's last step. The sweep's
-table is in docs/findings/slots.md.
+Swept: evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, chose 16 slots, its last step; its result is
+recorded in docs/findings/slots.md. The startup set keeps its pre-sweep 4 slots until the
+per-session target for real agent sessions is settled (the goal record's redirect, 2026-10-21).
 """
 
 [models.sampling]
@@ -331,19 +328,19 @@ c_reason = """
 Text embeddings only, 768-dimension output. c = 8192 is the context window its card states (the
 GGUF's context_length key reads 262144). No sampling: an embedding model doesn't sample.
 
-Swept: c = 8192 held at its committed value by evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, which
-swept the slots alone: llama.cpp keeps no KV memory for an embedding model, so c bounds each input,
-8192 tokens at the embedding role's target (evaluation/targets.toml).
+Swept: evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, chose to hold c = 8192 and sweep the slots
+alone; its result is recorded in docs/findings/slots.md. The startup set keeps its pre-sweep
+c = 8192 until the per-session target for real agent sessions is settled (the goal record's
+redirect, 2026-10-21).
 """
-slots = 16
+slots = 4
 slots_reason = """
 Each slot is one input embedded at once. llama.cpp keeps no KV memory for an embedding model
 (src/llama-model.cpp, create_memory), so the slots share no pool and c bounds each input alone.
 
-Swept: 16 slots, chosen by evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, in set a beside the
-settings chosen before it: the smaller of the largest N that held every floor at N, the pool floor
-and every session's context (16) and no knee. Bound by top: it is the sweep's last step. The sweep's
-table is in docs/findings/slots.md.
+Swept: evaluate sweep on b11734-f3fb2fcdb, 2026-10-20, chose 16 slots, its last step; its result is
+recorded in docs/findings/slots.md. The startup set keeps its pre-sweep 4 slots until the
+per-session target for real agent sessions is settled (the goal record's redirect, 2026-10-21).
 """
 args_reason = """
 embeddings serves it as an embedding model. Mean pooling, per its model card and its GGUF's
