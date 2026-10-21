@@ -113,15 +113,14 @@ Behaviors     1. The Framework runs the newest b-tag at the start of BUILD.
               11. A set's verdict states the concurrent sessions it supports
                  on its host: its agent model's chosen N, confirmed by the
                  set stage with every model at its own chosen N.
-              12. Set A is swept on the new build, and its chosen slots and c
-                 are committed and installed, with the pool floor unchanged
-                 and no scheduled reload. Set A's models then pass their
-                 screens against their own bars. The set stage holds every
-                 model at its chosen N. Each role's screen time is recorded
-                 against the 15-25 min estimate, and set A's agent and
-                 vision screens run as one run, whose wall time is the
-                 chat-and-vision figure against the ~85 min budget. One
-                 role's finalist continuation runs as the demonstration.
+              12. Set A is swept on the new build, in role order, and the
+                 sweep's tables, chosen Ns and bounds are recorded as findings.
+                 The startup set keeps the settings set A ran on before the
+                 sweep (4 slots each, gpt-oss-120b at c 131072), installed
+                 through the preset file: the per-session target for real
+                 agent sessions isn't settled. (Redirected by the architect,
+                 2026-10-21: set A's live screens, their timings and the
+                 finalist demonstration are dropped.)
               13. The Framework keeps only models that passed on it. Mistral
                  Small 4's cached files and align's retired-model directory
                  are deleted: through the router's API where it can, by the
@@ -190,14 +189,14 @@ Slices        1. Build move and host session (1, 13): the release-note review;
                  at 4.
               7. Sweep (10): fakes in the check; one live model swept, then
                  restored.
-              8. Set A swept (12): slots and c committed and installed;
-                 sessions supported stated.
-              9. Set A screened (12): every role passes its own bars;
-                 timings; the chat-and-vision figure; one finalist
-                 continuation.
+              8. Set A swept (12): the tables recorded; the pre-sweep
+                 settings restored and installed.
+              9. (dropped by the architect's redirect, 2026-10-21)
               10. Pool document and STANDARDS (14, 15).
               11. Docs and records (16): Decisions and pending edits.
-Out of scope  Screening any model beyond set A's four; choosing candidates,
+Out of scope  Set A's live screens, their timings and the finalist
+              demonstration (redirect, 2026-10-21). Screening any model
+              beyond set A's four; choosing candidates,
               their profile entries, downloads or admission runs; the
               verdict, and any startup-set change beyond set A's swept slots
               and c. Speculative decoding. Bumping the held pins. ROCm,
@@ -219,7 +218,7 @@ Door          two-way, except:
 
 ## Progress
 
-slices 8/11 committed · standards — · spec — · editor —
+slices 8/10 committed (9 dropped) · standards — · spec — · editor —
 
 ## Decisions
 
@@ -653,6 +652,9 @@ slices 8/11 committed · standards — · spec — · editor —
 - screen (r2): a model fine-tuned from a Chinese-origin base takes its base's origin, so voyage-4-nano, harrier-oss-v1-0.6b and jina-embeddings-v5 are excluded; STANDARDS gains the line.
 - screen (escalation, architect): a set's models are swept in role order (agent, vision, audio, embedding), each against the Ns already chosen and the unswept models at their committed settings, so the agent, whose N is the sessions the set supports, takes the headroom first. Prompted by gemma-4-E4B, swept alone, choosing N = 16 at 2824 MiB free, 8 MiB over the floor. Rejected sweeping each against the committed settings and cutting back in proportion.
 - screen (escalation, architect): vision, audio and embedding take the N their own sweep holds, not capped at the agent's N: applications call those roles directly, not only inside agent sessions.
+- screen (redirect, architect, 2026-10-21): the evaluation work went deeper than the experiment needs at this point: multi-hour staged evaluations ahead of the foundational hosting questions (engine, backend, hosts, gateway) whose answers shape what a benchmark measures. screen ends after slice 8 with the pool document, the STANDARDS lines and the docs; set A's live screens, timings and finalist demonstration are dropped, and the tooling ships as built, unproven on a full live screen. Withdraws the escalation on the agent's per-session target.
+- screen (redirect, architect): the Framework's startup set goes back to the settings set A ran on before the sweep (4 slots each, gpt-oss-120b at c 131072); the sweep's tables stay as findings. Prompted by the sweep cutting gpt-oss-120b to c 17664, under the 14739-token prompts the router has logged and far under a real agent session.
+- screen (redirect, architect): benchmarking is built as small, separate elements composed into workloads per scenario, not as one staged strategy: a model's fit on a host; a model as an agent; a set of role models running at once; any of these under concurrent sessions; and any of these load-balanced across several hosts. The spike's tasks are to be decomposed into spikes with clear boundaries, run in whatever order flows now that no task is blocked (the go-cli-sdk template is available; the two GB10 workstations are present, pending their tailnet join), with performance benchmarking last, once the other facts are in.
 
 ## Pending edits
 
@@ -726,3 +728,4 @@ slices 8/11 committed · standards — · spec — · editor —
   base takes its base's origin.
 - coordinator · ai-hosting.md, "Experiment: spike-model-hosting": slots and c are measured per
   model and host by a sweep; the spike accepts any open model licence (listed).
+- coordinator · roadmap, experiment.ai: a `plan experiment.ai` session re-evaluates every spike against what it has become and decomposes spike-model-hosting into spikes with clear boundaries (Strix Halo backends and engines, the GB10 hosts, the gateway, the admin tool on go-cli-sdk, and benchmarking last), ordered now that nothing blocks them. Benchmarking is designed as composable elements (host fit, agent capability, a concurrent role set, concurrent sessions, multi-host load balancing) built into scenario workloads, starting from screen's evaluate tooling.
