@@ -1,8 +1,8 @@
 # goal · experiment.ai.spike-model-hosting
 
-- **State:** brief ready
-- **Task:** screen
-- **Branch:** screen
+- **State:** idle
+- **Task:** none
+- **Branch:** none
 
 ## Tasks
 
@@ -11,7 +11,7 @@
 3. [x] consumers
 4. [x] main-model
 5. [x] evaluation
-6. [ ] screen
+6. [x] screen
 7. [ ] candidates
 8. [ ] rocm
 9. [ ] engines-strix
@@ -215,10 +215,6 @@ Door          two-way, except:
               command, and the committed render is restored and checked by
               its SHA-256.
 ```
-
-## Progress
-
-slices 10/10 committed (9 dropped) · standards done · spec done (gaps closed) · editor done
 
 ## Decisions
 
