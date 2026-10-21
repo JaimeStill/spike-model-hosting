@@ -218,7 +218,7 @@ Door          two-way, except:
 
 ## Progress
 
-slices 8/10 committed (9 dropped) · standards — · spec — · editor —
+slices 10/10 committed (9 dropped) · standards — · spec — · editor —
 
 ## Decisions
 
