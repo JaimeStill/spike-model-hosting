@@ -26,7 +26,7 @@ One Go module, a mise monorepo of five areas. Each area's tasks run from the roo
 | [`hosting/`](hosting) | The Go tooling for profiles and models: the `profile` package and command (load, validate, and render a host-class profile to the router's presets and systemd unit), the `router` client, the `swap` package and command (swap the router between a profile's sets), and the `probe` (the HTTP probes, `mise run integration`). |
 | [`evaluation/`](evaluation) | The instruments and the gated pipelines, all run from the architect's laptop: the `evaluate` command, its stages and steps, the floors and bars, the seeded tier lists, the Python quality suites, and the consumer pins. |
 | [`devices/`](devices) | One area per host class: its profile, runbook, and build log. [`devices/strix-halo/`](devices/strix-halo) is the Framework desktop's. |
-| [`docs/`](docs) | The methods and the findings. |
+| [`docs/`](docs) | The methods, the model pool, and the findings. |
 | [`context/`](context) | The marathon workflow's files: the vision and capability map, and the goal record. |
 
 ## The docs
@@ -35,6 +35,9 @@ One Go module, a mise monorepo of five areas. Each area's tasks run from the roo
   kind and the stage that uses it, the floors and bars, and how to run it.
 - [Reading a model card](docs/model-cards.md): what each card value means, the values each model
   runs at, and the context catalog.
+- [The model pool](docs/pool.md): on paper, the open-weight models that could serve each role on
+  Strix Halo under the origin and licence rules, each admitted or excluded and why, and the
+  profiles they could make, from set A's near-full pool to small models with large headroom.
 - [The Strix Halo runbook](devices/strix-halo/README.md): the Framework's OS, Tailscale, the
   versioned llama.cpp install, the rendered unit and presets, and the root commands of a build
   move. Its build log is [`llama-cpp-builds.md`](devices/strix-halo/llama-cpp-builds.md).

@@ -10,7 +10,7 @@ from `context/README.md`.
 - **Layout:** one Go module in a mise monorepo. `hosting/` holds the profile, router, swap, and
   probe packages and their commands; `evaluation/` the consumers, instruments, gated stages, and
   Python suites; `devices/<host class>/` each host class's `profile.toml`, runbook (`README.md`),
-  and build log; `docs/` the evaluation approach, the model cards, and, under `docs/findings/`,
+  and build log; `docs/` the evaluation approach, the model cards, the model pool (on paper), and, under `docs/findings/`,
   the measured results; `context/` marathon's files only. Each area's `mise.toml` holds its
   tasks, run from the root as `mise run //<area>:<task>`.
 - **Check:** `mise run check` (hermetic). The HTTP probes (the `probe` package) run against
