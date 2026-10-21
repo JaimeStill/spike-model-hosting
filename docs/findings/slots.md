@@ -20,13 +20,14 @@ the next sweep began. The sweep started from render `b987489d` (every model at 4
 | gemma-4-E4B | audio | 1956 | 16 | none | **16** | top | 31488 | `5a9b534c` |
 | EmbeddingGemma 2 | embedding | 8192 | 16 | none | **16** | top | 8192 (held) | `6643c687` |
 
-The last render, sha256 `6643c687c39a48ea518fab9c47e63aaa9ac842573419abaca2d75c340a87083e`, is the
-committed profile's, installed on the Framework (`sha256sum /etc/llama-router/models.ini` reads
-the same; no temporary file left), and `/props` reports each model at its committed slots and
-`n_ctx`. The probe passed after (`mise run integration`).
+The last render, sha256 `6643c687c39a48ea518fab9c47e63aaa9ac842573419abaca2d75c340a87083e`, was
+the committed profile's until the restore below, installed on the Framework
+(`sha256sum /etc/llama-router/models.ini` read the same; no temporary file left), with `/props`
+reporting each model at its committed slots and `n_ctx`. The probe passed after
+(`mise run integration`).
 
-**Set A supports 2 concurrent agent sessions on the Strix Halo**: gpt-oss-120b's chosen N. Not yet
-confirmed by the set stage, which `screen`'s slice 9 runs.
+**Set A supports 2 concurrent agent sessions on the Strix Halo**: gpt-oss-120b's chosen N. The set
+stage that confirms it was not run: the goal record's redirect of 2026-10-21 dropped it.
 
 ### The startup set restored, 2026-10-21
 
@@ -36,11 +37,12 @@ gpt-oss-120b, 32768 for Gemma 4 26B-A4B and gemma-4-E4B, and 8192 for EmbeddingG
 chosen N rests on its per-session target, 8806 tokens, and that target isn't yet settled for real
 agent sessions; until it is, the startup set doesn't run at what it chose. Each model's reasons in
 the profile keep its facts and say what the sweep chose and why the set doesn't run at it. The
-committed render, sha256 `84086e3c02bf63658a58d0e3e7926a976f7fd27f135f6fe7584b0c427567c08c`
-(its keys the pre-sweep render's), was installed with `evaluate sweep -restore -set a` and
-verified: the host's `sha256sum` reads the same, `/props` reports `total_slots` 4 and `n_ctx`
-131072, 32768, 32768 and 8192, and the probe passed. The 2 sessions above are the sweep's finding,
-not what the installed set serves.
+committed render, sha256 `a65fd306088ea3897f586645b2592c07e5fe3e578b50ca7e82a081c945097260`
+(its keys the pre-sweep render's), is installed on the Framework and verified: the host's
+`sha256sum` reads the same, `/props` reports `total_slots` 4 and `n_ctx` 131072, 32768, 32768 and
+8192, and the probe passes. It differs from the first restored render only in a comment
+([`llama-cpp-builds.md`](../../devices/strix-halo/llama-cpp-builds.md), "The Mistral reason
+corrected"). The 2 sessions above are the sweep's finding, not what the installed set serves.
 
 `.state/evaluate/index.json` is left as it is: its entries keyed by the swept presets no longer
 match any model's key, so none is reused at the restored settings.
@@ -137,8 +139,8 @@ setting, interrupted once the quality stage began. Admission, fitness and capaci
   peak, 5965 MiB, the least of any role's. Each is well above the 2816 MiB floor, which is
   unchanged.
 - **Sessions supported.** The report states `sessions supported: 2, ggml-org/gpt-oss-120b-GGUF:MXFP4's
-  slots; not confirmed: the run didn't reach the set stage`. The set stage that confirms it is
-  `screen`'s slice 9.
+  slots; not confirmed: the run didn't reach the set stage`. The set stage that confirms it was
+  not run (the redirect, 2026-10-21).
 - An earlier run of the same, without `-fresh`, read the same figures within 1-4% (agent at N
   24.6 tok/s, vision 8.72 s, audio 1.41x, embedding 40.2 ms; capacity's peak 5965 MiB free). It
   wrote no sessions line: an interrupted run then left it out, which is now fixed.

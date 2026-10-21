@@ -75,8 +75,8 @@
 //     profile, go in the run directory's conform/.
 //   - Quality runs the embedding role's MTEB tasks (EmbeddingTasks: STSBenchmark,
 //     Banking77Classification, SciFact, NFCorpus), each in full, through the uv project
-//     evaluation/suites, whose encoder sends the router's /v1/embeddings with EmbeddingGemma 2's
-//     task prompts. Each task's main score is judged against its bar, by task name, in
+//     evaluation/suites, whose encoder sends the router's /v1/embeddings with the model's task
+//     prompts from the profile. Each task's main score is judged against its bar, by task name, in
 //     evaluation/bars.toml, and recorded, never failing, without one; early stop doesn't apply
 //     to a continuous score. Each check records MTEB's version, the prompts the encoder applied,
 //     and the task's wall time.

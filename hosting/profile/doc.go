@@ -28,9 +28,9 @@
 //     (CardContext, which C may not pass), the requests it serves at once (Slots, at least 1,
 //     with its SlotsReason; KV, unified or per-slot, stays the profile's, for every model),
 //     optionally its active parameters and bits per weight (ActiveParamsB, BitsPerWeight: the
-//     bytes a decoded token reads), and an embedding model
-//     its output width, Dims; Profile.Model looks one up by router ID. A vision Model may cap
-//     the image tokens its encoder takes in one batch (MtmdBatchMaxTokens, with its reason). A
+//     bytes a decoded token reads), and an embedding model its output width, Dims;
+//     Profile.Model looks one up by router ID. A vision Model may cap the image tokens its
+//     encoder takes in one batch (MtmdBatchMaxTokens, with its reason). A
 //     profile's optional MemoryBandwidthGBs is its host class's memory bandwidth, the ceiling
 //     decode is compared with. RouterTag is the tag the router lists a model by, the one a
 //     Model's ID must end with.

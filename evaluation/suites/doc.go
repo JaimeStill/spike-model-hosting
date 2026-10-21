@@ -5,9 +5,9 @@
 // through the pinned uv and Python, offline: the claude-code Inspect provider against a fake
 // claude executable (test_claude_code.py), the tiers' early stops (test_early_stop.py), the
 // --slots every suite that keeps requests in flight takes from evaluate (test_slots.py), and MTEB
-// run without its result cache (test_caches.py). On a machine without the consumers environment, or without the project's locked packages synced,
-// the test fails, naming the commands that set them up, rather than skipping: a passing check
-// has always run them.
+// run without its result cache (test_caches.py). On a machine without the consumers environment,
+// or without the project's locked packages synced, the test fails, naming the commands that set
+// them up, rather than skipping: a passing check has always run them.
 //
 // The API:
 //   - Pin returns the exact version pyproject.toml pins a package to.

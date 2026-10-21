@@ -499,7 +499,7 @@ records it not run. The baseline's cold-load figures are the move to b11715's, t
 
 ## Set A's floors at N on b11734
 
-Capacity now puts each role model's own slots in flight, N from its profile entry, and judges
+Capacity puts each role model's own slots in flight, N from its profile entry, and judges
 each of the N against the role's floor at N (`evaluation/floors.toml`). The agent's N streams
 are the agentic shape, an 8192-token prompt and 512 out, in place of the short nonce request
 the b11715 baseline sent. One set run screen (`-set a`) on `b11734-f3fb2fcdb`, 2026-10-19 21:11

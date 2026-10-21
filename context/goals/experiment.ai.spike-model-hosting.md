@@ -218,7 +218,7 @@ Door          two-way, except:
 
 ## Progress
 
-slices 10/10 committed (9 dropped) · standards — · spec — · editor —
+slices 10/10 committed (9 dropped) · standards done · spec done (gaps closed) · editor done
 
 ## Decisions
 
@@ -655,6 +655,14 @@ slices 10/10 committed (9 dropped) · standards — · spec — · editor —
 - screen (redirect, architect, 2026-10-21): the evaluation work went deeper than the experiment needs at this point: multi-hour staged evaluations ahead of the foundational hosting questions (engine, backend, hosts, gateway) whose answers shape what a benchmark measures. screen ends after slice 8 with the pool document, the STANDARDS lines and the docs; set A's live screens, timings and finalist demonstration are dropped, and the tooling ships as built, unproven on a full live screen. Withdraws the escalation on the agent's per-session target.
 - screen (redirect, architect): the Framework's startup set goes back to the settings set A ran on before the sweep (4 slots each, gpt-oss-120b at c 131072); the sweep's tables stay as findings. Prompted by the sweep cutting gpt-oss-120b to c 17664, under the 14739-token prompts the router has logged and far under a real agent session.
 - screen (redirect, architect): benchmarking is built as small, separate elements composed into workloads per scenario, not as one staged strategy: a model's fit on a host; a model as an agent; a set of role models running at once; any of these under concurrent sessions; and any of these load-balanced across several hosts. The spike's tasks are to be decomposed into spikes with clear boundaries, run in whatever order flows now that no task is blocked (the go-cli-sdk template is available; the two GB10 workstations are present, pending their tailnet join), with performance benchmarking last, once the other facts are in.
+- screen (slice 8, session): the agent's per-session target is the router's own count of capacity's agentic request (8294 in + 512 out = 8806 on gpt-oss-120b, b11734), as the vision and audio targets were measured; the nominal 8192 + 512 was slice 7's slip.
+- screen (slice 8, session): an embedding model's c is held at its committed c and the sweep varies only slots: llama.cpp b11734 creates no KV memory for embedding architectures (src/llama-model.cpp create_memory returns nullptr), so c = N × target, premised on a KV pool shared across slots, doesn't apply.
+- screen (slice 8, session): a swept reason keeps the model's facts and ends in one `Swept: ` paragraph that a later sweep replaces.
+- screen (spec review, session): the results index keys each model also by a SHA-256 of its card prompts and consumer reasoning, and every entry by a method key (floors, bars, suite pins, tier lists, probe media); harness fit is keyed by the set, since its capabilities send to every role's model. Each is a real input to the result; kept beyond the brief's model, build and preset.
+- screen (spec review, session): fitness and capacity send embedding inputs with the profile's query and document prompts, as the MTEB encoder does.
+- screen (standards review, session): the suites' Inspect log-reuse check stays a source guard (TestNoLogReuse); a fixture per script isn't worth it before the benchmarking spike. The pinned-preset test's exemption for swept models is removed: a sweep that commits new values fails it on purpose.
+- screen (currency, session): go 1.27.3 and uv 0.13.4 taken (security and fix releases, nothing to adapt); inspect-ai 0.3.281 and pillow 12.3.0 join evaluation (spec review, architect)'s held suite pins while set A's bars stand (pillow 13 is a new major).
+- screen (editor, session): the fine-tune origin rule excludes jina-embeddings-v5-text-small (Qwen3-0.6B base); jina-embeddings-v5-text-nano is a EuroBERT encoder, not Qwen3, so screen r2's "jina-embeddings-v5 are excluded" narrows to text-small, and text-nano's origin (Jina AI, Germany) is left unjudged in docs/pool.md.
 
 ## Pending edits
 
@@ -715,15 +723,18 @@ slices 10/10 committed (9 dropped) · standards — · spec — · editor —
 - coordinator · roadmap: add task `screen` after `evaluation`, before `candidates` (evaluate's
   screen with early stop on either side, concurrent role tiers and finalists; the results
   index; the reload and warmed-peak pool reading; per-model slots and c by a sweep with the
-  sessions-supported count; card prompts in the profile; the pool document; proven on set A's
-  models on the newest build).
-- coordinator · roadmap, candidates summary: replace "candidates are screened, not
+  sessions-supported count; card prompts in the profile; the pool document; built and proven
+  against fakes, set A swept on b11734 with its startup settings kept, live screens dropped by
+  the redirect).
+- coordinator · roadmap, candidates summary, or the benchmarking spike's if the `plan
+  experiment.ai` restructure folds candidates into it: replace "candidates are screened, not
   baselined: …" with: screens models from screen's pool document with screen's evaluate, gives
   each kept profile its swept slots and c, builds profiles from the pool's sketches (omni
   included), and each verdict states the sessions its set supports.
-- coordinator · roadmap, candidates summary: drop "each set's verdict states the concurrent
-  sessions … lighter grouping" (screen builds the count, the pool document sketches the
-  lighter profiles; candidates judges them).
+- coordinator · roadmap, candidates summary, or wherever the restructure carries it: drop "each
+  set's verdict states the concurrent sessions … lighter grouping" (screen builds the count, the
+  pool document sketches the lighter profiles; candidates, or the benchmarking spike, judges
+  them).
 - coordinator · ai-strategy.md, "Constraint: model origin": a fine-tune of a Chinese-origin
   base takes its base's origin.
 - coordinator · ai-hosting.md, "Experiment: spike-model-hosting": slots and c are measured per

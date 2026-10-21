@@ -32,7 +32,8 @@ One Go module, a mise monorepo of five areas. Each area's tasks run from the roo
 ## The docs
 
 - [How the evaluation works](docs/evaluation.md): the stages and what each gates, each tool by
-  kind and the stage that uses it, the floors and bars, and how to run it.
+  kind and the stage that uses it, the floors and bars, the screen and full run, the results
+  index, the sweep, and how to run it.
 - [Reading a model card](docs/model-cards.md): what each card value means, the values each model
   runs at, and the context catalog.
 - [The model pool](docs/pool.md): on paper, the open-weight models that could serve each role on
@@ -50,6 +51,9 @@ The findings:
   consumer, and harness fit.
 - [The memory budget](docs/findings/memory-budget.md): set A's budget against the Framework's
   96 GiB pool, the candidate sets' footprints, set swaps, and the pool's growth under use.
+- [Per-model slots](docs/findings/slots.md): the sweep's tables for set A's models on b11734,
+  each model's chosen slots and context, and the 2 agent sessions the sweep found set A supports,
+  not confirmed by a set stage.
 
 ## What the Framework serves
 
@@ -59,18 +63,16 @@ profile's rendered unit and presets, serving set A: gpt-oss-120b (agent), Gemma 
 evaluation runs set the bars every candidate is judged by
 ([`evaluation/bars.toml`](evaluation/bars.toml)).
 
-## The planned answer
+## The remaining tasks
 
-The tasks still to run, in order, and what each settles:
+The tasks below are planned to be split into separate spikes, with benchmarking last. Benchmarking
+is planned as small elements composed per scenario: a model's fit on a host, a model as an agent,
+a concurrent role set, concurrent sessions, and load balancing across hosts. evaluate's screen,
+full run and results index are built and tested against a fake router, not yet proven on a
+live screen. Each task, and what it settles:
 
-- **`candidates`:** a candidate for every role, Nemotron 3.5 Super among them, judged by the
-  evaluation's floors and set A's bars; the verdict, and the startup set. Planned changes to the
-  evaluation, recorded in the goal record's Decisions: a candidate gets a
-  screen, not a full run (a tier stops early on a pass as well as a fail, the screening fifth
-  runs by default, the roles' quality tiers run concurrently, and results are kept by model,
-  build, and preset), with the full run kept for finalists; each set states the concurrent agent
-  sessions it supports on its host; a lighter grouping than set A is sought; and a host keeps
-  only the models that passed on it, in sets that passed together.
+- **`candidates`:** a candidate for every role, judged by the evaluation's floors and set A's
+  bars; the verdict, and the startup set. Expected to become part of the benchmarking spike.
 - **`rocm`** and **`engines-strix`:** llama.cpp's ROCm backend against Vulkan, then vLLM and,
   time-boxed, SGLang on Strix Halo.
 - **`gateway`:** no gateway, agentgateway, and LiteLLM in front of the Framework.

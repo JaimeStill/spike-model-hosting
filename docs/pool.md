@@ -157,6 +157,7 @@ token passes through. It ignores the quant and how each architecture's kernels r
 | EmbeddingGemma 300M (v1) | Google (US) | Gemma Terms of Use | dense encoder (Gemma 3), 300M | 2048 (its card) | ggml-org Q8_0 0.33 GB | ~1.8 GiB, est. | arch | ~16,700, est. b11734 | admissible |
 | harrier-oss-v1-27b; e5-mistral-7b | Microsoft (US) | MIT | dense decoder (Gemma 3; Mistral), 27B; 7.1B | 131072; 32768 (config.json) | Abiray (community) Q8_0 28.7 GB / Q4_K_M 16.6 GB; second-state (community) Q8_0 7.7 GB / Q4_K_M 4.4 GB; the most downloaded, HF 2026-10-21 | 18 / 6 GiB, est. | arch | ~190; ~700, est. b11734 | excluded: throughput, est. |
 | voyage-4-nano; harrier-oss-v1-0.6b; jina-embeddings-v5-text-small | Voyage AI, Microsoft, Jina (Qwen3 base) | | dense decoder (Qwen3), 0.35B; 0.6B; 0.6B | 40960; 32768; 32768 (config.json) | jsonMartin (community) Q8_0 0.37 GB; mradermacher (community) Q8_0 0.64 GB; jinaai's own (v5-text-small-retrieval) Q8_0 0.64 GB; the most downloaded, HF 2026-10-21 | | | not estimated | excluded: origin, by their Chinese-origin base |
+| jina-embeddings-v5-text-nano | Jina AI (Germany) | | dense encoder (EuroBERT, not Qwen3) | | | | | not estimated | not yet judged: the origin rule for a fine-tune doesn't exclude it, since its base isn't Qwen3, and its origin hasn't been judged; outside the survey's count |
 | Qwen3-Embedding, bge, gte | China | | | | | | | | excluded: origin |
 
 ## The model shapes evaluate supports

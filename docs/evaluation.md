@@ -12,6 +12,8 @@ run's mode, screen or full, whether it made a finalist, the stage reached, the s
 why, and each stage's wall time.
 
 A run is a screen by default, and a full run is for finalists ("Screen and full run", below).
+The screen, the full run and the results index are tested against a fake router and recorded
+suite results, and not yet proven on a live screen: live runs have stopped once quality began.
 
 The code is the `gate` package (the stages), the `tier` package (seeded lists and bars), the
 uv project `evaluation/suites` (the Inspect AI and MTEB runs, with their early stops), and
@@ -68,7 +70,8 @@ A chat-and-vision model that passes every gate is budgeted ~85 minutes from admi
 the set stage. Set A's two baseline runs on b11715 put such a model at about 95-105 minutes, over
 the budget: a vision run took 82.1 and 70.9 minutes, and an agent run 37.2 and 35.9, then about
 48 for the deep stage. An audio run took 17.9 to 18.6 minutes, an embedding run about 5, and a
-set run about 38. `candidates` times its first chat-and-vision model.
+set run about 38. Timing a screen and a finalist's full run waits for the benchmarking spike
+("Planned", below).
 
 ## The tools
 
@@ -82,7 +85,7 @@ Each tool, its kind, the stage that uses it, and why:
 | The ASR task (`asr_quality.py`, an Inspect task) | benchmark | quality (audio), set (LibriSpeech test-clean) | The Open ASR Leaderboard's English sets and FLEURS English, scored by corpus WER after the leaderboard's English normalizer, with RTFx. Each clip goes with the card's ASR prompt, which the task takes as `--prompt` from the audio model's `prompts.asr` in the profile, the prompt's one source. |
 | inspect_evals: τ2 airline and retail | benchmark | deep (agent) | Multi-turn tool use against a simulated user and a policy. Telecom is out: its simulated user needs tools. |
 | The claude-code Inspect provider (`claude_code.py`), Claude Code 2.1.301 as Sonnet | harness | deep (τ2) | τ2's simulated user, with no cloud spend: the laptop's pinned Claude Code in print mode on the architect's subscription, tools off, its own system prompt, no session persistence, the reported model ID recorded. inspect_evals' airline scorer has no model grader, so the simulator is its only use. |
-| [MTEB](https://github.com/embeddings-benchmark/mteb) 2.26.4 | benchmark | quality (embedding), set (STSBenchmark) | Similarity, classification, and retrieval, through an encoder that adds EmbeddingGemma 2's task prompts, the profile's `prompts.embedding`, and calls the router's embeddings API; the stock OpenAI encoder adds no prompts. |
+| [MTEB](https://github.com/embeddings-benchmark/mteb) 2.26.4 | benchmark | quality (embedding), set (STSBenchmark) | Similarity, classification, and retrieval, through an encoder that adds the model's task prompts, its `prompts.embedding` in the profile, and calls the router's embeddings API; the stock OpenAI encoder adds no prompts. |
 | clutch's conform, through the `passk` package | conformance test | quality (agent tier 3, harness fit) | Whether each coding agent can drive the model through clutch's nine capabilities, k = 5 times. |
 | Pi 1.3.0, Claude Code 2.1.301, OpenCode 1.19.3 | harness | quality (harness fit); the `concurrent` step | The coding agents the model serves, each judged by harness fit, and run at once by `evaluate concurrent`. |
 | [GuideLLM](https://github.com/vllm-project/guidellm) 0.8.1 | load generator | deep (generative models) | The grid: short 512/256 and agentic 8192/512 at 1 and 4 streams, client figures beside the engine's `/metrics`. The deep stage runs the same cells as `evaluation/scripts/baseline.sh`, through `gate.GuideLLM`. |
@@ -108,10 +111,16 @@ these are initial values a later decision may change:
 | Role | Floor |
 |---|---|
 | pool | at least 2816 MiB (2.75 GiB) free, idle and at the peak |
-| agent | decode ≥ 20 tok/s; 8k-prompt prefill ≥ 500 tok/s; 8k-prompt TTFT ≤ 20 s; each of 4 streams ≥ 10 tok/s |
-| vision | one image question ≤ 10 s |
-| audio | RTFx ≥ 5; each of 4 streams' RTFx ≥ 1 |
-| embedding | ≥ 4,300 tok/s; a 32-token query ≤ 250 ms |
+| agent | decode ≥ 20 tok/s; 8k-prompt prefill ≥ 500 tok/s; 8k-prompt TTFT ≤ 20 s; at N, each stream ≥ 10 tok/s |
+| vision | one image question ≤ 10 s, alone and each of N at once |
+| audio | RTFx ≥ 5; at N, each stream's RTFx ≥ 1 |
+| embedding | ≥ 4,300 tok/s; a 32-token query ≤ 250 ms, alone and each of N at once |
+
+Fitness judges the single-stream floors. Capacity judges the floors at N, N the model's own slots
+in the profile: it puts N requests in flight and judges each one, never their sum, and no request
+may run out of context. Fitness and capacity send embedding inputs as the MTEB encoder does, with
+the model's prompts from the profile (`prompts.embedding`): the smoke sentence and the 32-token
+queries after its query prompt, the throughput batch after its document prompt.
 
 Ceiling efficiency, decode over 256 GB/s ÷ the bytes a token reads, is recorded and never
 gated.
@@ -264,14 +273,13 @@ profile's slots change only by a commit.
 the set in role order: agent, vision, audio, embedding, a model the set assigns two roles once,
 at the larger of their targets (`-from <role>` starts at that role's model). After each model's
 sweep and restore it writes the chosen N and that step's `c` into the profile file, editing only
-the model's `slots`, `c`, `slots_reason` and `c_reason`, and installs the new render as the committed one, checked as a restore is. So each
-model is swept against the settings already chosen for the models before it, and the models after
+the model's `slots`, `c`, `slots_reason` and `c_reason`, and installs the new render as the
+committed one, checked as a restore is. So each model is swept against the settings already chosen for the models before it, and the models after
 it at their committed ones. Vision, audio and embedding take the N their own sweep holds, not
 capped at the agent's. It stops at the first model that chooses no N or whose sweep, edit or
 install fails, the models before it committed and installed; the profile's edit is left to be
 committed. Each reason keeps its own paragraphs, the model's facts, and ends with one paragraph
-from the sweep, beginning `Swept:` (N, bound, build, date), which a later sweep replaces, so a
-reason never accumulates sweeps.
+from the sweep, beginning `Swept:` (N, bound, build, date), which a later sweep replaces.
 
 ## Before each run
 
@@ -279,20 +287,20 @@ reason never accumulates sweeps.
   models. Each model keeps the largest working memory it has needed until it is reloaded, so
   without a reload one run's growth carries into the next, and a model's verdict would depend on
   where it ran in the day ([`findings/memory-budget.md`](findings/memory-budget.md), "The pool
-  over a day of runs"). evaluate does it itself, once admission has passed: it unloads and loads the set's models over the router's API, waits 30 s, and
-  records the idle pool. It then drives each of the set's models to its high-water mark: an
+  over a day of runs"). Once admission has passed, evaluate unloads and loads the set's models
+  over the router's API, waits 30 s, and records the idle pool. It then drives each of the set's models to its high-water mark: an
   8192-token prompt to each generative model (prefilled in full ubatches, as the deep stage's
   8192-token prompts are), the vision role's largest image and the audio role's longest clip in
   the committed tier lists (found by `vision_quality.py peak` and `asr_quality.py peak` into the
   run directory's `warm/`), and the embedding role's largest input, one that fills its physical
   batch. It reads the pool again at that warmed peak, and every pool floor is judged there:
   fitness judges the warmed reading, and capacity's, the quality pass's and the set stage's
-  readings come after it. Each reading carries the host's system RAM beside it: used
-  and available (`free -b`), and each model process's RSS (`ps`, by its `--alias`). The report's
-  `warm` records the reload's steps, both readings and the warm-up's requests. A run resumed
-  with `-from` on the same run directory, or a full run continuing its screen, doesn't reload,
-  and keeps that run's warm-up. The run
-  needs every model of the set loaded, and never loads one it didn't find loaded.
+  readings come after it. Each reading carries the host's system RAM beside it: used and
+  available (`free -b`), and each model process's RSS (`ps`, by its `--alias`). The report's
+  `warm` records the reload's steps, both readings and the warm-up's requests. A run resumed with
+  `-from` on the same run directory, or a full run continuing its screen, doesn't reload, and
+  keeps that run's warm-up. The run needs every model of the set loaded, and never loads one it
+  didn't find loaded.
 - **Point `TMPDIR` into `.state`.** inspect_evals' τ2 task writes one copy of the domain's
   database to `TMPDIR` per sample (airline 6.8 MB, retail 2.7 MB) and never removes it, about
   230 MB an agent run, enough to fill the laptop's `/tmp` quota. Run with
@@ -343,7 +351,8 @@ go run ./evaluation/cmd/evaluate sweep -restore -set a
 
 `-role` takes agent, vision, audio, or embedding. The set is `-set`, `SPIKE_SET`, or the
 profile's startup set. The run refuses a model the router doesn't list as loaded (for a run that
-reloads, every model of the set), and loads only the set it reloads. Each report is `.state/evaluate/<UTC time>-<model>/report.json`, a set run's
+reloads, every model of the set), and loads only the set it reloads. Each report is
+`.state/evaluate/<UTC time>-<model>/report.json`, a set run's
 `.state/evaluate/<UTC time>-set-<name>/report.json`, with a summary on stdout. The raw output stays
 untracked under `.state`; once a run's findings are committed to `docs/findings/`, the run
 outputs are removed, and only the logins and caches stay. `go run ./evaluation/cmd/evaluate -h`
@@ -353,19 +362,21 @@ of which also runs alone, and the sweep (`sweep`, above).
 The tier lists are drawn again from their seed with the consumers environment's tasks, for
 example `MISE_ENV=consumers mise run //evaluation:vision-tiers`; each rewrites the committed lists.
 
-## Planned for candidates
+## Planned
 
-The goal record's Decisions plan these changes for `candidates`:
+The goal record's redirect of 2026-10-21 moves benchmarking to a later spike, built from small
+elements composed per scenario. These parts of the method wait for it:
 
-- **A screen, not a full run.** Built in `screen` ("Screen and full run" and "The results index",
-  above), results kept by model, build, and preset, so a changed profile reruns only its changed
-  roles plus the set stage. The estimate, 15 to 25 minutes a candidate, is extrapolated, not measured.
-  Set A's baseline stays two full runs, since its bars and spreads are what make a screen
-  trustworthy.
-- **The concurrency count.** Every evaluated set reports the most agent sessions at once that
-  still meet the per-stream floors with the pool floor held, even when it is one. The capacity
-  stage checks each model's own slots in flight, and the sweep ("The sweep", above) chooses them.
-- **A lighter grouping.** Candidates also looks for a grouping that scores near set A's bars
-  with less of the pool and bandwidth, so the host keeps headroom and concurrency.
-- **Only passing models.** A host keeps installed only the models that passed evaluation on it,
-  and its sets group only models that passed together.
+- **A live screen.** A screen's time, 15 to 25 minutes a candidate, is extrapolated, not
+  measured. Set A's baseline
+  stays two full runs, since its bars and spreads are what make a screen trustworthy.
+- **Sessions supported, confirmed.** A set run's report states the concurrent agent sessions the
+  set supports on its host: its agent model's slots, confirmed when the set stage passes with
+  every model at its own slots. No set stage has confirmed the 2 sessions set A's sweep chose
+  ([`findings/slots.md`](findings/slots.md)).
+- **A lighter grouping.** A grouping that scores near set A's bars with less of the pool and
+  bandwidth, so the host keeps headroom and concurrency; [`pool.md`](pool.md) sketches such
+  profiles on paper.
+
+A host keeps installed only the models that passed evaluation on it, and its sets group only
+models that passed together.

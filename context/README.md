@@ -56,8 +56,9 @@ of the admin tooling.
 - **Gateways, live:** no gateway, agentgateway, and LiteLLM. Envoy AI Gateway (Agent Router) and
   vLLM's production-stack are Kubernetes-first and recorded on paper.
 - **Main-model pool:** gpt-oss-120b leads, and Gemma 4 26B-A4B completes the pool. Mistral
-  Small 4 is disqualified on Vulkan at b11669 (`main-model`). Nemotron 3.5 Super and other
-  candidates go to the `candidates` task, through the `evaluation` task's pipelines.
+  Small 4 is disqualified on Vulkan at b11669 (`main-model`). Nemotron 3.5 Super and the other
+  candidates in [`pool.md`](../docs/pool.md) wait for the `candidates` task, which the
+  restructure below is expected to fold into the benchmarking spike.
 - **Shared model set (set A):** gpt-oss-120b (ggml-org MXFP4, the main model), Gemma 4 26B-A4B
   (vision), gemma-4-E4B (audio and the small model), and EmbeddingGemma 2 (embeddings), each in
   its platform's native format: GGUF for llama.cpp, safetensors for vLLM and SGLang. On the
@@ -116,8 +117,14 @@ of the admin tooling.
   the module root, or by path. Each set assigns the model each role's requests go to
   (`[sets.roles]`), and `Profile.Set` is the one lookup the probe and every instrument share: each
   takes `-set` (or `SPIKE_SET`), the startup set by default. `devices/strix-halo/profile.toml`
-  holds the Framework's sets, with set A the startup set. Renderers for the other platforms'
-  configuration are planned.
+  holds the Framework's sets, with set A the startup set. Each model carries its own slots and
+  `c`, each with its reason, rendered as its section's `parallel` and context, and its card's
+  prompts (embedding task prompts, an ASR instruction), which evaluate's clients read from the
+  profile alone. Renderers for the other platforms' configuration are planned.
+- **Model pool:** on paper, the open-weight models that could serve each role on Strix Halo
+  under the origin and licence rules, each admitted or excluded and why, and profile sketches
+  from set A's near-full pool to small models with large headroom, in
+  [`pool.md`](../docs/pool.md).
 - **Model cards:** how to read a model card, what each value means, the values set A takes
   from each card, and a catalog of each profiled model's maximum context and its computed KV
   and recurrent-state cost, in [`model-cards.md`](../docs/model-cards.md).
@@ -128,18 +135,30 @@ of the admin tooling.
   OpenCode against the router for every tool and test: the pinned version, its harness driver,
   the Claude Code login check, and state under the run's own directory.
 - **Router state:** the `router` package reads a router's models, their status, and its build
-  over HTTP, and loads and unloads a model. Each tool reads the state to refuse to start against
+  over HTTP, loads and unloads a model, and has the router read its presets file again. Each
+  tool reads the state to refuse to start against
   an unloaded model and to name the build it ran on.
 - **Set swap:** the `swap` package and the `swap` command (`hosting/cmd/swap`) swap the router
   from the set it has loaded to another of the profile's sets over its API. They unload before they
-  load, and time each model's step and the total.
+  load, and time each model's step and the total. `swap.Reload` reloads a set's models in place,
+  which evaluate does before every run.
 - **Evaluation:** `go run ./evaluation/cmd/evaluate` takes a model, or a set's role, through
   gated stages (admission, fitness, capacity, quality, set) and then the deep stage, stopping at
   the first that fails and resuming from a named stage; absolute speed floors
   (`evaluation/floors.toml`), per-tier bars from set A's two-run baseline
   (`evaluation/bars.toml`), seeded tier lists with an early stop, and role pipelines on Inspect
-  AI and MTEB. The method, each tool by kind and stage, and how to run it are in
-  [`evaluation.md`](../docs/evaluation.md).
+  AI and MTEB. Each run reloads the set and judges every pool floor at the warmed peak, each
+  model driven to its high-water mark; capacity judges each role's floor at N, N the model's own
+  slots. A run is a screen by default (tiers early stopped on either side, the roles' tiers at
+  once), a finalist's full run continues it, and a results index reuses passed results by model,
+  build and preset section; these three are tested against a fake router and recorded suite
+  results, not yet proven on a live screen. The method, each tool by kind and stage, and how to
+  run it are in [`evaluation.md`](../docs/evaluation.md).
+- **Sweep:** evaluate's `sweep` step chooses a model's slots and `c` on the router, the rest of
+  its set loaded, by writing the router's preset file step by step and restoring the committed
+  render, checked by its SHA-256; a set sweep sweeps a set's models in role order and commits
+  each choice into the profile. Set A's sweep on b11734 is in
+  [`slots.md`](../docs/findings/slots.md); the startup set keeps its pre-sweep settings.
 - **Instruments:** `go run ./evaluation/cmd/evaluate <step>` also runs each instrument below
   alone, as a step by name (`conform`, `concurrent`, `prefix`, `coldload`), with its own flags,
   and `-h` lists the steps.
@@ -177,7 +196,11 @@ of the admin tooling.
 
 ## Path
 
-The tasks, in the order they run; each cites the evidence it proves.
+The tasks, in the order planned; each cites the evidence it proves. The architect's redirect of
+2026-10-21 (the goal record's Decisions) plans to decompose the tasks after `screen` into spikes
+with clear boundaries, run in whatever order flows, with benchmarking last. Benchmarking is
+planned as small elements composed into scenario workloads: a model's fit on a host, a model as
+an agent, a concurrent role set, concurrent sessions, and load balancing across hosts.
 
 1. `align`: the Framework's router, personal-agents, spike-harness-driver, and the "clutch
    driving Pi" artifact brought in line with set A on an upstream b-number build (evidence 1).
@@ -192,18 +215,22 @@ The tasks, in the order they run; each cites the evidence it proves.
    staged gates (admission, fitness under ~3 minutes, capacity, quality, characterization);
    graded fixtures of rising complexity; a set evaluation for co-loaded models covering all four
    core roles; speed judged beside accuracy, with floors set by the hardware (evidence 4, 5).
-6. `candidates`: candidates for every role, including Nemotron 3.5 Super and new vision, audio,
+6. `screen`: evaluate's screen, full run and results index, tested against fakes; the reload
+   and warmed-peak pool reading; per-model slots and `c`, chosen by a sweep, with set A swept on
+   b11734; card prompts in the profile; the pool on paper and the licence and fine-tune origin
+   rules (evidence 5).
+7. `candidates`: candidates for every role, including Nemotron 3.5 Super and new vision, audio,
    and embedding candidates, run through the pipelines; the verdict and the startup set
    (evidence 4, 6).
-7. `rocm`: llama.cpp's ROCm backend against Vulkan (evidence 2–7).
-8. `engines-strix`: vLLM, and SGLang time-boxed, on Strix Halo (evidence 2–7).
-9. `gateway`: the gateway approaches in front of the Framework (evidence 8, 10).
-10. `admin`: needs go-cli-sdk v0.1.0. The admin tool over the profile (evidence 9).
-11. `cuda`: needs the Dell NVIDIA workstation (from 2026-10-14). The CUDA profile and
+8. `rocm`: llama.cpp's ROCm backend against Vulkan (evidence 2–7).
+9. `engines-strix`: vLLM, and SGLang time-boxed, on Strix Halo (evidence 2–7).
+10. `gateway`: the gateway approaches in front of the Framework (evidence 8, 10).
+11. `admin`: needs go-cli-sdk v0.1.0. The admin tool over the profile (evidence 9).
+12. `cuda`: needs the Dell NVIDIA workstation (from 2026-10-14). The CUDA profile and
    llama.cpp's CUDA router (evidence 2, 5, 7).
-12. `engines-cuda`: needs the Dell NVIDIA workstation. vLLM and SGLang on CUDA; the gateway
+13. `engines-cuda`: needs the Dell NVIDIA workstation. vLLM and SGLang on CUDA; the gateway
    configurations and the admin tool rerun unchanged (evidence 2–9).
-13. `validate`: evidence 1–10 on both hosts, the platform comparison, and the answer.
+14. `validate`: evidence 1–10 on both hosts, the platform comparison, and the answer.
 
 ## References
 
