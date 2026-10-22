@@ -585,8 +585,9 @@ slices 3/4 committed · standards — · spec — · editor —
      can't hold four 8k agentic requests at c 32768; a shared 8192-token prefix cuts TTFT from
      4-11 s to under 0.55 s; a router restart loads all four in about 21 s, warm or cold. Proven
      by running demos (GuideLLM 0.8.1, `evaluate prefix`, `evaluate coldload`) on b11572,
-     2026-10-12, and rerun within 3% (cold load 20.8 and 21.0 s) on b11715, 2026-10-17 and
-     2026-10-18.
+     2026-10-12; the deep stages reran the grid and prefix reuse on b11715, 2026-10-17 and
+     2026-10-18, gpt-oss-120b's short cells within 3%, and the move to b11715 read 20.8 and
+     21.0 s cold, 2026-10-17.
   5. A memory budget on unified memory: set A leaves 3.30 GiB of the 96 GiB pool free with 4 in
      flight on every model (b11565, 2026-10-12); each model keeps its high-water mark until
      reloaded, so the floor (2816 MiB) is judged after a reload at the warmed peak, 3068 MiB free
