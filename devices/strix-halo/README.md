@@ -46,7 +46,8 @@ policy sets each SSH rule to **accept** (unattended) or **check** (the first con
 the rule's check period needs a browser re-authentication). The spike runs in accept mode for
 the host alone: the host carries `tag:inference`, and an accept rule from the architect's user to
 that tag sits above the tailnet's check rule, which still covers every other device. The
-architect sets it and reverts the host to check mode when the spike completes.
+architect set it, and it stays in accept mode while the experiments run (`standards-lab/context/ai-hosting.md`,
+"Hosts and access").
 
 **The check-mode lapse.** In check mode, once the check period lapses, a non-interactive ssh
 fails (`exit status 255`) until someone re-authenticates in a browser; the router's HTTP API is
