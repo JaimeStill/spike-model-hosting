@@ -610,7 +610,7 @@ slices 3/4 committed · standards — · spec — · editor —
   - 6, a capability matrix per platform: spike-model-engines (raw capability by model shape,
     embedding and ASR among them).
   - 7, presets, context sizing, and the footprint method beyond the Framework:
-    spike-model-layout (context × sessions per pool) and spike-model-engines (vLLM).
+    spike-model-layout (context × sessions per placed model) and spike-model-engines (vLLM).
   - 8, each gateway approach: spike-model-gateway, budgets, rate limits, OpenTelemetry traces,
     memory and latency overhead, and one configuration on both host classes included.
   - 9, one admin tool over every platform and host: experiment.ai's spike-host-admin.

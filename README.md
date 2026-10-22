@@ -99,8 +99,8 @@ stands on set A's two baseline runs, its screen proven by tests only.
    answers in text where the `respond` call is due and makes up the `skill` motto without loading
    the skill; OpenCode, on `tool_choice` `auto`, gets the parser's "does not match the expected
    peg-native format" error in its stream. The layered convention (constrain at the server, card
-   settings in the profile, reasoning round-trip at the client, bounded resample at the gateway)
-   is recorded with its sources. Proven by running demos: `evaluate conform -k 5` on b11572,
+   settings in the profile, reasoning round-trip at the client, a schema failure retried at the
+   harness, bounded resample at the gateway, pass^k as the measure) is recorded with its sources. Proven by running demos: `evaluate conform -k 5` on b11572,
    2026-10-12 (Pi 1.1.0, Claude Code 2.1.296, OpenCode 1.19.0), and harness fit, the agent
    role's tier 3, in both of set A's baseline agent runs on b11715 (`b11715-9d1878a43`),
    2026-10-17 and 2026-10-18 (Pi 1.3.0, Claude Code 2.1.301, OpenCode 1.19.3)

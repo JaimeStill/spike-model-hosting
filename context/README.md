@@ -34,7 +34,7 @@ self-hosted model stack. The question is framed, and the answer lands, in
   reports in `build_info`. llama.cpp is tracked by b-number because its semver releases ship no
   binaries and lag its model support. Other versions are pinned exactly, and
   `mise run currency` reports the pins that trail.
-- **The Framework** (Strix Halo, 96 GB GTT pool) hosts and serves inference only. The spike may
+- **The Framework** (Strix Halo, 96 GiB GTT pool) hosts and serves inference only. The spike may
   change anything in its hosting layer, including the runtime, its configuration, and the
   models. Sessions may do on it whatever needs no sudo: the router's HTTP API (including load,
   unload, and downloads), user-level SSH reads such as `amdgpu_top`, and logs, by Tailscale SSH
