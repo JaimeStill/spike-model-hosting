@@ -1,4 +1,4 @@
-# goal · experiment.ai.spike-model-hosting
+# goal · experiment.hosting.spike-model-hosting
 
 - **State:** idle
 - **Task:** none
@@ -12,14 +12,7 @@
 4. [x] main-model
 5. [x] evaluation
 6. [x] screen
-7. [ ] candidates
-8. [ ] rocm
-9. [ ] engines-strix
-10. [ ] gateway
-11. [ ] admin (needs: go-cli-sdk v0.1.0)
-12. [ ] cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
-13. [ ] engines-cuda (needs: the Dell NVIDIA workstation, from 2026-10-14)
-14. [ ] validate
+7. [ ] answer
 
 ## Task brief · screen
 
@@ -659,80 +652,6 @@ Door          two-way, except:
 - screen (standards review, session): the suites' Inspect log-reuse check stays a source guard (TestNoLogReuse); a fixture per script isn't worth it before the benchmarking spike. The pinned-preset test's exemption for swept models is removed: a sweep that commits new values fails it on purpose.
 - screen (currency, session): go 1.27.3 and uv 0.13.4 taken (security and fix releases, nothing to adapt); inspect-ai 0.3.281 and pillow 12.3.0 join evaluation (spec review, architect)'s held suite pins while set A's bars stand (pillow 13 is a new major).
 - screen (editor, session): the fine-tune origin rule excludes jina-embeddings-v5-text-small (Qwen3-0.6B base); jina-embeddings-v5-text-nano is a EuroBERT encoder, not Qwen3, so screen r2's "jina-embeddings-v5 are excluded" narrows to text-small, and text-nano's origin (Jina AI, Germany) is left unjudged in docs/pool.md.
+- plan experiment.ai (architect, 2026-10-22): the spike moves to experiment.hosting, the self-hosted model stack, and closes through one `answer` task that narrows its question to what align through screen proved, with no new measurement; candidates, rocm, engines-strix, gateway, admin, cuda, engines-cuda, and validate are deleted. Their questions moved to experiment.hosting's spike-model-engines, spike-model-layout, and spike-model-gateway, and to experiment.ai's spike-host-admin and spike-model-benchmarks. Every pending edit was applied, superseded, or dropped in standards-lab's plan-experiment.ai pull request; the answer section goes to `ai-hosting.md`, "Answers · experiment.hosting".
 
 ## Pending edits
-
-- coordinator · ai-hosting.md, "Where personal-agents' parts go": add "how to read a
-  model card (spike-model-hosting's docs page on model cards)" to the methods proposed for the
-  architecture layer, and say that ai-hosting's per-model presets cite the card values that
-  method reads.
-- coordinator · roadmap, the spike's profile summary: replace "pinned exactly in the profile"
-  and "Currency compares the profile's pins against the newest `b<N>` tag" with a minimum
-  build (b11452), with each measurement naming the build it ran on.
-- coordinator · ai-hosting.md, "The existing setup: personal-agents", the Serving line: it
-  names release build b11529; the Framework's router now runs b11565 from the spike's rendered
-  presets and unit, which hold llama.cpp to a minimum build (b11452).
-- coordinator · roadmap, consumers summary: the consumers run from the laptop against the
-  Framework's router; drop the Mistral sentence; add pass^5 over conform's 9 capabilities and the
-  baseline (`docs/findings/baseline.md`) that every later platform is measured against.
-- coordinator · roadmap: add task `main-model` after `consumers`, before `rocm`: named model sets
-  with roles, swapping sets over the router's API, set-aware instruments, gpt-oss-120b's b11669
-  comparison row, and Mistral Small 4 disqualified on Vulkan (3.36 tok/s, CPU fallback #30105).
-- coordinator · roadmap, the spike's goal summary: the new boundary: every consumer and
-  instrument runs from the laptop, and the Framework only hosts and serves inference.
-- coordinator · ai-hosting.md, "Experiment: spike-model-hosting": the Hosts boundary change;
-  point the main-model probe to `candidates`, with Mistral Small 4's disqualification in
-  `main-model`.
-- coordinator · roadmap, the spike's goal summary, and ai-hosting.md, "Experiment:
-  spike-model-hosting", Hosts: sessions may do on the Framework whatever needs no sudo (the
-  router's HTTP API including load, unload and downloads, user-level SSH reads, logs); root
-  stays the architect's, by exact commands.
-- coordinator · roadmap: the spike's workstation tasks need re-planning (a `plan` session after
-  main-model): the hosts are two GB10 units (aarch64, sm_121, 128 GB unified at 273 GB/s, DGX OS
-  7.5 with driver 580 and CUDA 13.0, joined by 200GbE QSFP), not a discrete-VRAM box. The
-  re-plan revisits evidence 7; the cuda summary ("sized to its VRAM", and its nvidia-smi
-  footprint, since nvidia-smi reports "Memory-Usage: Not Supported" on GB10 and the footprint
-  method changes); ai-hosting.md's "discrete VRAM" passages; the "from 2026-10-14" dates and
-  needs markers; two-unit serving scope; the dense candidates (decode ceiling ~15 tok/s at 30B,
-  ~4 at 128B); and admin's go-cli-sdk need (met).
-- coordinator · roadmap: add task `evaluation` after `main-model` (the repository laid out by
-  area; evaluate's gated stages admission, fitness, capacity, quality, set and deep, with
-  absolute task-based floors and early stop, a chat-and-vision model's run budgeted at ~85 min
-  and measured at ~95-105 min; role pipelines on Inspect AI and MTEB; τ2 with Claude Code as the
-  simulated user; set A's baseline), then `candidates`
-  (candidates for every role, including Nemotron 3.5 Super, through the pipelines against set
-  A's bars; the verdict and startup set), both before `rocm`.
-- coordinator · ai-hosting.md (line 133) and roadmap.toml, validate task (line 515): repoint
-  `context/tool-reliability.md` to `docs/findings/tool-reliability.md`.
-- coordinator · ai-hosting.md, "Experiment: spike-model-hosting": candidates are judged by
-  evaluation's absolute floors and set A's per-tier bars, not the 24 tok/s floor.
-- coordinator · roadmap, experiment.ai's native Go harness spike: it joins this spike's harness-fit
-  tier as one more harness, and reads the fit profiles' failed cells and reasons (forcing the tool
-  call, reasoning round-trip, resend on a parse 500, image drop) as its design input.
-- coordinator · roadmap, the spike's candidates summary: a host keeps only the models that passed on it
-  (failed candidates are deleted after their verdict is recorded), and sets load only models that
-  passed together.
-- coordinator · roadmap, the spike's candidates summary: candidates are screened, not baselined: tiers stop early on a pass or a fail, each tier's screening fifth runs by default and the full tiers and deep stage only for finalists, the roles' quality tiers run concurrently, and results are kept by model, build and preset so a changed profile reruns only its changed roles plus the set stage.
-- coordinator · roadmap, the spike's candidates summary: each set's verdict states the concurrent sessions it supports on its host (even one), and candidates looks for a lighter grouping that scores near set A's bars with less of the pool and bandwidth.
-- coordinator · roadmap, the workstation re-plan and the gateway task: weigh role placement across hosts behind a session-sticky gateway against a full set on each host; a host-wide check runs the role mix through the gateway under load.
-- coordinator · roadmap and ai-hosting.md, "Experiment: spike-model-hosting": at the experiment's intake, propose evaluation as its own goal: a system that keeps results by model, build, preset and host, queues runs per host, and has a management interface (run ledger, comparison views), starting from the `admin` task's go-cli-sdk tool; built only after every spike task has proven the method.
-- coordinator · roadmap: add task `screen` after `evaluation`, before `candidates` (evaluate's
-  screen with early stop on either side, concurrent role tiers and finalists; the results
-  index; the reload and warmed-peak pool reading; per-model slots and c by a sweep with the
-  sessions-supported count; card prompts in the profile; the pool document; built and proven
-  against fakes, set A swept on b11734 with its startup settings kept, live screens dropped by
-  the redirect).
-- coordinator · roadmap, candidates summary, or the benchmarking spike's if the `plan
-  experiment.ai` restructure folds candidates into it: replace "candidates are screened, not
-  baselined: …" with: screens models from screen's pool document with screen's evaluate, gives
-  each kept profile its swept slots and c, builds profiles from the pool's sketches (omni
-  included), and each verdict states the sessions its set supports.
-- coordinator · roadmap, candidates summary, or wherever the restructure carries it: drop "each
-  set's verdict states the concurrent sessions … lighter grouping" (screen builds the count, the
-  pool document sketches the lighter profiles; candidates, or the benchmarking spike, judges
-  them).
-- coordinator · ai-strategy.md, "Constraint: model origin": a fine-tune of a Chinese-origin
-  base takes its base's origin.
-- coordinator · ai-hosting.md, "Experiment: spike-model-hosting": slots and c are measured per
-  model and host by a sweep; the spike accepts any open model licence (listed).
-- coordinator · roadmap, experiment.ai: a `plan experiment.ai` session re-evaluates every spike against what it has become and decomposes spike-model-hosting into spikes with clear boundaries (Strix Halo backends and engines, the GB10 hosts, the gateway, the admin tool on go-cli-sdk, and benchmarking last), ordered now that nothing blocks them. Benchmarking is designed as composable elements (host fit, agent capability, a concurrent role set, concurrent sessions, multi-host load balancing) built into scenario workloads, starting from screen's evaluate tooling.
