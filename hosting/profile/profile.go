@@ -13,7 +13,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// The host classes a profile may name. A CUDA profile validates; nothing renders it yet.
+// The host classes a profile may name. A CUDA profile validates; nothing renders it.
 const (
 	HostStrixHalo  = "strix-halo"
 	HostNvidiaCUDA = "nvidia-cuda"

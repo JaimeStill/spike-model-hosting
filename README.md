@@ -1,10 +1,10 @@
 # spike-model-hosting
 
-A spike for the Standards Lab reference architecture. It tests which serving platform,
-configuration, and specification shape hold for locally hosted models across two host classes
-and three consumers at once, and records the evidence. It decides nothing itself: its answer is
-evidence for standards-lab's experiment.ai intake, which decides what the `ai-hosting`
-specification holds.
+A spike for the Standards Lab reference architecture. It records what llama.cpp's Vulkan router
+on the Framework desktop (Strix Halo) establishes for the self-hosted model stack, serving three
+consumers at once, and the evidence for it. It decides nothing itself: its answer is evidence for
+standards-lab's experiment.hosting intake, which decides what the `ai-hosting` specification
+holds.
 
 ## The question
 
@@ -64,24 +64,6 @@ profile's rendered unit and presets, serving set A: gpt-oss-120b (agent), Gemma 
 (vision), gemma-4-E4B (audio), and EmbeddingGemma 2 (embedding). Set A's scores from two full
 evaluation runs set the bars every candidate is judged by
 ([`evaluation/bars.toml`](evaluation/bars.toml)).
-
-## The remaining tasks
-
-The tasks below are planned to be split into separate spikes, with benchmarking last. Benchmarking
-is planned as small elements composed per scenario: a model's fit on a host, a model as an agent,
-a concurrent role set, concurrent sessions, and load balancing across hosts. evaluate's screen,
-full run and results index are built and tested against a fake router, not yet proven on a
-live screen. Each task, and what it settles:
-
-- **`candidates`:** a candidate for every role, judged by the evaluation's floors and set A's
-  bars; the verdict, and the startup set. Expected to become part of the benchmarking spike.
-- **`rocm`** and **`engines-strix`:** llama.cpp's ROCm backend against Vulkan, then vLLM and,
-  time-boxed, SGLang on Strix Halo.
-- **`gateway`:** no gateway, agentgateway, and LiteLLM in front of the Framework.
-- **`admin`:** one admin tool over the profile.
-- **`cuda`** and **`engines-cuda`:** the Dell NVIDIA workstation's platforms. The workstation
-  is two GB10 units, not a discrete-VRAM box, so these tasks await a re-plan.
-- **`validate`:** the evidence on both hosts, the platform comparison, and the answer.
 
 ## The answer
 
@@ -168,8 +150,9 @@ The original evidence's other items, each with the spike that now owns it:
   shape (embedding and ASR among them), quantization, and concurrency.
 - **Item 7**, tier presets, context sizing, and the footprint method beyond the Framework:
   spike-model-layout (context × sessions per placed model) and spike-model-engines (vLLM).
-- **Item 8**, each gateway approach: spike-model-gateway, with budgets, rate limits, and
-  OpenTelemetry traces added by this task's pending edit.
+- **Item 8**, each gateway approach: spike-model-gateway, with budgets, rate limits,
+  OpenTelemetry traces, memory and latency overhead, and one configuration on both host classes
+  added by this task's pending edit.
 - **Item 9**, one admin tool over every platform and host: experiment.ai's spike-host-admin.
 - **Item 10**, IL6 acceptability on paper: spike-model-gateway, and spike-model-engines for the
   engines by this task's pending edit.

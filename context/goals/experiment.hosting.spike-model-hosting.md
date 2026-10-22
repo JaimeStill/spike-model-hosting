@@ -611,8 +611,8 @@ slices 2/4 committed · standards — · spec — · editor —
     embedding and ASR among them).
   - 7, presets, context sizing, and the footprint method beyond the Framework:
     spike-model-layout (context × sessions per pool) and spike-model-engines (vLLM).
-  - 8, each gateway approach: spike-model-gateway, budgets, rate limits, and OpenTelemetry
-    traces included.
+  - 8, each gateway approach: spike-model-gateway, budgets, rate limits, OpenTelemetry traces,
+    memory and latency overhead, and one configuration on both host classes included.
   - 9, one admin tool over every platform and host: experiment.ai's spike-host-admin.
   - 10, IL6 on paper: spike-model-gateway, and spike-model-engines for the engines.
   - The model candidates and the benchmark method: experiment.ai's spike-model-benchmarks.
@@ -632,8 +632,8 @@ slices 2/4 committed · standards — · spec — · editor —
   each engine kept is acceptable air-gapped at IL6."
 - coordinator · context/roadmap.toml, `[goals.experiment.hosting.spike-model-gateway]` summary:
   after "Access: per-consumer keys issued by the gateway, with JWT/OIDC compared on paper." add
-  "Measures per-consumer budgets and rate limits, and the OpenTelemetry traces each gateway
-  emits."
+  "Measures per-consumer budgets and rate limits, each gateway's OpenTelemetry traces and memory
+  and latency overhead, and one gateway configuration on both host classes."
 - coordinator · references.toml: list the spike unarchived, awaiting intake, after
   `[repos.spike-html-conventions]`:
 

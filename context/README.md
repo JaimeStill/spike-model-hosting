@@ -1,246 +1,90 @@
 # spike-model-hosting
 
-spike-model-hosting tests which serving platform, configuration, and specification shape hold
-across the Strix Halo and Dell NVIDIA host classes for three consumers at once: Pi, Claude Code,
-and go-ai's model client. It compares llama.cpp, vLLM, and SGLang, recording how each is set up
-and managed and what it makes possible, and compares agentgateway and LiteLLM in front of the
-serving with no gateway at all. Its answer is evidence for standards-lab's experiment.ai intake,
-which decides what the `ai-hosting` specification holds; the spike decides nothing itself.
+spike-model-hosting records what llama.cpp's Vulkan router on the Framework desktop (Strix Halo)
+establishes for the self-hosted model stack: one host-class profile serving three consumers at
+once (Pi, Claude Code, and go-ai's model client), their tool-call reliability, a memory budget on
+unified memory, and a method for measuring a model. The spike decides nothing itself.
 
-The spike is the sub-goal `experiment.ai.spike-model-hosting` in the coordinator's roadmap,
-`standards-lab/context/roadmap.toml`, where its tasks live. Its answer lands in
-`standards-lab/context/ai-strategy.md`, "Answers · experiment.ai"; its question is framed in
-`standards-lab/context/ai-hosting.md`, "Experiment: spike-model-hosting".
+The spike is the sub-goal `experiment.hosting.spike-model-hosting` in the coordinator's roadmap,
+`standards-lab/context/roadmap.toml`, where its tasks live; its goal record is
+[`goals/experiment.hosting.spike-model-hosting.md`](goals/experiment.hosting.spike-model-hosting.md).
 
 ## The question
 
-Which serving platform, configuration, and specification shape hold across both host classes
-(Strix Halo with Vulkan or ROCm, Dell NVIDIA with CUDA) and all three consumers at once?
+What does llama.cpp's Vulkan router on the Framework establish for the self-hosted stack: a
+host-class profile, Pi, Claude Code, and go-ai's model client at once, tool-call reliability, a
+memory budget on unified memory, and a measurement method?
 
-## The decision it changes
+The answer, its evidence, and the spike that owns each question this spike no longer asks are in
+the root [`README.md`](../README.md), "The answer".
 
-The `ai-hosting` specification: the serving platform on each host class, the schema of a
-host-class profile, whether a gateway sits in front of the serving and which one, and the form
-of the admin tooling.
+## The decision it informs
 
-## The evidence
+experiment.hosting's intake, which decides what the `ai-hosting` specification holds for the
+self-hosted model stack. The question is framed, and the answer lands, in
+`standards-lab/context/ai-hosting.md`.
 
-1. One host-class profile schema renders the Framework's llama.cpp router (presets, slots, KV,
-   bind, systemd unit) serving the shared model set, holding no host state.
-2. The same schema renders a running setup for every serving platform in scope, on Strix Halo
-   (Vulkan and ROCm) and on the Dell NVIDIA workstation (CUDA).
-3. For each platform and host class, a record of how it is set up and managed: install, update,
-   service unit, model format, adding and swapping models, admin verbs.
-4. For each platform, Pi (OpenAI-compatible), Claude Code (Anthropic `/v1/messages`, with tool
-   use, streaming, and thinking intact), and the go-ai model client (chat, embeddings) run at
-   once, with no response crossing between requests.
-5. For each platform and host, measured: memory footprint, prompt and generation speed for one
-   request and for four at once, prefix-cache reuse, and cold-load time.
-6. A capability matrix per platform: multi-model swapping, prefix caching, structured output,
-   batching, embeddings, rerank, vision, audio, and the Anthropic API; each cell proven by a
-   probe or marked paper.
-7. Tier presets, context sizing, and the memory-footprint method carry over to discrete VRAM and
-   to each platform, with exceptions recorded.
-8. Each gateway approach in front of the serving: fidelity for the three consumers, per-consumer
-   identity, budgets and rate limits, OpenTelemetry traces, memory and latency, and one
-   configuration on both host classes. The answer may be "no gateway".
-9. One admin tool manages every platform kept, on both host classes.
-10. Every platform and gateway kept is acceptable air-gapped at IL6, checked on paper only.
+## Rules
 
-## Scope
-
-- **Serving platforms, live:** llama.cpp (Vulkan and ROCm on Strix Halo, CUDA on the
-  workstation) behind its own router; vLLM (ROCm, CUDA) and SGLang (CUDA, and time-boxed on
-  Strix Halo from its nightly gfx1151 images) behind llama-swap. Lemonade serves only as an
-  install path for vLLM on Strix Halo. Ollama, LM Studio, and TGI are recorded on paper.
-- **Gateways, live:** no gateway, agentgateway, and LiteLLM. Envoy AI Gateway (Agent Router) and
-  vLLM's production-stack are Kubernetes-first and recorded on paper.
-- **Main-model pool:** gpt-oss-120b leads, and Gemma 4 26B-A4B completes the pool. Mistral
-  Small 4 is disqualified on Vulkan at b11669 (`main-model`). Nemotron 3.5 Super and the other
-  candidates in [`pool.md`](../docs/pool.md) wait for the `candidates` task, which the
-  restructure below is expected to fold into the benchmarking spike.
-- **Shared model set (set A):** gpt-oss-120b (ggml-org MXFP4, the main model), Gemma 4 26B-A4B
-  (vision), gemma-4-E4B (audio and the small model), and EmbeddingGemma 2 (embeddings), each in
-  its platform's native format: GGUF for llama.cpp, safetensors for vLLM and SGLang. On the
-  Framework all four stay loaded together as the startup set; a candidate set swaps its main
-  model in for gpt-oss-120b and Gemma 4 26B-A4B. The workstation's set is sized to its VRAM in
-  the `cuda` task, whose candidate list adds the dense models Mistral Medium 3.5, Gemma 4 31B,
-  and Muse Glimmer 30B.
 - **Model origin:** models of Chinese origin are avoided where an alternative serves
   (`standards-lab/context/ai-strategy.md`, "Constraint: model origin").
-- **Versions:** every engine, gateway, and model runs its latest upstream release. Every document
-  names the exact versions in use when it is written, and every measurement the versions it ran
-  on. A profile holds llama.cpp to a minimum build, a b-number, and a host runs any build at or
-  above it; the build in use is the one the router's `/props` reports in `build_info`. llama.cpp
-  is tracked by b-number because its semver releases ship no binaries and lag its model support.
-  Other versions are pinned exactly, and `mise run currency` reports the pins that trail.
-
-## Hosts and boundaries
-
-- **Framework desktop** (Strix Halo, 96 GB GTT pool): the first host class, available now. It
-  hosts and serves inference only. The spike may change anything in its hosting layer,
-  including the runtime, its configuration, and the models. Sessions may do on it whatever
-  needs no sudo: the router's HTTP API (including load, unload, and downloads), user-level SSH
-  reads such as `amdgpu_top`, and logs. Root stays the architect's, run from exact commands.
-  Only the OS install and the Tailscale registration stay fixed, and there is no restore point.
-- **Dell NVIDIA workstation** (CUDA): available from 2026-10-14. The tasks that need it say so.
-- **Remote access:** sessions reach both hosts by Tailscale SSH in accept mode, set by the
-  architect before the first task and reverted to check mode when the spike completes.
-- **The architect's laptop:** every consumer (Pi, Claude Code, OpenCode, and the `model`
-  client) and every instrument (GuideLLM, and the concurrent run, pass^k, prefix, and cold load,
-  each a step of `evaluation/cmd/evaluate`) runs from it, pinned in
-  `evaluation/mise.consumers.toml` and run from the root as
-  `MISE_ENV=consumers mise -C evaluation exec -- <tool>`, off the root PATH so the architect's own
-  Claude Code and Pi stay untouched. Their untracked state is under the root's
-  `.state/`; Claude Code runs from its own
-  `CLAUDE_CONFIG_DIR` there, on the architect's subscription login, with `ANTHROPIC_BASE_URL` at
-  the router. Nothing is served on the laptop.
-- Nothing committed here names a host: no tailnet names or addresses, no hostnames. The profile
-  and its renderer carry no host's name or address; the rendered unit resolves the host's tailnet
+- **Versions:** every document names the exact versions in use when it is written, and every
+  measurement the versions it ran on. A profile holds llama.cpp to a minimum build, a b-number,
+  and a host runs any build at or above it; the build in use is the one the router's `/props`
+  reports in `build_info`. llama.cpp is tracked by b-number because its semver releases ship no
+  binaries and lag its model support. Other versions are pinned exactly, and
+  `mise run currency` reports the pins that trail.
+- **The Framework** (Strix Halo, 96 GB GTT pool) hosts and serves inference only. The spike may
+  change anything in its hosting layer, including the runtime, its configuration, and the
+  models. Sessions may do on it whatever needs no sudo: the router's HTTP API (including load,
+  unload, and downloads), user-level SSH reads such as `amdgpu_top`, and logs, by Tailscale SSH
+  as the runbook describes. Root stays the architect's, run from exact commands. Only the OS
+  install and the Tailscale registration stay fixed, and there is no restore point.
+- **The architect's laptop** runs every consumer (Pi, Claude Code, OpenCode, and the `model`
+  client) and every instrument, pinned in `evaluation/mise.consumers.toml` and run from the root
+  as `MISE_ENV=consumers mise -C evaluation exec -- <tool>`, off the root PATH so the
+  architect's own Claude Code and Pi stay untouched. Their untracked state is under the root's
+  `.state/`; Claude Code runs from its own `CLAUDE_CONFIG_DIR` there, on the architect's
+  subscription login, with `ANTHROPIC_BASE_URL` at the router. Nothing is served on the laptop.
+- **No host is named:** no tailnet names or addresses, no hostnames. The profile and its
+  renderer carry no host's name or address; the rendered unit resolves the host's tailnet
   address when it starts, and host-local values (the service user, HF_HOME, and the models
   directory) are given at render time.
 
 ## Capabilities
 
 - **Layout:** one Go module, a mise monorepo of areas, each with its own `mise.toml` of tasks
-  (`mise run //<area>:<task>`): `hosting/` (the profile, router, swap, and probe packages and the
-  `profile` and `swap` commands), `evaluation/` (the consumers, instruments, gated stages,
-  Python suites, and their scripts), and `devices/<host class>/` (each host class's
-  `profile.toml`, its runbook, its build log, and its render tasks). `docs/` holds the
-  evaluation approach, the model cards, and, under `docs/findings/`, the measured results.
-  `context/` holds this file and the goals. The root [`README.md`](../README.md) is the front
-  page.
-- **Host-class profile:** the `profile` package loads, validates, and renders a TOML profile to
-  llama.cpp's router presets and systemd unit, and the `profile` command
-  (`hosting/cmd/profile`) validates and renders the profiles under `devices/`, lists their
-  engines, and describes a set for the scripts. Every command takes a profile by host-class name, found from
-  the module root, or by path. Each set assigns the model each role's requests go to
-  (`[sets.roles]`), and `Profile.Set` is the one lookup the probe and every instrument share: each
-  takes `-set` (or `SPIKE_SET`), the startup set by default. `devices/strix-halo/profile.toml`
-  holds the Framework's sets, with set A the startup set. Each model carries its own slots and
-  `c`, each with its reason, rendered as its section's `parallel` and context, and its card's
-  prompts (embedding task prompts, an ASR instruction), which evaluate's clients read from the
-  profile alone. Renderers for the other platforms' configuration are planned.
-- **Model pool:** on paper, the open-weight models that could serve each role on Strix Halo
-  under the origin and licence rules, each admitted or excluded and why, and profile sketches
-  from set A's near-full pool to small models with large headroom, in
-  [`pool.md`](../docs/pool.md).
-- **Model cards:** how to read a model card, what each value means, the values set A takes
-  from each card, and a catalog of each profiled model's maximum context and its computed KV
-  and recurrent-state cost, in [`model-cards.md`](../docs/model-cards.md).
-- **Serving platforms:** llama.cpp (Vulkan, ROCm, CUDA), vLLM, SGLang, and llama-swap, each with
-  its setup and management record.
-- **Consumers:** Pi, Claude Code, OpenCode, and spike-harness-driver's `model` package as
-  go-ai's stand-in, run from the laptop. The `consumers` package sets up Pi, Claude Code, and
-  OpenCode against the router for every tool and test: the pinned version, its harness driver,
-  the Claude Code login check, and state under the run's own directory.
-- **Router state:** the `router` package reads a router's models, their status, and its build
-  over HTTP, loads and unloads a model, and has the router read its presets file again. Each
-  tool reads the state to refuse to start against
-  an unloaded model and to name the build it ran on.
-- **Set swap:** the `swap` package and the `swap` command (`hosting/cmd/swap`) swap the router
-  from the set it has loaded to another of the profile's sets over its API. They unload before they
-  load, and time each model's step and the total. `swap.Reload` reloads a set's models in place,
-  which evaluate does before every run.
+  (`mise run //<area>:<task>`): `hosting/`, `evaluation/`, `devices/<host class>/`, `docs/`,
+  and `context/`. The root [`README.md`](../README.md) maps them.
+- **Host-class profile:** the `profile` package and command load, validate, and render a TOML
+  profile to llama.cpp's router presets and systemd unit; each set assigns the model each role's
+  requests go to, and every model carries its slots, context, and card prompts with their
+  reasons. [`devices/strix-halo/profile.toml`](../devices/strix-halo/profile.toml) holds the
+  Framework's sets, with set A the startup set.
+- **Router state and set swap:** the `router` package reads and drives a router over HTTP; the
+  `swap` package and command swap the router between a profile's sets, or reload one in place.
+- **Probe:** the `probe` package's HTTP probes, `mise run integration`, against the router
+  `SPIKE_ROUTER_URL` names.
+- **Consumers:** the `consumers` package sets up Pi, Claude Code, and OpenCode against the
+  router, and spike-harness-driver's `model` package stands in for go-ai's model client.
 - **Evaluation:** `go run ./evaluation/cmd/evaluate` takes a model, or a set's role, through
-  gated stages (admission, fitness, capacity, quality, set) and then the deep stage, stopping at
-  the first that fails and resuming from a named stage; absolute speed floors
-  (`evaluation/floors.toml`), per-tier bars from set A's two-run baseline
-  (`evaluation/bars.toml`), seeded tier lists with an early stop, and role pipelines on Inspect
-  AI and MTEB. Each run reloads the set and judges every pool floor at the warmed peak, each
-  model driven to its high-water mark; capacity judges each role's floor at N, N the model's own
-  slots. A run is a screen by default (tiers early stopped on either side, the roles' tiers at
-  once), a finalist's full run continues it, and a results index reuses passed results by model,
-  build and preset section; these three are tested against a fake router and recorded suite
-  results, not yet proven on a live screen. The method, each tool by kind and stage, and how to
-  run it are in [`evaluation.md`](../docs/evaluation.md).
-- **Sweep:** evaluate's `sweep` step chooses a model's slots and `c` on the router, the rest of
-  its set loaded, by writing the router's preset file step by step and restoring the committed
-  render, checked by its SHA-256; a set sweep sweeps a set's models in role order and commits
-  each choice into the profile. Set A's sweep on b11734 is in
-  [`slots.md`](../docs/findings/slots.md); the startup set keeps its pre-sweep settings.
-- **Instruments:** `go run ./evaluation/cmd/evaluate <step>` also runs each instrument below
-  alone, as a step by name (`conform`, `concurrent`, `prefix`, `coldload`), with its own flags,
-  and `-h` lists the steps.
-- **Concurrent run:** the `concurrent` package and evaluate's `concurrent` step run Pi, Claude
-  Code, and the model client's chat and embedding streams against the router at once. The run
-  fails when an answer carries another request's nonce, or an embedding differs from its input's
-  lone embedding by more than the cosine tolerance.
-- **Wire recording:** the `wire` package's `Recorder` is a reverse proxy that records what a
-  consumer sends the router and what comes back, with credentials dropped. Its `RoundTrip`
-  integration tests record each consumer's reasoning round-trip; each runs only when
-  `SPIKE_PI`, `SPIKE_CLAUDE`, or `SPIKE_OPENCODE` names its executable.
-- **Tool-call reliability:** the layered convention every platform, profile, consumer, and
-  gateway is held to, with pass^k as its measure, in
-  [`tool-reliability.md`](../docs/findings/tool-reliability.md). The `passk` package and the
-  `conform` step (`evaluate conform`) run clutch's conformance suite k times per harness and
-  judge each harness's fit by one absolute bar, the agent role's harness-fit tier. BFCL's tier
-  covers tool calls for every model and engine.
-- **Measurement:** footprint, speed, prefix cache, cold load, and the capability matrix. The
-  llama.cpp Vulkan baseline every platform is measured against is in
-  [`baseline.md`](../docs/findings/baseline.md): the GuideLLM grid
-  (`MISE_ENV=consumers mise run //evaluation:baseline`), prefix reuse (evaluate's `prefix`
-  step), and cold load (the `coldload` package and evaluate's `coldload` step). Set A's memory budget on the Framework,
-  estimated against measured, the candidate sets' idle footprints, and the swap timings between
-  sets (evidence 6's model-swapping cell) are in
-  [`memory-budget.md`](../docs/findings/memory-budget.md).
-- **llama.cpp builds:** each build move on the Framework, with its release-note review and
-  what was re-verified on the new build, and what the main-model candidates loaded (files,
-  handlers, the CPU fallback), in
-  [`llama-cpp-builds.md`](../devices/strix-halo/llama-cpp-builds.md). The Framework runs b11734.
-- **Gateways:** none, agentgateway, and LiteLLM.
-- **Admin tool:** a CLI on go-cli-sdk over the profile, with personal-agents' `outpost` as its
-  baseline.
-- **Host runbooks:** what each host needs to run every platform kept. The Framework's, for
-  llama.cpp on Vulkan, is [`devices/strix-halo/README.md`](../devices/strix-halo/README.md).
-
-## Path
-
-The tasks, in the order planned; each cites the evidence it proves. The architect's redirect of
-2026-10-21 (the goal record's Decisions) plans to decompose the tasks after `screen` into spikes
-with clear boundaries, run in whatever order flows, with benchmarking last. Benchmarking is
-planned as small elements composed into scenario workloads: a model's fit on a host, a model as
-an agent, a concurrent role set, concurrent sessions, and load balancing across hosts.
-
-1. `align`: the Framework's router, personal-agents, spike-harness-driver, and the "clutch
-   driving Pi" artifact brought in line with set A on an upstream b-number build (evidence 1).
-2. `profile`: the profile schema and the Strix Halo llama.cpp profile, which holds llama.cpp to
-   a minimum build (evidence 1).
-3. `consumers`: the three consumers at once on the Vulkan router, and the baseline every
-   platform is measured against, all run from the laptop (evidence 4, 5).
-4. `main-model`: named sets in the profile, swapped over the router's API, with the probe and
-   every instrument taking a set; gpt-oss-120b's comparison row on b11669; Mistral Small 4
-   disqualified on Vulkan (evidence 4, 6).
-5. `evaluation`: role-specific evaluation pipelines (agent, vision, audio, embedding) with
-   staged gates (admission, fitness under ~3 minutes, capacity, quality, characterization);
-   graded fixtures of rising complexity; a set evaluation for co-loaded models covering all four
-   core roles; speed judged beside accuracy, with floors set by the hardware (evidence 4, 5).
-6. `screen`: evaluate's screen, full run and results index, tested against fakes; the reload
-   and warmed-peak pool reading; per-model slots and `c`, chosen by a sweep, with set A swept on
-   b11734; card prompts in the profile; the pool on paper and the licence and fine-tune origin
-   rules (evidence 5).
-7. `candidates`: candidates for every role, including Nemotron 3.5 Super and new vision, audio,
-   and embedding candidates, run through the pipelines; the verdict and the startup set
-   (evidence 4, 6).
-8. `rocm`: llama.cpp's ROCm backend against Vulkan (evidence 2–7).
-9. `engines-strix`: vLLM, and SGLang time-boxed, on Strix Halo (evidence 2–7).
-10. `gateway`: the gateway approaches in front of the Framework (evidence 8, 10).
-11. `admin`: needs go-cli-sdk v0.1.0. The admin tool over the profile (evidence 9).
-12. `cuda`: needs the Dell NVIDIA workstation (from 2026-10-14). The CUDA profile and
-   llama.cpp's CUDA router (evidence 2, 5, 7).
-13. `engines-cuda`: needs the Dell NVIDIA workstation. vLLM and SGLang on CUDA; the gateway
-   configurations and the admin tool rerun unchanged (evidence 2–9).
-14. `validate`: evidence 1–10 on both hosts, the platform comparison, and the answer.
+  gated stages on absolute floors and set A's bars, runs each instrument alone as a step
+  (`conform`, `concurrent`, `prefix`, `coldload`), and sweeps a model's slots and context
+  (`sweep`). The method is in [`evaluation.md`](../docs/evaluation.md); the screen, full run, and
+  results index are tested against a fake router.
+- **Wire recording:** the `wire` package records what a consumer sends the router and what comes
+  back, and its integration tests record each consumer's reasoning round-trip.
+- **Findings:** the baseline, tool-call reliability, the memory budget, and per-model slots,
+  under [`docs/findings/`](../docs/findings); the model cards and the model pool on paper, under
+  [`docs/`](../docs).
+- **Host runbook:** the Framework's, for llama.cpp on Vulkan, with its build log, in
+  [`devices/strix-halo/`](../devices/strix-halo/README.md).
 
 ## References
 
-The spike reads these repositories. It writes only to personal-agents and spike-harness-driver,
-and only in its `align` task. Each is a key in the coordinator's
-`references.toml`, with its local checkout in `references.local.toml`: `personal-agents` (the
-running llama.cpp setup, the tier, context-sizing, and memory-footprint methods, and `outpost`),
-`spike-harness-driver` (its `model` client and router findings), `tau-examples` (local-model
-configurations), and `tau-protocol` (per-model capability options).
-
-## The answer
-
-In the root [`README.md`](../README.md), "The answer".
+The spike reads these repositories, each a key in the coordinator's `references.toml`, with its
+local checkout in `references.local.toml`: `personal-agents` (the running llama.cpp setup, the
+tier, context-sizing, and memory-footprint methods), `spike-harness-driver` (its `model` client
+and router findings), `tau-examples` (local-model configurations), and `tau-protocol` (per-model
+capability options). It wrote to personal-agents and spike-harness-driver only in its `align`
+task.

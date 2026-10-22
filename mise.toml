@@ -48,8 +48,7 @@ done
 '''
 
 # The integration tier probes a running router over HTTP: the hosting area's probe. It never
-# starts a server on this machine: SPIKE_ROUTER_URL names a router on the Framework or the
-# workstation.
+# starts a server on this machine: SPIKE_ROUTER_URL names a router on the Framework.
 [tasks.integration]
 description = "Run the hosting area's integration-tagged HTTP probes against SPIKE_ROUTER_URL"
 depends = ["//hosting:integration"]

@@ -3,9 +3,10 @@
 The tables measure the Framework's llama.cpp router on b11572 (`b11572-efe3626b1`, the upstream
 Vulkan x64 build) serving set A, all four models loaded (`devices/strix-halo/profile.toml`), on
 2026-10-12. Every figure was taken from the architect's laptop over HTTP; nothing ran on the
-Framework but the router. Each later platform is planned to fill the same tables, from the
-same place, with the same workloads. [Set A's baseline on b11715](#set-as-baseline-on-b11715-every-stage-twice),
-at the end, is the evaluation's: every stage run twice, and the bars `candidates` is judged by.
+Framework but the router. The other engines' measurements belong to spike-model-engines.
+[Set A's baseline on b11715](#set-as-baseline-on-b11715-every-stage-twice), at the end, is the
+evaluation's: every stage run twice, and the bars a candidate is judged by, in experiment.ai's
+spike-model-benchmarks.
 
 **Network path.** The laptop reached the Framework over a Tailscale DERP relay (`iad`), not a
 direct connection. `tailscale ping -c 3` read 308, 66 and 51 ms at 16:24 UTC, before the grid;

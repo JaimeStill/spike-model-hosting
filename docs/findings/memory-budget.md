@@ -310,7 +310,7 @@ rejected. A reload still can't help within the set stage, as "The settings chose
 stops one run's growth reaching the next.
 
 Whether a set serving all day, with no evaluation's reloads, needs a scheduled reload or a
-different floor is left to `candidates`.
+different floor is left to experiment.ai's spike-model-benchmarks.
 
 ## Set A at its warmed peak, b11734
 
