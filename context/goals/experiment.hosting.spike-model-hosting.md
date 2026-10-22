@@ -547,3 +547,107 @@ slices 1/4 committed · standards — · spec — · editor —
 - answer (r1): the unowned parts go to spikes by pending edit at sync: IL6 for the engines to spike-model-engines; gateway budgets, rate limits and OpenTelemetry traces to spike-model-gateway.
 
 ## Pending edits
+
+- coordinator · context/ai-hosting.md, "Answers · experiment.hosting" (the heading exists, empty):
+  add the answer section below under it, as written.
+
+  ```markdown
+  ### Answer · experiment.hosting.spike-model-hosting
+
+  **Question:** What does llama.cpp's Vulkan router on the Framework establish for the
+  self-hosted stack: a host-class profile, Pi, Claude Code, and go-ai's model client at once,
+  tool-call reliability, a memory budget on unified memory, and a measurement method?
+
+  **Answer:** llama.cpp's Vulkan router on the Framework serves set A from one rendered
+  host-class profile to Pi, Claude Code, and go-ai's model client at once, with no answer crossed
+  and the pool's floor held; with gpt-oss-120b only Pi meets the tool-call bar, and the
+  measurement method stands on set A's two baseline runs, its screen proven by tests only.
+
+  1. A host-class profile: one TOML profile validates and renders the router's presets and
+     systemd unit for set A (gpt-oss-120b, Gemma 4 26B-A4B, gemma-4-E4B, EmbeddingGemma 2), each
+     model at its card's sampling and reasoning settings, naming no host. Proven by the
+     `profile` package's tests and by a running demo: the committed render's SHA-256
+     (`a65fd306…`) equals the installed presets', and the probe passes, on b11734, 2026-10-21.
+  2. Three consumers at once: Pi, Claude Code, and the model client on gpt-oss-120b's 4 slots,
+     beside an embedding stream, sent 40 chat requests and 1032 embeddings in 51.7 s with no
+     answer crossed; all three harnesses (Pi, Claude Code, OpenCode) send the reasoning back on
+     tool turns. Proven by a running demo, `evaluate concurrent`, and the `wire` package's
+     round-trip integration tests, on b11572, 2026-10-12; set A's role models under each other's
+     load crossed nothing in 18 and 22 rounds, on b11715, 2026-10-17 and 2026-10-18.
+  3. Tool-call reliability: with gpt-oss-120b, Pi on `tool_choice` `"required"` meets OpenAI's
+     bar (pass^5 9 of 9, 0 invalid); Claude Code answers in text where a call is due and makes up
+     the skill's motto, and OpenCode on `auto` gets the parser's peg-native error in its stream.
+     The layered convention (server, profile, client, harness, gateway, measurement) is recorded
+     with its sources. Proven by running demos: `evaluate conform -k 5` on b11572, 2026-10-12,
+     and harness fit in both baseline agent runs on b11715, 2026-10-17 and 2026-10-18 (Pi 1.3.0,
+     Claude Code 2.1.301, OpenCode 1.19.3).
+  4. Speed: gpt-oss-120b generates 48.8 tok/s alone and 21.2 per stream at four; the Gemmas
+     can't hold four 8k agentic requests at c 32768; a shared 8192-token prefix cuts TTFT from
+     4-11 s to under 0.55 s; a router restart loads all four in about 21 s, warm or cold. Proven
+     by running demos (GuideLLM 0.8.1, `evaluate prefix`, `evaluate coldload`) on b11572,
+     2026-10-12, and rerun within 3% (cold load 20.8 and 21.0 s) on b11715, 2026-10-17 and
+     2026-10-18.
+  5. A memory budget on unified memory: set A leaves 3.30 GiB of the 96 GiB pool free with 4 in
+     flight on every model (b11565, 2026-10-12); each model keeps its high-water mark until
+     reloaded, so the floor (2816 MiB) is judged after a reload at the warmed peak, 3068 MiB free
+     (b11734, 2026-10-19); a cached set swap takes about 23 s (b11669, 2026-10-15). Proven by
+     running demos: `footprint.sh`, evaluate's reload and warmed-peak reading, and `swap`.
+  6. A measurement method: `evaluate` gates admission, fitness, capacity, and quality on
+     absolute floors, and set A's two full runs set the bars (b11715, 2026-10-17 and
+     2026-10-18); the sweep found set A supports 2 concurrent agent sessions (b11734,
+     2026-10-20), not confirmed by a set stage. Proven by running demos; the screen, full run,
+     and results index by tests only. On paper, the pool counts 47 models, 34 admissible
+     (b11734, 2026-10-19); Mistral Small 4 is disqualified on Vulkan (3.36 tok/s, CPU fallback
+     until llama.cpp's open PR #30105; b11669, 2026-10-15).
+
+  The original evidence's other items moved:
+
+  - 2, one schema rendering every platform on both host classes: spike-model-engines (engine
+    and hosting method per host class); the profile format is settled at experiment.ai's
+    spike-host-admin's setup.
+  - 3, how each platform is set up and managed: spike-model-engines (scripted install and setup)
+    and experiment.ai's spike-host-admin.
+  - 6, a capability matrix per platform: spike-model-engines (raw capability by model shape,
+    embedding and ASR among them).
+  - 7, presets, context sizing, and the footprint method beyond the Framework:
+    spike-model-layout (context × sessions per pool) and spike-model-engines (vLLM).
+  - 8, each gateway approach: spike-model-gateway, budgets, rate limits, and OpenTelemetry
+    traces included.
+  - 9, one admin tool over every platform and host: experiment.ai's spike-host-admin.
+  - 10, IL6 on paper: spike-model-gateway, and spike-model-engines for the engines.
+  - The model candidates and the benchmark method: experiment.ai's spike-model-benchmarks.
+
+  [The answer](https://github.com/JaimeStill/spike-model-hosting#the-answer) ·
+  [spike-model-hosting](https://github.com/JaimeStill/spike-model-hosting)
+  ```
+
+- coordinator · context/ai-hosting.md, "### spike-model-hosting": the spike has answered.
+  Replace "The spike closes through its `answer` task, which takes no new measurement, and its
+  answer lands in "Answers · experiment.hosting" below. Its other questions moved:" with "The
+  spike has answered, with no new measurement in its `answer` task: "Answer ·
+  experiment.hosting.spike-model-hosting", under "Answers · experiment.hosting" below. Its other
+  questions moved:".
+- coordinator · context/roadmap.toml, `[goals.experiment.hosting.spike-model-engines]` summary:
+  after "Install and setup are scripted as named, idempotent steps." add "Checks on paper that
+  each engine kept is acceptable air-gapped at IL6."
+- coordinator · context/roadmap.toml, `[goals.experiment.hosting.spike-model-gateway]` summary:
+  after "Access: per-consumer keys issued by the gateway, with JWT/OIDC compared on paper." add
+  "Measures per-consumer budgets and rate limits, and the OpenTelemetry traces each gateway
+  emits."
+- coordinator · references.toml: list the spike unarchived, awaiting intake, after
+  `[repos.spike-html-conventions]`:
+
+  ```toml
+  [repos.spike-model-hosting]
+  remote = "https://github.com/JaimeStill/spike-model-hosting.git"
+  ```
+
+- coordinator · references.md, "Experiments — archived spikes": after "### spike-harness-driver"
+  add:
+
+  ```markdown
+  ### spike-model-hosting
+  Asked what llama.cpp's Vulkan router on the Framework establishes for the self-hosted stack.
+  Answered with a host-class profile, three consumers at once, tool-call reliability, a memory
+  budget on unified memory, and a measurement method; experiment.hosting's intake archives it.
+  ```
