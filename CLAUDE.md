@@ -1,9 +1,9 @@
 # spike-model-hosting
 
 A spike for the Standards Lab reference architecture. It records what llama.cpp's Vulkan router
-on the Framework desktop (Strix Halo) establishes for the self-hosted model stack, behind one
-host-class profile schema. `README.md` is the front page, its answer under "The answer"; the
-repository is managed with the marathon workflow, so start from `context/README.md`.
+on the Framework desktop (Strix Halo), served from one host-class profile, establishes for the
+self-hosted model stack. `README.md` is the front page and gives the answer under "The answer";
+the repository is managed with the marathon workflow, so start from `context/README.md`.
 
 - **Standards:** `STANDARDS.md`, with pointers into the architecture repository.
 - **Layout:** one Go module in a mise monorepo. `hosting/` holds the profile, router, swap, and

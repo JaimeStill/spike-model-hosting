@@ -364,9 +364,8 @@ example `MISE_ENV=consumers mise run //evaluation:vision-tiers`; each rewrites t
 
 ## Planned
 
-The goal record's redirect of 2026-10-21 moves benchmarking to experiment.ai's
-spike-model-benchmarks, built from small elements composed per scenario. These parts of the
-method wait for it:
+Benchmarking belongs to experiment.ai's spike-model-benchmarks, which builds it from small
+elements composed per scenario. These parts of the method wait for it:
 
 - **A live screen.** A screen's time, 15 to 25 minutes a candidate, is extrapolated, not
   measured. Set A's baseline

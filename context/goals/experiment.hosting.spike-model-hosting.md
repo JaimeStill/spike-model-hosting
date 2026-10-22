@@ -94,7 +94,7 @@ Door          two-way: the repository reverts by PR, and the sync's
 
 ## Progress
 
-slices 3/4 committed · standards — · spec — · editor —
+slices 3/4 committed · standards ✓ · spec ✓ · editor ✓
 
 ## Decisions
 
@@ -545,6 +545,13 @@ slices 3/4 committed · standards — · spec — · editor —
 - answer (r1): context/README.md drops the original ten evidence items and the 14-task path; the moved items are listed in the README's "The answer" and the answer section.
 - answer (r1): the walkthrough runs the probe and the render's SHA-256 against the installed presets only; no consumer or benchmark run; item 4 cites the 2026-10-12 run.
 - answer (r1): the unowned parts go to spikes by pending edit at sync: IL6 for the engines to spike-model-engines; gateway budgets, rate limits and OpenTelemetry traces to spike-model-gateway.
+- answer (currency): uv 0.13.5 taken; Pi 1.3.0 and OpenCode 1.19.3 held behind 1.4.0 and 1.19.4, their hold comment in `evaluation/mise.consumers.toml` naming the versions harness fit was measured at, not the newest (standards review: a newest version named in a comment goes stale).
+- answer: Tailscale SSH stays in accept mode while the experiments run (`ai-hosting.md`, "Hosts and access"), and the Strix Halo runbook says so. Supersedes setup's "`validate` reverts it to check mode"; `validate` is deleted.
+- answer: the answer, in the README's "The answer": llama.cpp's Vulkan router on the Framework serves set A from one rendered host-class profile to Pi, Claude Code, and go-ai's model client at once, with no answer crossed and the pool's floor held; with gpt-oss-120b only Pi meets the tool-call bar; the measurement method stands on set A's two baseline runs, its screen proven by tests only. Its answer section for `ai-hosting.md`, "Answers · experiment.hosting", is in Pending edits.
+- answer: the unowned parts of original items 8 and 10 get owners by pending roadmap edits: IL6 for the engines on paper to spike-model-engines; budgets, rate limits, OpenTelemetry traces, memory and latency overhead, and one configuration on both host classes to spike-model-gateway. Extends r1's fourth decision to item 8's overhead and both-host-classes parts.
+- answer: `devices/strix-halo/profile.toml`'s comments that mention candidates stay, because they render into the installed presets, and editing them would break the SHA-256 match (`a65fd306…`) the walkthrough checks.
+- answer: the `.state/evaluate` run outputs (three 2026-10-19 run directories and `index.json`, 15 MB) are removed; logins and caches are kept.
+- answer: the catalog lists spike-model-hosting under `references.md`'s archived-spikes heading while it awaits intake, as it lists spike-harness-driver.
 
 ## Pending edits
 
@@ -599,7 +606,7 @@ slices 3/4 committed · standards — · spec — · editor —
      2026-10-20), not confirmed by a set stage. Proven by running demos; the screen, full run,
      and results index by tests only. On paper, the pool counts 47 models, 34 admissible
      (b11734, 2026-10-19); Mistral Small 4 is disqualified on Vulkan (3.36 tok/s, CPU fallback
-     until llama.cpp's open PR #30105; b11669, 2026-10-15).
+     until llama.cpp's open PR #30105; b11669, 2026-10-15 and 2026-10-16).
 
   The original evidence's other items moved:
 

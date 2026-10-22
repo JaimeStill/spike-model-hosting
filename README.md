@@ -12,11 +12,11 @@ What does llama.cpp's Vulkan router on the Framework establish for the self-host
 host-class profile, Pi, Claude Code, and go-ai's model client at once, tool-call reliability, a
 memory budget on unified memory, and a measurement method?
 
-The spike first asked which serving platform, configuration, and specification shape hold across
-both host classes and all three consumers at once, with llama.cpp, vLLM, and SGLang behind no
-gateway, agentgateway, or LiteLLM. The architect narrowed it on 2026-10-22 to what the
-Framework's llama.cpp baseline proved, with no new measurement; the rest of the original evidence
-moved to other spikes, each listed under [The answer](#the-answer).
+The question covers what the Framework's llama.cpp baseline proved, with no new measurement. The
+spike's original question asked which serving platform, configuration, and specification shape
+hold across both host classes and all three consumers at once, with llama.cpp, vLLM, and SGLang
+behind no gateway, agentgateway, or LiteLLM; the rest of its evidence moved to other spikes, each
+listed under [The answer](#the-answer).
 
 ## The areas
 
@@ -91,7 +91,7 @@ stands on set A's two baseline runs, its screen proven by tests only.
    (`b11572-efe3626b1`), 2026-10-12
    ([memory budget](docs/findings/memory-budget.md#during-the-concurrent-run-b11572),
    [tool-call reliability](docs/findings/tool-reliability.md#reasoning-round-trip-by-consumer)).
-   Set A's role models, each loaded by the others, crossed nothing either: 18 and 22 crossing
+   Set A's role models, each under the others' load, crossed nothing either: 18 and 22 crossing
    rounds in the set runs on b11715, 2026-10-17 and 2026-10-18
    ([baseline](docs/findings/baseline.md#the-set-stage)).
 3. **Tool-call reliability.** With gpt-oss-120b, Pi, constrained to `tool_choice` `"required"`,
@@ -100,10 +100,11 @@ stands on set A's two baseline runs, its screen proven by tests only.
    the skill; OpenCode, on `tool_choice` `auto`, gets the parser's "does not match the expected
    peg-native format" error in its stream. The layered convention (constrain at the server, card
    settings in the profile, reasoning round-trip at the client, a schema failure retried at the
-   harness, bounded resample at the gateway, pass^k as the measure) is recorded with its sources. Proven by running demos: `evaluate conform -k 5` on b11572,
-   2026-10-12 (Pi 1.1.0, Claude Code 2.1.296, OpenCode 1.19.0), and harness fit, the agent
-   role's tier 3, in both of set A's baseline agent runs on b11715 (`b11715-9d1878a43`),
-   2026-10-17 and 2026-10-18 (Pi 1.3.0, Claude Code 2.1.301, OpenCode 1.19.3)
+   harness, bounded resample at the gateway, pass^k as the measure) is recorded with its
+   sources. Proven by running demos: `evaluate conform -k 5` on b11572, 2026-10-12 (Pi 1.1.0,
+   Claude Code 2.1.296, OpenCode 1.19.0), and harness fit, the agent role's tier 3, in both of
+   set A's baseline agent runs on b11715 (`b11715-9d1878a43`), 2026-10-17 and 2026-10-18 (Pi
+   1.3.0, Claude Code 2.1.301, OpenCode 1.19.3)
    ([tool-call reliability](docs/findings/tool-reliability.md)).
 4. **Speed, prefix reuse, and cold load.** gpt-oss-120b generates 48.8 tok/s alone and 21.2 per
    stream at four (68.2 together), on 512-token prompts; the two Gemmas can't hold four 8k
@@ -120,10 +121,9 @@ stands on set A's two baseline runs, its screen proven by tests only.
    model keeps its largest working memory until it is reloaded, a high-water mark and not a leak:
    the pool fell from 3509 to 2778 MiB free over a day of runs and a reload restored 3509 (b11715,
    2026-10-17 and 2026-10-18). Reloaded and driven to each model's peak, set A read 3068 MiB
-   free, 252 over the floor (b11734, 2026-10-19). A swap between cached sets takes about half a
-   minute: set A back in 23.0 s (b11669, 2026-10-15). Proven by running demos:
-   `evaluation/scripts/footprint.sh` (`amdgpu_top -p` over ssh), evaluate's reload and
-   warmed-peak reading, and `hosting/cmd/swap`
+   free, 252 over the floor (b11734, 2026-10-19). A swap between cached sets brought set A back in
+   23.0 s (b11669, 2026-10-15). Proven by running demos: `evaluation/scripts/footprint.sh`
+   (`amdgpu_top -p` over ssh), evaluate's reload and warmed-peak reading, and `hosting/cmd/swap`
    ([memory budget](docs/findings/memory-budget.md)).
 6. **A measurement method.** `evaluate` gates a model through admission, fitness, capacity, and
    quality on absolute floors (`evaluation/floors.toml`); set A's two full runs, every stage
@@ -150,10 +150,10 @@ The original evidence's other items, each with the spike that now owns it:
   shape (embedding and ASR among them), quantization, and concurrency.
 - **Item 7**, tier presets, context sizing, and the footprint method beyond the Framework:
   spike-model-layout (context × sessions per placed model) and spike-model-engines (vLLM).
-- **Item 8**, each gateway approach: spike-model-gateway, with budgets, rate limits,
-  OpenTelemetry traces, memory and latency overhead, and one configuration on both host classes
-  added by this task's pending edit.
+- **Item 8**, each gateway approach: spike-model-gateway, including budgets, rate limits,
+  OpenTelemetry traces, memory and latency overhead, and one configuration on both host
+  classes.
 - **Item 9**, one admin tool over every platform and host: experiment.ai's spike-host-admin.
 - **Item 10**, IL6 acceptability on paper: spike-model-gateway, and spike-model-engines for the
-  engines by this task's pending edit.
+  engines.
 - The model candidates and the benchmark method: experiment.ai's spike-model-benchmarks.
