@@ -94,7 +94,7 @@ Door          two-way: the repository reverts by PR, and the sync's
 
 ## Progress
 
-slices 0/4 committed · standards — · spec — · editor —
+slices 1/4 committed · standards — · spec — · editor —
 
 ## Decisions
 
