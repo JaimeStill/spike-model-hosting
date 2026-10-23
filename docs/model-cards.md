@@ -168,7 +168,8 @@ MLA cache. The low end, the table's 2.81 GiB, caches only the latent (`kv_lora_r
 320 values per layer and token). llama.cpp b11669 does this: it loads `mistral4` through its
 DeepSeek-2 code, which allocates a K-only cache when the GGUF carries the MLA key lengths. The
 high end also caches the latent's 256 values a second time, as V (5.06 GiB, rounded up to 5.1).
-The profile's mistral budget takes the high end, so its estimate holds for either layout.
+The mistral set's budget, while the profile held it, took the high end, so its estimate held for
+either layout.
 
 ## Assumptions
 

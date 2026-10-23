@@ -1,0 +1,132 @@
+# A candidate beside the walking skeleton: the skeleton's profile and startup set, plus a set
+# whose main model takes chat and images, carries a consumers block, and names a quant tag the
+# router lists as written (Q4_K_XL, not the UD-Q4_K_XL of its file names).
+host_class = "strix-halo"
+bind = "tailnet"
+kv = "unified"
+
+[engine]
+name = "llama.cpp"
+backend = "vulkan"
+min_build = "b11452"
+
+[defaults]
+c = 32768
+gpu_layers = 999
+checkpoint_min_step = 4096
+
+[[sets]]
+name = "a"
+startup = true
+models = ["ggml-org/gpt-oss-120b-GGUF:MXFP4", "ggml-org/embeddinggemma-2-GGUF:Q8_0"]
+
+[sets.roles]
+chat = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+
+[sets.memory_budget]
+pool_mib = 98304
+measured_mib = 94926
+build = "b11529"
+source = "docs/findings/memory-budget.md"
+
+[[sets]]
+name = "candidate"
+models = ["example/candidate-GGUF:Q4_K_XL", "ggml-org/embeddinggemma-2-GGUF:Q8_0"]
+
+[sets.roles]
+chat = "example/candidate-GGUF:Q4_K_XL"
+vision = "example/candidate-GGUF:Q4_K_XL"
+embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+
+[sets.memory_budget]
+pool_mib = 98304
+estimated_mib = 88826
+source = "docs/findings/memory-budget.md"
+
+[[models]]
+id = "ggml-org/gpt-oss-120b-GGUF:MXFP4"
+publisher = "OpenAI"
+origin = "United States"
+licence = "Apache-2.0"
+roles = ["chat"]
+card_url = "https://huggingface.co/openai/gpt-oss-120b"
+card_context = 131072
+kind = "generative"
+c = 131072
+c_reason = """
+The harness model. c = 131072 is its trained context_length, the ceiling: its KV cache costs
+36,864 bytes/token (18 of 36 layers hold a full-attention cache; the rest are 128-token sliding
+windows), 4.5GiB at this c, beside ~59GiB of MXFP4 weights.
+"""
+slots = 4
+slots_reason = "4 slots, the evaluation baseline's value."
+
+[models.sampling]
+source = "https://github.com/openai/gpt-oss"
+temperature = 1.0
+top_p = 1.0
+top_k = 0
+min_p = 0.0
+reason = """
+Sampling from openai/gpt-oss's README, "Recommended Sampling Parameters": temperature 1.0,
+top_p 1.0; top-k = 0 and min-p = 0 turn off the truncations the card doesn't name.
+"""
+
+[[models]]
+id = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+publisher = "Google"
+origin = "United States"
+licence = "Apache-2.0"
+roles = ["embedding"]
+card_url = "https://huggingface.co/google/embeddinggemma-2"
+card_context = 8192
+kind = "embedding"
+# dims: the 768-dimension output its card states.
+dims = 768
+c = 8192
+c_reason = """
+Text embeddings only, 768-dimension output. c = 8192 is the context window its card states.
+"""
+slots = 2
+slots_reason = "2 slots, so the render shows each model's own."
+args_reason = """
+embeddings serves it as an embedding model, mean pooling per its card; b and ub match c.
+"""
+
+[models.args]
+embeddings = true
+pooling = "mean"
+b = 8192
+ub = 8192
+
+[[models]]
+id = "example/candidate-GGUF:Q4_K_XL"
+publisher = "Example"
+origin = "France"
+licence = "Apache-2.0"
+roles = ["chat", "vision"]
+card_url = "https://huggingface.co/example/candidate"
+card_context = 262144
+kind = "generative"
+c = 131072
+c_reason = "The candidate's main model, at gpt-oss-120b's c."
+slots = 4
+slots_reason = "4 slots, the evaluation baseline's value."
+
+[models.sampling]
+source = "https://huggingface.co/example/candidate"
+temperature = 0.7
+top_p = 1.0
+top_k = 0
+min_p = 0.0
+reasoning = "high"
+reason = "Sampling from the card: reasoning_effort high at temperature 0.7."
+
+[models.consumers]
+pi = "high"
+opencode = { reasoningEffort = "high" }
+reason = """
+The candidate's template accepts reasoning_effort "none" or "high" alone; each consumer asks for
+high.
+"""

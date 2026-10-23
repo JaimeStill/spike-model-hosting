@@ -326,25 +326,95 @@ sudo chown root:root /etc/llama-router /etc/llama-router/models.ini && sudo chmo
 
 ## The models the host keeps
 
-The Framework keeps only models that passed on it (the goal record's decision `screen` (r1)).
-On 2026-10-19 that removes two things:
+The Framework keeps only models that passed on it (the goal record's decision `screen` (r1)),
+and only the models its profile holds: set A's four. The profile holds set A alone since the
+answer redirect (the goal record's decision `answer` (r1), 2026-10-23), so no other model has a
+preset and the router lists none. The deletions so far, each by the architect's command:
 
 - **Mistral Small 4's cached files** (`unsloth/Mistral-Small-4-119B-2603-GGUF`, its three
-  UD-Q4_K_XL splits and `mmproj-BF16.gguf`, about 70G), disqualified at fitness on b11669
+  UD-Q4_K_XL splits and `mmproj-BF16.gguf`, about 70G), deleted at `screen` on 2026-10-19 (step
+  c), disqualified at fitness on b11669
   ([`docs/findings/tool-reliability.md`](../../docs/findings/tool-reliability.md)). The router's
   API can't delete them: `DELETE /models?model=unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL`
   answered 500, "not removable (not from cache)", since the router deletes only a model whose
   source is the cache, and every model the profile holds is a preset (`GET /models` lists each
-  with `source` `preset` and `can_remove` false). So step c deletes its directory from the
-  cache. The profile keeps its entry, the record of the candidate; the router still lists it,
-  and a load would download it again, in about 35 minutes.
+  with `source` `preset` and `can_remove` false). So the deletion is from the cache directly.
 - **align's retired-model directory**, the cache's sibling on the models drive (`<hf
-  cache>-retired`, about 132G), where `align` moved the models it retired out of the router's
-  cache rather than delete them (Qwen3-Embedding-4B, gemma-4-31B-it, Qwen3-Coder-Next,
-  Qwen3.8-27B, and unsloth's gpt-oss-120b). The router never read it.
+  cache>-retired`, about 132G), deleted at `screen` on 2026-10-19 (step c): where `align` moved
+  the models it retired out of the router's cache rather than delete them (Qwen3-Embedding-4B,
+  gemma-4-31B-it, Qwen3-Coder-Next, Qwen3.8-27B, and unsloth's gpt-oss-120b). The router never
+  read it.
+- **Nemotron 3.5 Super's cached files**
+  (`ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF`, its NVFP4 weights and Q8_0 mmproj,
+  77.9 GB), deleted at `answer` on 2026-10-23 by the architect's redirect (decisions `answer`
+  (r2, r3)): it measured 12.1 tok/s on b11669, under the floor
+  ([`docs/findings/memory-budget.md`](../../docs/findings/memory-budget.md)), and candidates
+  belong to experiment.ai's spike-model-benchmarks.
 
-Both belong to the service user. Neither deletion reverts on the host; the Hugging Face files
-can be downloaded again.
+All belong to the service user. No deletion reverts on the host; the Hugging Face files can be
+downloaded again.
+
+### The answer sitting: set A only
+
+One sitting installs the set-A-only presets, keeping the installed ones (`a65fd306`) beside
+them, and deletes Nemotron 3.5 Super's directory from the cache. The unit is unchanged: the
+profile's change removes preset sections alone, and the unit's render
+(`hosting/profile/testdata/strix-halo.service`) is the same, so it isn't installed. A session
+renders the presets at the commit the sitting installs and copies them to the Framework's home
+directory; nothing there needs root.
+
+```bash
+# laptop
+mise run //devices/strix-halo:render:presets > /tmp/models.ini
+sha256sum /tmp/models.ini
+scp /tmp/models.ini <host>:models.ini.<sha8>
+```
+
+```bash
+# Framework
+sudo cp -p /etc/llama-router/models.ini /etc/llama-router/models.ini.a65fd306
+echo "<sha256>  $HOME/models.ini.<sha8>" | sha256sum -c
+sudo install -m 0644 -o root -g root "$HOME/models.ini.<sha8>" /etc/llama-router/models.ini
+hf=$(systemctl show llama-router -p Environment --value | tr ' ' '\n' | sed -n 's/^HF_HOME=//p')
+du -sh "$hf/hub/models--ggml-org--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF"
+[ -d "$hf/hub" ] && rm -rf -- "$hf/hub/models--ggml-org--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF"
+ls "$hf/hub"
+```
+
+Expect one `OK`; `du` near 73G (77.9 GB); and the cache's `hub` holding set A's four models'
+directories and no Nemotron one. The cache belongs to the service user, so its deletion needs no
+`sudo`; the `[ -d ]` test stops it if the cache wasn't found. Nemotron 3.5 Super is unloaded, so
+no process holds its files.
+
+The router reads the new presets by a reload first ("The preset file's write access", above),
+with no restart:
+
+```bash
+# laptop
+curl -s "$SPIKE_ROUTER_URL/models?reload=1" > /dev/null
+curl -s "$SPIKE_ROUTER_URL/models" | jq -r '.data[] | "\(.id) \(.status.value)"'
+```
+
+Expect set A's four models, each `loaded`, and no other. If the reload leaves the removed
+presets listed, restart the router, which reads the file afresh:
+
+```bash
+# Framework
+sudo systemctl restart llama-router
+```
+
+Then check the installed presets against the committed render, and probe:
+
+```bash
+# laptop
+mise run //devices/strix-halo:render:presets | sha256sum
+ssh <host> sha256sum /etc/llama-router/models.ini
+mise run integration
+```
+
+Expect the two sums equal (`<sha256>`) and every probe to pass. It reverts by installing the
+kept file, `sudo install -m 0644 -o root -g root /etc/llama-router/models.ini.a65fd306
+/etc/llama-router/models.ini`, and a reload; Nemotron's files don't come back with it.
 
 ## The router's state, without root
 

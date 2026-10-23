@@ -212,7 +212,7 @@ func TestRefusesUnknownSet(t *testing.T) {
 	srv := httptest.NewServer(f)
 	defer srv.Close()
 	_, errOut, code := run(t, nil, "-router", srv.URL, "-profile", withSetB(t), "c")
-	if code != 2 || !strings.Contains(errOut, `no set "c"`) || !strings.Contains(errOut, `["a" "mistral" "nemotron" "b"]`) {
+	if code != 2 || !strings.Contains(errOut, `no set "c"`) || !strings.Contains(errOut, `["a" "b"]`) {
 		t.Errorf("exit %d, stderr %q; want 2, naming c and the profile's sets, b among them", code, errOut)
 	}
 	if f.requests != 0 {

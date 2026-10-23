@@ -135,8 +135,9 @@ The Framework keeps only models that passed on it, so on 2026-10-19 `screen` del
 Small 4's cached files (70G), with align's retired-model directory (132G) beside the cache
 ([the Strix Halo runbook](../../devices/strix-halo/README.md), "The models the host keeps").
 The router's API couldn't delete them, since a preset's model isn't removable; the architect's
-command did. A swap to the mistral set downloads its weights again, about 35 minutes by the table
-above. Nemotron 3.5 Super's files stay: it hasn't been screened.
+command did. Nemotron 3.5 Super's files (77.89GB, the table above) were deleted on 2026-10-23,
+at `answer`, by the architect's redirect: it measured 12.1 tok/s on b11669, under the floor, and
+the profile no longer holds either candidate's set.
 
 ## Gemma 4 26B-A4B's growth under vision use, b11669
 

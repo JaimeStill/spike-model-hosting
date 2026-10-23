@@ -19,7 +19,10 @@ import (
 var update = flag.Bool("update", false, "rewrite golden files")
 
 const (
-	skeleton  = "testdata/skeleton.toml"
+	skeleton = "testdata/skeleton.toml"
+	// candidate is the skeleton beside a candidate set, whose main model carries a consumers
+	// block and a quant tag the router lists as written.
+	candidate = "testdata/candidate.toml"
 	strixHalo = "../../devices/strix-halo/profile.toml"
 	// pinned is personal-agents' 96GiB preset, copied at the commit testdata/README.md names.
 	pinned = "testdata/unified-96gb.ini"
@@ -176,8 +179,8 @@ func TestRenderPresets(t *testing.T) {
 // evaluation's slice 8), which the profile renders and the pinned copy lacks. Parallel and c are
 // compared too, sweep or no sweep: set A runs at the preset's values again, so a future sweep
 // that commits other values fails here on purpose, and the pinned copy (or this test) is updated
-// deliberately with it. Every other set's model renders without load-on-startup and is left out
-// of the comparison: the pinned copy predates the candidates.
+// deliberately with it. Another set's model, should the profile hold one, must render without
+// load-on-startup and is left out of the comparison: the pinned copy holds set A alone.
 func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 	p, err := profile.Load(strixHalo)
 	if err != nil {
@@ -291,12 +294,12 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 		{
 			"a set naming a model the profile doesn't list",
 			text + extraSet("b", false, gptOSS, "example/unlisted-GGUF:Q4_0"),
-			`sets[3].models: "example/unlisted-GGUF:Q4_0" is not a model the profile lists`,
+			`sets[1].models: "example/unlisted-GGUF:Q4_0" is not a model the profile lists`,
 		},
 		{
 			"a set with no chat model",
 			text + extraSet("b", false, embedding),
-			"sets[3].models: required, at least one chat model",
+			"sets[1].models: required, at least one chat model",
 		},
 		{
 			"an unknown role",
@@ -311,17 +314,17 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 		{
 			"a model in no set",
 			extraModel(t, text, "example/fifth-GGUF:Q4_0"),
-			`models[6].id: "example/fifth-GGUF:Q4_0" is in no set`,
+			`models[4].id: "example/fifth-GGUF:Q4_0" is in no set`,
 		},
 		{
 			"a set named twice",
 			text + extraSet("a", false, gptOSS),
-			`sets[3].name: "a" is listed twice`,
+			`sets[1].name: "a" is listed twice`,
 		},
 		{
 			"a set listing a model twice",
 			text + extraSet("b", false, gptOSS, gptOSS),
-			`sets[3].models: "ggml-org/gpt-oss-120b-GGUF:MXFP4" is listed twice`,
+			`sets[1].models: "ggml-org/gpt-oss-120b-GGUF:MXFP4" is listed twice`,
 		},
 		{
 			"no role",
@@ -407,7 +410,7 @@ func TestLoadRefusesSetsAndRoles(t *testing.T) {
 }
 
 // TestLoadAcceptsOptionalRoles shows a set may leave vision and audio unassigned, and may
-// assign one model several roles, as a candidate set whose main model takes images does.
+// assign one model several roles, as a set whose main model takes images would.
 func TestLoadAcceptsOptionalRoles(t *testing.T) {
 	base, err := os.ReadFile(strixHalo)
 	if err != nil {
@@ -1049,8 +1052,8 @@ func dropTable(t *testing.T, text, header string) string {
 	return text[:start] + text[start+end+2:]
 }
 
-// mistral is the Mistral Small 4 candidate's router ID, as the Strix Halo profile names it.
-const mistral = "unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL"
+// candidateID is the candidate profile's main model, its tag the router's Q4_K_XL.
+const candidateID = "example/candidate-GGUF:Q4_K_XL"
 
 // TestRouterTag shows the tag the router lists a section by: the quant type at the end of the
 // section's tag, upper-cased.
@@ -1072,13 +1075,13 @@ func TestRouterTag(t *testing.T) {
 // TestLoadNamesNonCanonicalID shows a model ID whose tag the router would list differently is
 // refused, with the ID the router would list it by.
 func TestLoadNamesNonCanonicalID(t *testing.T) {
-	base, err := os.ReadFile(strixHalo)
+	base, err := os.ReadFile(candidate)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ud := "unsloth/Mistral-Small-4-119B-2603-GGUF:UD-Q4_K_XL"
-	path := writeProfile(t, strings.ReplaceAll(string(base), mistral, ud))
-	assertFails(t, path, fmt.Sprintf("%q lists on the router as %q", ud, mistral))
+	ud := "example/candidate-GGUF:UD-Q4_K_XL"
+	path := writeProfile(t, strings.ReplaceAll(string(base), candidateID, ud))
+	assertFails(t, path, fmt.Sprintf("%q lists on the router as %q", ud, candidateID))
 }
 
 // TestLoadConsumerReasoning shows a chat model's consumer reasoning setting decodes as written,
@@ -1151,31 +1154,31 @@ func TestLoadMemoryBudgetEstimate(t *testing.T) {
 // Pi takes and a reason, must set Pi or OpenCode, and belongs only to a generative chat model;
 // a key outside the schema is refused, though OpenCode's options are free-form.
 func TestLoadNamesInvalidConsumers(t *testing.T) {
-	base, err := os.ReadFile(strixHalo)
+	base, err := os.ReadFile(candidate)
 	if err != nil {
 		t.Fatal(err)
 	}
 	text := string(base)
-	const mistralPi = "[models.consumers]\npi = \"high\""
+	const candidatePi = "[models.consumers]\npi = \"high\""
 	for _, tt := range []struct{ name, text, want string }{
-		{"a level Pi doesn't take", replace(t, text, mistralPi, "[models.consumers]\npi = \"maximum\""), `models[4].consumers.pi: "maximum" is not one of Pi's thinking levels`},
-		{"no reason", replace(t, text, "reason = \"\"\"\nMistral Small 4's template", "unused = \"\"\"\nMistral Small 4's template"), "models[4].consumers.reason: required"},
-		{"a reason alone", replace(t, replace(t, text, mistralPi+"\n", "[models.consumers]\n"), "opencode = { reasoningEffort = \"high\" }\n", ""), "models[4].consumers: sets neither pi nor opencode"},
-		{"on the embedding model", replace(t, text, "[models.args]\nembeddings = true", "[models.consumers]\npi = \"high\"\nreason = \"x\"\n\n[models.args]\nembeddings = true"), "models[3].consumers: only a generative chat model runs under a consumer"},
-		{"an undefined key", replace(t, text, mistralPi, mistralPi+"\nclaude = \"high\""), "models.consumers.claude: not a key the schema defines"},
+		{"a level Pi doesn't take", replace(t, text, candidatePi, "[models.consumers]\npi = \"maximum\""), `models[2].consumers.pi: "maximum" is not one of Pi's thinking levels`},
+		{"no reason", replace(t, text, "reason = \"\"\"\nThe candidate's template", "unused = \"\"\"\nThe candidate's template"), "models[2].consumers.reason: required"},
+		{"a reason alone", replace(t, replace(t, text, candidatePi+"\n", "[models.consumers]\n"), "opencode = { reasoningEffort = \"high\" }\n", ""), "models[2].consumers: sets neither pi nor opencode"},
+		{"on the embedding model", replace(t, text, "[models.args]\nembeddings = true", "[models.consumers]\npi = \"high\"\nreason = \"x\"\n\n[models.args]\nembeddings = true"), "models[1].consumers: only a generative chat model runs under a consumer"},
+		{"an undefined key", replace(t, text, candidatePi, candidatePi+"\nclaude = \"high\""), "models.consumers.claude: not a key the schema defines"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assertFails(t, writeProfile(t, tt.text), tt.want)
 		})
 	}
 
-	p, err := profile.Load(strixHalo)
+	p, err := profile.Load(candidate)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.Model(mistral).Consumers.Reason = ""
-	if err := p.Validate(); err == nil || !strings.Contains(err.Error(), "models[4].consumers.reason: required") {
-		t.Errorf("Validate(consumers without a reason) = %v; want models[4].consumers.reason: required", err)
+	p.Model(candidateID).Consumers.Reason = ""
+	if err := p.Validate(); err == nil || !strings.Contains(err.Error(), "models[2].consumers.reason: required") {
+		t.Errorf("Validate(consumers without a reason) = %v; want models[2].consumers.reason: required", err)
 	}
 }
 
