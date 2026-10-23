@@ -1,6 +1,6 @@
 # goal · experiment.hosting.spike-model-hosting
 
-- **State:** building
+- **State:** brief ready
 - **Task:** answer
 - **Branch:** answer
 
@@ -127,7 +127,7 @@ Door          two-way: the repository reverts by PR, and the sync's
 
 ## Progress
 
-slices 3/4 committed · standards ✓ (1-3) · spec ✓ (1-3) · editor ✓ (1-3) · redirect: slice 4 open
+slices 4/4 committed · standards ✓ · spec ✓ · editor ✓
 
 ## Decisions
 
