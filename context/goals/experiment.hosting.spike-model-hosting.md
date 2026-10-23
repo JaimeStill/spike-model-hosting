@@ -12,202 +12,119 @@
 4. [x] main-model
 5. [x] evaluation
 6. [x] screen
-7. [ ] answer
+7. [x] answer
 
-## Task brief · screen
+## Task brief · answer
 
 ```
-Problem       The candidates task can't start yet. evaluate gives every model
-              the full run that set A's baseline took most of a day for. It
-              holds every model to a fixed 4 slots and a hand-chosen c, and
-              reads the pool only after a fresh load, where set A's day of
-              runs fell to 2778 MiB, under its own floor. The embedding and
-              ASR prompts are set A's, hard-coded. No pool of admissible
-              models, and no rule for their licences or for fine-tunes of a
-              Chinese-origin base, says what candidates should screen.
-              screen builds the screen, measures each model's slots and c,
-              and surveys the pool on paper. It proves all of this on set
-              A's own models, on the Framework's newest build.
-Behaviors     1. The Framework runs the newest b-tag at the start of BUILD.
-                 Its release-note review since b11715 is recorded, and set A
-                 passes the probe and every role's fitness on it. The
-                 repository's currency reports only the held pins
-                 (claude-code, python, inspect-evals, mteb, openai).
-              2. Slots and c belong to each model in the profile, each with
-                 its reason. The host-wide slots value is gone, and KV stays
-                 unified. Each model's section renders its own parallel.
-                 Validation refuses a c beyond the card's context, and slots
-                 under 1.
-              3. A model's card prompts are profile fields with a source:
-                 embedding task prompts by prompt type, and an ASR
-                 instruction. The MTEB encoder, the ASR task, fitness and
-                 capacity read them from the profile. Validation refuses a
-                 prompt field on a role the model doesn't declare.
-              4. evaluate reloads the set over the router's API before every
-                 model run and set run. A run resumed with -from on the same
-                 run directory doesn't reload. After the reload it records
-                 the idle pool, then drives each loaded model to its
-                 high-water mark: its largest image, an 8192-token prompt at
-                 a full ubatch, its longest clip. Every pool floor is judged
-                 at that warmed peak. Each pool reading carries system RAM
-                 beside it (used and available on the host, each model
-                 process's resident memory).
-              5. A model run is a screen by default. Each tier runs its
-                 screening fifth. It stops failed once the one-sided 95%
-                 bound falls on the wrong side of the bar, and stops passed
-                 once the bound clears it: for a pass rate, the Wilson lower
-                 bound at or over the bar; for an ASR WER, the upper bound at
-                 or under the ceiling. A tier whose bound still straddles the
-                 bar runs on until it is decided or its list ends. MTEB tasks
-                 run whole. The record names the tier, the bound and the
-                 side it stopped on.
-              6. A screen runs its roles' quality tiers at once. The speed
-                 floors are measured alone, at fitness and capacity. The
-                 concurrent pass also records the pool's least free memory
-                 at the warmed peak and the crossing rounds, and stands in
-                 for the set stage's concurrent phase. Alone figures and
-                 slowdowns belong to the full run.
-              7. A screen that passes every gate makes the model a finalist.
-                 Its full run reuses the screen's records and adds the rest
-                 of each tier, the set stage's alone figures and slowdowns,
-                 and the deep stage.
-              8. evaluate keeps an index of its results, keyed by model,
-                 build, and the SHA-256 of the model's rendered preset
-                 section. A stage whose key matches a passed result is
-                 reused, and the report says so. A changed profile reruns
-                 only the roles whose models' sections changed, plus the set
-                 stage. The suites' own caches stay off.
-              9. Floors at N in flight: each agent stream ≥ 10 tok/s; each
-                 audio stream RTFx ≥ 1; each image question ≤ 10 s; each
-                 32-token query ≤ 250 ms. Capacity runs each role model at
-                 its own profile slots against these floors, with the pool
-                 floor at the warmed peak, and no request may run out of
-                 context.
-              10. A sweep step chooses a model's slots and c. The model is
-                 swept with the rest of its set loaded and idle at their own
-                 settings. N runs 1, 2, 4, 8, 16, then one bisection between
-                 the last pass and the first fail. c is N times the role's
-                 per-session target, capped at the card's context: the
-                 role's largest tier request (agent 8192 in and 512 out);
-                 a model in several roles takes the largest target. Each
-                 step is rendered from the profile with the override,
-                 written to the router's preset file and applied through
-                 its reload. Each step records:
-                 - every stream's rate against the floors at N
-                 - TTFT median and p95, and total throughput
-                 - the pool at the warmed peak, and system RAM
-                 - any request that ran out of context
-                 The chosen N is the smaller of two values: the largest N
-                 that holds every floor, the pool floor and every session's
-                 context; and the knee, past which total throughput gains
-                 under 10% a step. The report gives both, and which bound.
-                 The sweep ends by restoring the committed render, checked
-                 by its SHA-256, and reloading.
-              11. A set's verdict states the concurrent sessions it supports
-                 on its host: its agent model's chosen N, confirmed by the
-                 set stage with every model at its own chosen N.
-              12. Set A is swept on the new build, in role order, and the
-                 sweep's tables, chosen Ns and bounds are recorded as findings.
-                 The startup set keeps the settings set A ran on before the
-                 sweep (4 slots each, gpt-oss-120b at c 131072), installed
-                 through the preset file: the per-session target for real
-                 agent sessions isn't settled. (Redirected by the architect,
-                 2026-10-21: set A's live screens, their timings and the
-                 finalist demonstration are dropped.)
-              13. The Framework keeps only models that passed on it. Mistral
-                 Small 4's cached files and align's retired-model directory
-                 are deleted: through the router's API where it can, by the
-                 architect's exact command where root owns the files.
-              14. A pool document, on paper, gives per role (agent, vision,
-                 audio, embedding) the open-weight models that run on Strix
-                 Halo under the origin rule. For each model:
-                 - publisher, origin, licence, architecture and active
-                   parameters
-                 - its GGUF, quant and size, from the publisher, ggml-org,
-                   or a community converter, named
-                 - an estimated budget, and whether the router serves it on
-                   the build in use
-                 - its decode ceiling against the role's floors
-                 - admitted, or excluded and why
-                 It states the rules it judged by, the estimate method, the
-                 model shapes evaluate supports (one model in several roles,
-                 per-model prompts, a context under 8192, system RAM that
-                 grows with slots, speculative-decoding sidecars, noted not
-                 used). It sketches profiles from "max quality near the
-                 pool" to "small models, large headroom", including the
-                 omni profile, each with its budget and headroom. Every
-                 figure is marked estimated or measured, with its build.
-              15. STANDARDS states that any open model licence is accepted:
-                 Apache-2.0, MIT, OpenMDW-1.1, the NVIDIA Open Model
-                 licences, the LFM Open License 1.0, the Llama 3.1 and 4
-                 Community licences, and the Gemma Terms of Use. It also
-                 states that a model fine-tuned from a Chinese-origin base
-                 takes its base's origin.
-              16. The evaluation docs, the Strix Halo runbook (the preset
-                 file's write access, the build move, the deletions), the
-                 findings (set A's sweep, the warmed peak, system RAM, the
-                 screen timings), the build log, the package docs, CLAUDE.md,
-                 the README and the goal record are current.
-Test seams    evaluate's stage runner against a fake router and recorded
-              suite results:
-              - the screen and its early stop on either side
-              - the straddle continuation
-              - concurrent role tiers and the folded set phase
-              - the finalist continuation
-              - index reuse and the rerun of changed roles
-              - the reload and the warmed peak
-              - the floors at N
-              The sweep against a fake router with a reloadable preset file:
-              steps, the bisection, the stop rule, the knee, the restore and
-              its SHA-256. The profile package: per-model slots and c,
-              prompt fields, render, validation. The suites' early-stop
-              tests, both sides. The integration probe at SPIKE_ROUTER_URL.
-              Measured evidence (1, 12, 13).
-Slices        1. Build move and host session (1, 13): the release-note review;
-                 the architect's root commands in one sitting (the new
-                 b-tag, the preset file made writable by the session's user,
-                 the retired directory removed); Mistral Small 4 deleted
-                 through the router; the probe and every role's fitness on
-                 the new build.
-              2. Profile (2, 3): per-model slots and c, the prompt fields;
-                 set A's render keeps its values (each model at 4 slots),
-                 and its SHA-256 matches the installed file.
-              3. Reload, warmed peak, system RAM (4): live on set A.
-              4. Screen (5, 6, 7): early stop on either side, concurrent
-                 tiers, the folded set phase, the finalist continuation;
-                 fakes in the check.
-              5. Results index (8): reuse, and a changed section reruns its
-                 role plus the set stage.
-              6. Floors at N and capacity per model (9, 11): live on set A
-                 at 4.
-              7. Sweep (10): fakes in the check; one live model swept, then
-                 restored.
-              8. Set A swept (12): the tables recorded; the pre-sweep
-                 settings restored and installed.
-              9. (dropped by the architect's redirect, 2026-10-21)
-              10. Pool document and STANDARDS (14, 15).
-              11. Docs and records (16): Decisions and pending edits.
-Out of scope  Set A's live screens, their timings and the finalist
-              demonstration (redirect, 2026-10-21). Screening any model
-              beyond set A's four; choosing candidates,
-              their profile entries, downloads or admission runs; the
-              verdict, and any startup-set change beyond set A's swept slots
-              and c. Speculative decoding. Bumping the held pins. ROCm,
-              vLLM, SGLang, gateways, the workstations, the admin tool.
-              Evaluation as its own system. Changes to clutch,
-              spike-harness-driver or personal-agents.
-Door          two-way, except:
-              - the deleted Mistral Small 4 files and retired-model
-                directory (one-way on the host; the Hugging Face files can
-                be downloaded again, Mistral's in ~35 min)
-              - the cleaned .state run outputs
-              - Claude Code subscription usage spent
-              The repository reverts by PR. On the Framework the earlier
-              b-tag stays in its versioned directory and `current` points
-              back. The preset file's write access reverts by one root
-              command, and the committed render is restored and checked by
-              its SHA-256.
+Problem       The spike now answers a narrower question than its front
+              pages ask. The README and context still frame the
+              original question across both host classes, list eight
+              deleted tasks, and point the answer at experiment.ai, so
+              experiment.hosting's intake has no answer to read. This
+              task states what the Framework baseline proved and where
+              each unproven item went, from the docs and the goal
+              record, with no new measurement.
+Behaviors     1. The repository's currency reports only held items: uv
+                 is at 0.13.5; Pi 1.3.0 and OpenCode 1.19.3 are held,
+                 with reasons naming 1.4.0 and 1.19.4; the check passes.
+              2. The README states the narrowed question and, under
+                 "The answer", a one-line answer and numbered evidence.
+                 Each evidence item names where it is proven (a test, a
+                 running demo, or tests only), and the build and date
+                 it was measured on. Items 2, 3 and 6-10 are each listed
+                 in one line with the spike that now owns it.
+              3. The goal record's Pending edits carry:
+                 - the answer section for ai-hosting.md, "Answers ·
+                   experiment.hosting", in marathon's Answer section
+                   form: the question, a one-line answer, numbered
+                   evidence with its proof, items 2, 3 and 6-10 each
+                   with its new spike, and links to the README's "The
+                   answer" and the remote
+                 - ai-hosting.md's spike-model-hosting paragraph saying
+                   it has answered
+                 - the roadmap: spike-model-engines' summary takes IL6
+                   for the engines (on paper); spike-model-gateway's
+                   takes budgets, rate limits and OpenTelemetry traces
+                 - the catalog listing spike-model-hosting unarchived
+                   (references.toml and references.md)
+              4. No tracked file outside the goal record names
+                 experiment.ai as the spike's goal or ai-strategy.md as
+                 where its answer lands, describes vLLM, SGLang,
+                 gateways, the admin tool or the workstation as this
+                 spike's work, or points to a deleted task (candidates,
+                 rocm, engines-strix, gateway, admin, cuda,
+                 engines-cuda, validate) as pending. Each such pointer
+                 names the spike that inherited it. No measured figure
+                 changes.
+              5. context/README.md is the spike's orientation as it
+                 stands: the narrowed question, the decision it
+                 informs (experiment.hosting's intake), and the
+                 capabilities that exist; the original ten items and the
+                 14-task path are gone.
+              6. Decisions records the holds, the Tailscale accept-mode
+                 supersession of setup's `validate` revert, and the
+                 answer. .state run outputs (evaluate run directories
+                 and index.json) are removed; logins and caches kept.
+              7. On the Framework, the installed presets' SHA-256 equals
+                 the committed render (the new set-A-only render), the
+                 router lists set A's four models only, and the probe
+                 passes.
+              8. devices/strix-halo/profile.toml holds set A only: the
+                 mistral and nemotron sets and the Mistral Small 4 and
+                 Nemotron 3.5 Super VL model entries are gone, and its
+                 header and [engine] comments describe the profile as it
+                 stands. The pinned render (hosting/profile/testdata/
+                 strix-halo.ini) and the tests that named the sets follow
+                 (evaluate's concurrent_test.go, swap's main_test.go).
+                 The profile package's cases that used Mistral's entry
+                 (the router-ID quant check, the consumers block and its
+                 validation) keep their coverage on a testdata profile;
+                 no validation rule is lost.
+              9. The Framework keeps only set A: Nemotron 3.5 Super's
+                 cache directory is deleted by the architect's command,
+                 the new render is installed root-owned with the old
+                 one kept beside it, and the router reads it (reload or
+                 restart, whichever drops the removed presets from
+                 GET /models). The runbook ("The models the host
+                 keeps", and a step for this sitting), memory-budget.md
+                 ("Nemotron 3.5 Super's files stay"), the build log, and
+                 model-cards.md's "the profile's mistral budget" are
+                 current; answer item 1 cites the new SHA-256 and date.
+                 Measured figures in the findings and pool.md stay.
+              (Behaviors 8-9 and the new 7: redirect, architect,
+              2026-10-23.)
+Test seams    mise run check (unchanged); the profile render's SHA-256
+              against the installed presets; mise run integration
+              against SPIKE_ROUTER_URL; git grep for the stale pointers
+              in behavior 4.
+Slices        1. Upgrade (1): uv 0.13.5 and the holds; currency shows
+                 only held items; check passes.
+              2. The answer (2, 3): the README's question and answer;
+                 the answer section and the other pending edits in the
+                 goal record.
+              3. Repoint (4, 5, 6): README, context/README.md,
+                 CLAUDE.md, the docs' forward pointers, Decisions, the
+                 .state cleanup.
+              4. Prune and walkthrough (7, 8, 9): an implementer prunes
+                 the profile, tests and docs, check passing; the session
+                 renders and stages the files on the Framework's home
+                 directory (scp, no root); the architect runs one
+                 sitting of exact commands (back up and install
+                 models.ini, delete Nemotron's directory, reload or
+                 restart); then the walkthrough: check, render SHA-256
+                 against the installed file, GET /models, the probe.
+Out of scope  Any measurement, benchmark, consumer run or build move;
+              bumping held pins; code changes beyond behavior 8's
+              tests; Tailscale or other host changes beyond behavior 9; personal-agents and spike-harness-driver; edits
+              to the coordinator before sync; archiving (intake).
+Door          two-way: the repository reverts by PR, and the sync's
+              coordinator edits by PR. Nemotron's deleted files are
+              one-way on the host (re-download ~46 min); the old
+              models.ini is kept as models.ini.a65fd306. The removed .state run outputs
+              are one-way locally; their findings are committed.
 ```
+
 
 ## Decisions
 
@@ -654,4 +571,129 @@ Door          two-way, except:
 - screen (editor, session): the fine-tune origin rule excludes jina-embeddings-v5-text-small (Qwen3-0.6B base); jina-embeddings-v5-text-nano is a EuroBERT encoder, not Qwen3, so screen r2's "jina-embeddings-v5 are excluded" narrows to text-small, and text-nano's origin (Jina AI, Germany) is left unjudged in docs/pool.md.
 - plan experiment.ai (architect, 2026-10-22): the spike moves to experiment.hosting, the self-hosted model stack, and closes through one `answer` task that narrows its question to what align through screen proved, with no new measurement; candidates, rocm, engines-strix, gateway, admin, cuda, engines-cuda, and validate are deleted. Their questions moved to experiment.hosting's spike-model-engines, spike-model-layout, and spike-model-gateway, and to experiment.ai's spike-host-admin and spike-model-benchmarks. Every pending edit was applied, superseded, or dropped in standards-lab's plan-experiment.ai pull request; the answer section goes to `ai-hosting.md`, "Answers · experiment.hosting".
 
+- answer (r1): Pi held at 1.3.0 and OpenCode at 1.19.3, the versions harness fit was measured at; uv taken to 0.13.5.
+- answer (r1): context/README.md drops the original ten evidence items and the 14-task path; the moved items are listed in the README's "The answer" and the answer section.
+- answer (r1): the walkthrough runs the probe and the render's SHA-256 against the installed presets only; no consumer or benchmark run; item 4 cites the 2026-10-12 run.
+- answer (r1): the unowned parts go to spikes by pending edit at sync: IL6 for the engines to spike-model-engines; gateway budgets, rate limits and OpenTelemetry traces to spike-model-gateway.
+- answer (currency): uv 0.13.5 taken; Pi 1.3.0 and OpenCode 1.19.3 held behind 1.4.0 and 1.19.4, their hold comment in `evaluation/mise.consumers.toml` naming the versions harness fit was measured at, not the newest (standards review: a newest version named in a comment goes stale).
+- answer: Tailscale SSH stays in accept mode while the experiments run (`ai-hosting.md`, "Hosts and access"), and the Strix Halo runbook says so. Supersedes setup's "`validate` reverts it to check mode"; `validate` is deleted.
+- answer: the answer, in the README's "The answer": llama.cpp's Vulkan router on the Framework serves set A from one rendered host-class profile to Pi, Claude Code, and go-ai's model client at once, with no answer crossed and the pool's floor held; with gpt-oss-120b only Pi meets the tool-call bar; the measurement method stands on set A's two baseline runs, its screen proven by tests only. Its answer section for `ai-hosting.md`, "Answers · experiment.hosting", is in Pending edits.
+- answer: the unowned parts of original items 8 and 10 get owners by pending roadmap edits: IL6 for the engines on paper to spike-model-engines; budgets, rate limits, OpenTelemetry traces, memory and latency overhead, and one configuration on both host classes to spike-model-gateway. Extends r1's fourth decision to item 8's overhead and both-host-classes parts.
+- answer: `devices/strix-halo/profile.toml`'s comments that mention candidates stay, because they render into the installed presets, and editing them would break the SHA-256 match (`a65fd306…`) the walkthrough checks.
+- answer: the `.state/evaluate` run outputs (three 2026-10-19 run directories and `index.json`, 15 MB) are removed; logins and caches are kept.
+- answer: the catalog lists spike-model-hosting under `references.md`'s archived-spikes heading while it awaits intake, as it lists spike-harness-driver.
+
+- answer (redirect r1, architect, 2026-10-23): the profile holds set A only; the mistral and nemotron sets and their model entries are removed, the findings and git history keeping the candidates' evidence.
+- answer (redirect r2, architect): the Framework drops them too: the architect installs the new render, dropping Mistral Small 4's dead preset (a load would re-download a disqualified model), and deletes Nemotron 3.5 Super's cached files (77.9 GB), in one sitting of exact commands.
+- answer (redirect r3, architect): Nemotron's files are not kept for spike-model-engines: engines brings the host up to date itself, Nemotron measured 12.1 tok/s (b11669), under the floor, and candidates belong to experiment.ai's spike-model-benchmarks.
+- answer (redirect, session, 2026-10-23): the reload alone dropped both removed presets on b11734, so the sitting needed no restart; the runbook keeps the restart as the fallback. The backup `models.ini.a65fd306` is the service user's, not root's, because `cp -p` keeps the owner and the file it copied was the one `evaluate sweep -restore` wrote on 2026-10-21. Supersedes the decision that the profile's comments mentioning candidates stay: the prune removed them, and the render (`96732ef9…`) carries none.
+- answer (redirect, standards review): the candidate test cases (the router-ID quant check and the consumers validation) run on `hosting/profile/testdata/candidate.toml`, a minimal profile built on the skeleton. `TestStrixHaloMatchesPinnedPreset` compares every rendered section, so a future set on the Strix Halo profile that doesn't load at startup must re-pin the copy; `TestRenderPresetsStartupSetOnly` keeps the load-on-startup rule.
+- answer (redirect, standards review): Nemotron's 12.1 tok/s is cited from the build log ("The candidates loaded on b11669"), where it is recorded.
+
 ## Pending edits
+
+- coordinator · context/ai-hosting.md, "Answers · experiment.hosting" (the heading exists, empty):
+  add the answer section below under it, as written.
+
+  ```markdown
+  ### Answer · experiment.hosting.spike-model-hosting
+
+  **Question:** What does llama.cpp's Vulkan router on the Framework establish for the
+  self-hosted stack: a host-class profile, Pi, Claude Code, and go-ai's model client at once,
+  tool-call reliability, a memory budget on unified memory, and a measurement method?
+
+  **Answer:** llama.cpp's Vulkan router on the Framework serves set A from one rendered
+  host-class profile to Pi, Claude Code, and go-ai's model client at once, with no answer crossed
+  and the pool's floor held; with gpt-oss-120b only Pi meets the tool-call bar, and the
+  measurement method stands on set A's two baseline runs, its screen proven by tests only.
+
+  1. A host-class profile: one TOML profile holds set A alone (gpt-oss-120b, Gemma 4 26B-A4B,
+     gemma-4-E4B, EmbeddingGemma 2) and validates and renders the router's presets and systemd
+     unit for it, each model at its card's sampling and reasoning settings, naming no host.
+     Proven by the `profile` package's tests and by a running demo: the committed render's
+     SHA-256 (`96732ef9…`) equals the installed presets', and the probe passes, on b11734,
+     2026-10-23.
+  2. Three consumers at once: Pi, Claude Code, and the model client on gpt-oss-120b's 4 slots,
+     beside an embedding stream, sent 40 chat requests and 1032 embeddings in 51.7 s with no
+     answer crossed; all three harnesses (Pi, Claude Code, OpenCode) send the reasoning back on
+     tool turns. Proven by a running demo, `evaluate concurrent`, and the `wire` package's
+     round-trip integration tests, on b11572, 2026-10-12; set A's role models under each other's
+     load crossed nothing in 18 and 22 rounds, on b11715, 2026-10-17 and 2026-10-18.
+  3. Tool-call reliability: with gpt-oss-120b, Pi on `tool_choice` `"required"` meets OpenAI's
+     bar (pass^5 9 of 9, 0 invalid); Claude Code answers in text where a call is due and makes up
+     the skill's motto, and OpenCode on `auto` gets the parser's peg-native error in its stream.
+     The layered convention (server, profile, client, harness, gateway, measurement) is recorded
+     with its sources. Proven by running demos: `evaluate conform -k 5` on b11572, 2026-10-12,
+     and harness fit in both baseline agent runs on b11715, 2026-10-17 and 2026-10-18 (Pi 1.3.0,
+     Claude Code 2.1.301, OpenCode 1.19.3).
+  4. Speed: gpt-oss-120b generates 48.8 tok/s alone and 21.2 per stream at four; the Gemmas
+     can't hold four 8k agentic requests at c 32768; a shared 8192-token prefix cuts TTFT from
+     4-11 s to under 0.55 s; a router restart loads all four in about 21 s, warm or cold. Proven
+     by running demos (GuideLLM 0.8.1, `evaluate prefix`, `evaluate coldload`) on b11572,
+     2026-10-12; the deep stages reran the grid and prefix reuse on b11715, 2026-10-17 and
+     2026-10-18, gpt-oss-120b's short cells within 3%, and the move to b11715 read 20.8 and
+     21.0 s cold, 2026-10-17.
+  5. A memory budget on unified memory: set A leaves 3.30 GiB of the 96 GiB pool free with 4 in
+     flight on every model (b11565, 2026-10-12); each model keeps its high-water mark until
+     reloaded, so the floor (2816 MiB) is judged after a reload at the warmed peak, 3068 MiB free
+     (b11734, 2026-10-19); a cached set swap takes about 23 s (b11669, 2026-10-15). Proven by
+     running demos: `footprint.sh`, evaluate's reload and warmed-peak reading, and `swap`.
+  6. A measurement method: `evaluate` gates admission, fitness, capacity, and quality on
+     absolute floors, and set A's two full runs set the bars (b11715, 2026-10-17 and
+     2026-10-18); the sweep found set A supports 2 concurrent agent sessions (b11734,
+     2026-10-20), not confirmed by a set stage. Proven by running demos; the screen, full run,
+     and results index by tests only. On paper, the pool counts 47 models, 34 admissible
+     (b11734, 2026-10-19); Mistral Small 4 is disqualified on Vulkan (3.36 tok/s, CPU fallback
+     until llama.cpp's open PR #30105; b11669, 2026-10-15 and 2026-10-16).
+
+  The original evidence's other items moved:
+
+  - 2, one schema rendering every platform on both host classes: spike-model-engines (engine
+    and hosting method per host class); the profile format is settled at experiment.ai's
+    spike-host-admin's setup.
+  - 3, how each platform is set up and managed: spike-model-engines (scripted install and setup)
+    and experiment.ai's spike-host-admin.
+  - 6, a capability matrix per platform: spike-model-engines (raw capability by model shape,
+    embedding and ASR among them).
+  - 7, presets, context sizing, and the footprint method beyond the Framework:
+    spike-model-layout (context × sessions per placed model) and spike-model-engines (vLLM).
+  - 8, each gateway approach: spike-model-gateway, budgets, rate limits, OpenTelemetry traces,
+    memory and latency overhead, and one configuration on both host classes included.
+  - 9, one admin tool over every platform and host: experiment.ai's spike-host-admin.
+  - 10, IL6 on paper: spike-model-gateway, and spike-model-engines for the engines.
+  - The model candidates and the benchmark method: experiment.ai's spike-model-benchmarks.
+
+  [The answer](https://github.com/JaimeStill/spike-model-hosting#the-answer) ·
+  [spike-model-hosting](https://github.com/JaimeStill/spike-model-hosting)
+  ```
+
+- coordinator · context/ai-hosting.md, "### spike-model-hosting": the spike has answered.
+  Replace "The spike closes through its `answer` task, which takes no new measurement, and its
+  answer lands in "Answers · experiment.hosting" below. Its other questions moved:" with "The
+  spike has answered, with no new measurement in its `answer` task: "Answer ·
+  experiment.hosting.spike-model-hosting", under "Answers · experiment.hosting" below. Its other
+  questions moved:".
+- coordinator · context/roadmap.toml, `[goals.experiment.hosting.spike-model-engines]` summary:
+  after "Install and setup are scripted as named, idempotent steps." add "Checks on paper that
+  each engine kept is acceptable air-gapped at IL6."
+- coordinator · context/roadmap.toml, `[goals.experiment.hosting.spike-model-gateway]` summary:
+  after "Access: per-consumer keys issued by the gateway, with JWT/OIDC compared on paper." add
+  "Measures per-consumer budgets and rate limits, each gateway's OpenTelemetry traces and memory
+  and latency overhead, and one gateway configuration on both host classes."
+- coordinator · references.toml: list the spike unarchived, awaiting intake, after
+  `[repos.spike-html-conventions]`:
+
+  ```toml
+  [repos.spike-model-hosting]
+  remote = "https://github.com/JaimeStill/spike-model-hosting.git"
+  ```
+
+- coordinator · references.md, "Experiments — archived spikes": after "### spike-harness-driver"
+  add:
+
+  ```markdown
+  ### spike-model-hosting
+  Asked what llama.cpp's Vulkan router on the Framework establishes for the self-hosted stack.
+  Answered with a host-class profile, three consumers at once, tool-call reliability, a memory
+  budget on unified memory, and a measurement method; experiment.hosting's intake archives it.
+  ```

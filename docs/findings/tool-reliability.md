@@ -75,7 +75,7 @@ On llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64) with gpt-oss-120b 
   set the card's. personal-agents' `profiles/unified-96gb.ini` and the spike's
   `devices/strix-halo/profile.toml` state each card's values.
 - **Levers for OpenCode.** Three levers could cut OpenCode's failures. `consumers` answered the
-  second (see "Reasoning round-trip by consumer"); `gateway` takes up the other two:
+  second (see "Reasoning round-trip by consumer"); spike-model-gateway takes up the other two:
   - *Force the shape.* OpenCode sends `tool_choice: "auto"`. Its `chat.params` plugin hook
     edits a request's parameters before it is sent, and may set `required` the way Pi's bridge
     does; whether it reaches `tool_choice` is unconfirmed. A gateway can inject `required` for
@@ -87,8 +87,8 @@ On llama.cpp b11529 (`b11529-8ae386707`, upstream Vulkan x64) with gpt-oss-120b 
     1.19.0 already sends it, with or without its per-model `interleaved` setting.
   - *Retry the parse 5xx.* Related 500s with OpenCode and gpt-oss on reasoning plus tool calls
     are reported in llama.cpp [#19703](https://github.com/ggml-org/llama.cpp/issues/19703) and
-    [#20500](https://github.com/ggml-org/llama.cpp/issues/20500). `gateway` evaluates a bounded
-    resample and a fallback model.
+    [#20500](https://github.com/ggml-org/llama.cpp/issues/20500). spike-model-gateway evaluates
+    a bounded resample and a fallback model.
 
 ## Reasoning round-trip by consumer
 
@@ -163,7 +163,7 @@ in a stream that began with 200. The `passk` package builds the cells:
 - **Claude Code 2.1.296** over the router's Anthropic messages, from `.state/claude` on the
   subscription login, every model alias mapped to gpt-oss-120b, as in the round-trip run.
 - **OpenCode 1.19.0** with gpt-oss-120b's `interleaved` set to `reasoning_content`. Its
-  `tool_choice` stays `auto`: forcing it is `gateway`'s.
+  `tool_choice` stays `auto`: forcing it is spike-model-gateway's.
 
 A capability is a task, and it passes at 5 only when all five trials pass. pass^5 is the
 share of the nine tasks that do; the bar is 0 invalid and pass^5 of at least 90%, which over
@@ -269,9 +269,9 @@ error, so no consumer's set was rerun:
 | Claude Code 2.1.301 | 5/5 | 5/5 | 5/5 | 0/5 | 0/5 | 5/5 | 5/5 | n/a | 5/5 | 6/9 (66.7%) | 0 | fails |
 | OpenCode 1.19.1 | 5/5 | 5/5 | 5/5 | 4/5 | 3/5 | 5/5 | 5/5 | 5/5 | 3/5 | 6/9 (66.7%) | 18 | fails |
 
-This row is the bar the candidates are judged against. For Claude Code, a candidate must meet
-or beat each cell's count, with no more than 0 invalid requests. Pi's bar stays 9/9 at 5/5
-with 0 invalid. OpenCode is measured, not judged.
+This row is the bar a candidate is judged against, in experiment.ai's spike-model-benchmarks.
+For Claude Code, a candidate must meet or beat each cell's count, with no more than 0 invalid
+requests. Pi's bar stays 9/9 at 5/5 with 0 invalid. OpenCode is measured, not judged.
 
 - **Pi.** It held every cell with no invalid request, as it has on every build since b11529.
 - **Claude Code's `tool` and `skill`.** Both are the text-for-a-call failure of
@@ -441,7 +441,7 @@ parse errors still reach it on `tool_choice` `auto`. These are the design inputs
 harness spike takes (the goal record's Decisions, "evaluation (slice 7, architect)"): force the
 call when offering `respond`, round-trip reasoning, no blind resend on a parse error.
 
-## Which task answers which layer
+## Which task or spike answers which layer
 
 - `profile`: `devices/strix-halo/profile.toml` sets each model's card sampling and leaves reasoning
   to the template, and the `profile` package renders both into llama.cpp's presets
@@ -451,9 +451,9 @@ call when offering `respond`, round-trip reasoning, no blind resend on a parse e
   back, seen on the wire).
 - `evaluation`: harness fit, conform pass^5 through every pinned harness against one absolute
   bar, and the fit profile, each failed cell with its reason ([`../evaluation.md`](../evaluation.md)).
-- `gateway`: the bounded resample and fallback on a parse 5xx, per gateway.
-- `validate`: the convention per platform: whether each engine constrains `required`, named
-  calls, and strict `json_schema`, and parses its models' native tool format.
+- spike-model-gateway: the bounded resample and fallback on a parse 5xx, per gateway.
+- spike-model-engines: the convention per engine: whether each engine constrains `required`,
+  named calls, and strict `json_schema`, and parses its models' native tool format.
 
 ## Assumptions
 

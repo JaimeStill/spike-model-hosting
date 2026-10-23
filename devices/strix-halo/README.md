@@ -46,7 +46,8 @@ policy sets each SSH rule to **accept** (unattended) or **check** (the first con
 the rule's check period needs a browser re-authentication). The spike runs in accept mode for
 the host alone: the host carries `tag:inference`, and an accept rule from the architect's user to
 that tag sits above the tailnet's check rule, which still covers every other device. The
-architect sets it and reverts the host to check mode when the spike completes.
+architect sets it, and the host stays in accept mode while the experiments run
+(`standards-lab/context/ai-hosting.md`, "Hosts and access").
 
 **The check-mode lapse.** In check mode, once the check period lapses, a non-interactive ssh
 fails (`exit status 255`) until someone re-authenticates in a browser; the router's HTTP API is
@@ -325,25 +326,102 @@ sudo chown root:root /etc/llama-router /etc/llama-router/models.ini && sudo chmo
 
 ## The models the host keeps
 
-The Framework keeps only models that passed on it (the goal record's decision `screen` (r1)).
-On 2026-10-19 that removes two things:
+The Framework keeps only models that passed on it (the goal record's decision `screen` (r1)),
+and only the models its profile holds: set A's four. The profile holds set A alone (decision
+`answer` (redirect r1)), so no other model has a preset and the router lists none. The deletions so far, each by the architect's command:
 
 - **Mistral Small 4's cached files** (`unsloth/Mistral-Small-4-119B-2603-GGUF`, its three
-  UD-Q4_K_XL splits and `mmproj-BF16.gguf`, about 70G), disqualified at fitness on b11669
+  UD-Q4_K_XL splits and `mmproj-BF16.gguf`, about 70G), deleted at `screen` on 2026-10-19 (step
+  c), disqualified at fitness on b11669
   ([`docs/findings/tool-reliability.md`](../../docs/findings/tool-reliability.md)). The router's
   API can't delete them: `DELETE /models?model=unsloth/Mistral-Small-4-119B-2603-GGUF:Q4_K_XL`
   answered 500, "not removable (not from cache)", since the router deletes only a model whose
   source is the cache, and every model the profile holds is a preset (`GET /models` lists each
-  with `source` `preset` and `can_remove` false). So step c deletes its directory from the
-  cache. The profile keeps its entry, the record of the candidate; the router still lists it,
-  and a load would download it again, in about 35 minutes.
+  with `source` `preset` and `can_remove` false). So the deletion is from the cache directly.
 - **align's retired-model directory**, the cache's sibling on the models drive (`<hf
-  cache>-retired`, about 132G), where `align` moved the models it retired out of the router's
-  cache rather than delete them (Qwen3-Embedding-4B, gemma-4-31B-it, Qwen3-Coder-Next,
-  Qwen3.8-27B, and unsloth's gpt-oss-120b). The router never read it.
+  cache>-retired`, about 132G), deleted at `screen` on 2026-10-19 (step c): where `align` moved
+  the models it retired out of the router's cache rather than delete them (Qwen3-Embedding-4B,
+  gemma-4-31B-it, Qwen3-Coder-Next, Qwen3.8-27B, and unsloth's gpt-oss-120b). The router never
+  read it.
+- **Nemotron 3.5 Super's cached files**
+  (`ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF`, its NVFP4 weights and Q8_0 mmproj,
+  77.89GB), deleted at `answer` on 2026-10-23 by the architect's redirect (decisions `answer`
+  (redirect r2, r3)): it generated at 12.1 tok/s on b11669, under the floor
+  ([`llama-cpp-builds.md`](llama-cpp-builds.md), "The candidates loaded on b11669"), and
+  candidates belong to experiment.ai's spike-model-benchmarks.
 
-Both belong to the service user. Neither deletion reverts on the host; the Hugging Face files
-can be downloaded again.
+All belong to the service user. No deletion reverts on the host; the Hugging Face files can be
+downloaded again.
+
+### The answer sitting: set A only
+
+One sitting installs the set-A-only presets, keeping the installed ones (`a65fd306`) beside
+them, and deletes Nemotron 3.5 Super's directory from the cache. The unit is unchanged: the
+profile's change removes preset sections alone, and the unit's render
+(`hosting/profile/testdata/strix-halo.service`) is the same, so it isn't installed. A session
+renders the presets at the commit the sitting installs and copies them to the Framework's home
+directory; nothing there needs root.
+
+```bash
+# laptop
+mise run //devices/strix-halo:render:presets > /tmp/models.ini
+sha256sum /tmp/models.ini
+scp /tmp/models.ini <host>:models.ini.96732ef9
+```
+
+```bash
+# Framework
+sudo cp -p /etc/llama-router/models.ini /etc/llama-router/models.ini.a65fd306
+echo "96732ef954c60ad9c1385b278955ff50b5b5f9a8b85c2699fc509353ad7a6761  $HOME/models.ini.96732ef9" | sha256sum -c
+sudo install -m 0644 -o root -g root "$HOME/models.ini.96732ef9" /etc/llama-router/models.ini
+hf=$(systemctl show llama-router -p Environment --value | tr ' ' '\n' | sed -n 's/^HF_HOME=//p')
+du -sh "$hf/hub/models--ggml-org--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF"
+[ -d "$hf/hub" ] && rm -rf -- "$hf/hub/models--ggml-org--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF"
+ls "$hf/hub"
+```
+
+Expect one `OK`; `du` near 73G (77.89GB); and the cache's `hub` holding set A's four models'
+directories and no Nemotron one. The cache belongs to the service user, so its deletion needs no
+`sudo`; the `[ -d ]` test stops it if the cache wasn't found. Nemotron 3.5 Super is unloaded, so
+no process holds its files.
+
+The router reads the new presets by a reload first ("The preset file's write access", above),
+with no restart:
+
+```bash
+# laptop
+curl -s "$SPIKE_ROUTER_URL/models?reload=1" > /dev/null
+curl -s "$SPIKE_ROUTER_URL/models" | jq -r '.data[] | "\(.id) \(.status.value)"'
+```
+
+Expect set A's four models, each `loaded`, and no other. On 2026-10-23, on b11734, the reload
+alone dropped both removed presets. If a reload leaves them listed, restart the router, which
+reads the file afresh:
+
+```bash
+# Framework
+sudo systemctl restart llama-router
+```
+
+Then check the installed presets against the committed render, and probe:
+
+```bash
+# laptop
+mise run //devices/strix-halo:render:presets | sha256sum
+ssh <host> sha256sum /etc/llama-router/models.ini
+mise run integration
+```
+
+Expect the two sums equal (`96732ef954c60ad9c1385b278955ff50b5b5f9a8b85c2699fc509353ad7a6761`)
+and every probe to pass. It reverts by installing the kept file and reloading; Nemotron's files
+don't come back with it. The kept file is the service user's, not root's: `cp -p` keeps the
+owner, and the file it copied was the one `evaluate sweep -restore` wrote. The `install` below
+makes the reinstalled file root's again:
+
+```bash
+# Framework
+sudo install -m 0644 -o root -g root /etc/llama-router/models.ini.a65fd306 /etc/llama-router/models.ini
+```
 
 ## The router's state, without root
 

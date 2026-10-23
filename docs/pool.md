@@ -4,7 +4,8 @@ The open-weight models that could serve each of the Framework's four roles (agen
 audio, embedding) under the spike's rules, and the profiles they could make. It is a paper
 survey: nothing here was downloaded, loaded, or benchmarked for this page. It feeds the
 experiment's restructure (the goal record's redirect, 2026-10-21), which splits benchmarking
-into small elements composed per scenario; benchmarking the pool is left to a later spike.
+into small elements composed per scenario; benchmarking the pool is left to
+experiment.ai's spike-model-benchmarks.
 
 The survey was taken on 2026-10-19 against llama.cpp b11734 (`b11734-f3fb2fcdb`, upstream
 Vulkan x64), the build the Framework serves, from the Hugging Face API, the model cards, and

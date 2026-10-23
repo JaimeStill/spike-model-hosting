@@ -70,8 +70,8 @@ A chat-and-vision model that passes every gate is budgeted ~85 minutes from admi
 the set stage. Set A's two baseline runs on b11715 put such a model at about 95-105 minutes, over
 the budget: a vision run took 82.1 and 70.9 minutes, and an agent run 37.2 and 35.9, then about
 48 for the deep stage. An audio run took 17.9 to 18.6 minutes, an embedding run about 5, and a
-set run about 38. Timing a screen and a finalist's full run waits for the benchmarking spike
-("Planned", below).
+set run about 38. Timing a screen and a finalist's full run waits for experiment.ai's
+spike-model-benchmarks ("Planned", below).
 
 ## The tools
 
@@ -364,7 +364,7 @@ example `MISE_ENV=consumers mise run //evaluation:vision-tiers`; each rewrites t
 
 ## Planned
 
-The goal record's redirect of 2026-10-21 moves benchmarking to a later spike, built from small
+Benchmarking belongs to experiment.ai's spike-model-benchmarks, which builds it from small
 elements composed per scenario. These parts of the method wait for it:
 
 - **A live screen.** A screen's time, 15 to 25 minutes a candidate, is extrapolated, not

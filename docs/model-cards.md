@@ -125,8 +125,9 @@ The evaluation ([`evaluation.md`](evaluation.md)) reads the card in five places:
 
 ## Context catalog
 
-Every model in `devices/strix-halo/profile.toml`, with what a larger context would cost. All figures
-are computed from each model's `config.json`, not measured;
+Set A's four models, those of `devices/strix-halo/profile.toml`, and the two main-model
+candidates the spike loaded, Mistral Small 4 and Nemotron 3.5 Super, with what a larger context
+would cost. All figures are computed from each model's `config.json`, not measured;
 [`memory-budget.md`](findings/memory-budget.md) holds the measured footprints.
 
 **Method.** A full-attention layer caches K and V for every token: layers × KV heads × head
@@ -138,13 +139,13 @@ Mistral Small 4 uses multi-head latent attention (MLA): each layer caches one la
 Nemotron 3.5 Super's Mamba-2 layers keep a fixed recurrent state per sequence, at f32
 (`mamba_ssm_cache_dtype`): SSM heads × head dim × state size, plus the convolution's
 (kernel − 1) × (inner size + 2 × groups × state size). Both KV columns count the cache the
-profile would allocate at that context: the per-token cost times the context, which the 4 slots
+router would allocate at that context: the per-token cost times the context, which the 4 slots
 share on `--kv-unified`, plus the fixed part for each of the 4 sequences. The two columns differ
-only in the context, so where the profile already runs at the maximum they are equal, and their
+only in the context, so where a model already runs at the maximum they are equal, and their
 difference is what raising c to the maximum would cost. Compute buffers and the router's context
 checkpoints are not counted.
 
-| Model | Maximum context | Cached layers | KV bytes/token, f16 | Fixed per sequence | KV at the profile's c | KV at the maximum context | c in the profile, and why |
+| Model | Maximum context | Cached layers | KV bytes/token, f16 | Fixed per sequence | KV at the spike's c | KV at the maximum context | The spike's c, and why |
 |---|---|---|---|---|---|---|---|
 | gpt-oss-120b ([config](https://huggingface.co/openai/gpt-oss-120b/blob/main/config.json), [card](https://huggingface.co/openai/gpt-oss-120b)) | 131072, `max_position_embeddings`; the card states none | 18 full of 36 (8 KV heads × 64); 18 SWA at 128 tokens | 36,864 | 4.5 MiB (SWA) | 4.52 GiB | 4.52 GiB at 131072 | 131072, its trained length: the harness model runs at its ceiling. |
 | Gemma 4 26B-A4B ([config](https://huggingface.co/google/gemma-4-26B-A4B-it/blob/main/config.json), [card](https://huggingface.co/google/gemma-4-26B-A4B-it)) | 262144, the card's 256K and `max_position_embeddings` | 5 full of 30 (2 KV heads × 512); 25 SWA (8 × 256) at 1024 tokens | 20,480 | 200 MiB (SWA) | 1.41 GiB | 5.78 GiB at 262144 | 32768: the shared budget binds; at 65536 set A left 2.61 GiB free, under the 2.75 GiB pool floor. |
@@ -153,7 +154,7 @@ checkpoints are not counted.
 | Mistral Small 4 ([config](https://huggingface.co/mistralai/Mistral-Small-4-119B-2603/blob/main/config.json), [card](https://huggingface.co/mistralai/Mistral-Small-4-119B-2603)) | 262144, the card's 256k (`max_position_embeddings` reads 1048576) | 36 MLA layers, latent 256 + rope 64 | 23,040 | none | 2.81 GiB | 5.63 GiB at 262144 (22.5 GiB at 1048576) | 131072, gpt-oss-120b's, so candidates compare at set A's main-model context; 262144 would leave the pool under main-model's 3 GiB floor. |
 | Nemotron 3.5 Super VL ([config](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16/blob/main/config.json), [card](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-BF16)) | 1048576, the card's "up to 1M" and `max_position_embeddings` | 8 attention of 88 (2 KV heads × 128); 40 Mamba-2 (128 heads × 64, state 128, 8 groups, kernel 4); 40 MoE with no cache | 8,192 | 164.7 MiB (recurrent, f32) | 1.64 GiB | 8.64 GiB at 1048576 | 131072, gpt-oss-120b's, for the comparison; rejected 262144 and 1M. Its 8 checkpoints per slot hold ~5.1 GiB of recurrent state in system RAM, outside the pool. |
 
-Four models allow a larger context than the profile sets. Nemotron 3.5 Super's cache grows
+Four models allow a larger context than the spike runs them at. Nemotron 3.5 Super's cache grows
 slowest, 8 KiB per token: its 1M costs 8 GiB of attention KV. Mistral Small 4 doubles to its
 262144 for 2.8 GiB more. Gemma 4 26B-A4B's full-attention KV goes from 0.625 GiB at 32768 to
 5 GiB at its 262144, which set A's budget can't hold. Gemma 4 E4B could reach its 131072 for
@@ -168,7 +169,8 @@ MLA cache. The low end, the table's 2.81 GiB, caches only the latent (`kv_lora_r
 320 values per layer and token). llama.cpp b11669 does this: it loads `mistral4` through its
 DeepSeek-2 code, which allocates a K-only cache when the GGUF carries the MLA key lengths. The
 high end also caches the latent's 256 values a second time, as V (5.06 GiB, rounded up to 5.1).
-The profile's mistral budget takes the high end, so its estimate holds for either layout.
+The mistral set's estimated budget ([memory budget](findings/memory-budget.md)) takes the high
+end, so the estimate holds for either layout.
 
 ## Assumptions
 

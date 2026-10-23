@@ -1,5 +1,5 @@
-// Package spikemodelhosting is the root of spike-model-hosting, a spike that compares serving
-// platforms and gateway approaches for locally hosted models across host classes, behind one
-// host-class profile schema. README.md states the question and maps the areas;
-// context/README.md states the evidence.
+// Package spikemodelhosting is the root of spike-model-hosting, a spike that records what
+// llama.cpp's Vulkan router on the Framework desktop, served from one host-class profile,
+// establishes for the self-hosted model stack. README.md states the question, maps the areas, and
+// gives the answer with its evidence.
 package spikemodelhosting

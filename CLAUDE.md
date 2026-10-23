@@ -1,10 +1,9 @@
 # spike-model-hosting
 
-A spike for the Standards Lab reference architecture. It compares serving platforms (llama.cpp,
-vLLM, SGLang) and gateway approaches (none, agentgateway, LiteLLM) for locally hosted models
-across the Strix Halo and Dell NVIDIA host classes, behind one host-class profile schema.
-`README.md` is the front page; the repository is managed with the marathon workflow, so start
-from `context/README.md`.
+A spike for the Standards Lab reference architecture. It records what llama.cpp's Vulkan router
+on the Framework desktop (Strix Halo), served from one host-class profile, establishes for the
+self-hosted model stack. `README.md` is the front page and gives the answer under "The answer";
+the repository is managed with the marathon workflow, so start from `context/README.md`.
 
 - **Standards:** `STANDARDS.md`, with pointers into the architecture repository.
 - **Layout:** one Go module in a mise monorepo. `hosting/` holds the profile, router, swap, and
@@ -21,18 +20,17 @@ from `context/README.md`.
   a profile by host-class name (`strix-halo`, the default), found from the module root, or by
   path. The `profile` and `swap` packages' docs list their APIs.
 - **Goals:** this spike's tasks live in the coordinator's roadmap,
-  `standards-lab/context/roadmap.toml`, under `experiment.ai.spike-model-hosting`. Its goal
-  record is `context/goals/experiment.ai.spike-model-hosting.md`.
+  `standards-lab/context/roadmap.toml`, under `experiment.hosting.spike-model-hosting`. Its goal
+  record is `context/goals/experiment.hosting.spike-model-hosting.md`.
 - **Dependencies:** published versions only, never a `replace` directive.
 - **References:** the repositories this spike reads are keys in the coordinator's
   `references.toml` and `references.local.toml`. The spike reads them and writes to none of them,
   except personal-agents and spike-harness-driver in its `align` task.
-- **Hosts:** the spike may change anything in the hosting layer of the Framework desktop and
-  the Dell NVIDIA workstation; root stays the architect's, run from exact commands. The
-  Framework only hosts and serves inference. Sessions may do on it whatever needs no sudo: the
-  router's HTTP API (including load, unload, and downloads), user-level SSH reads such as
-  `amdgpu_top`, and logs. Every consumer and instrument runs from the architect's laptop, where
-  nothing is served.
+- **Hosts:** the spike may change anything in the hosting layer of the Framework desktop; root
+  stays the architect's, run from exact commands. The Framework only hosts and serves inference.
+  Sessions may do on it whatever needs no sudo: the router's HTTP API (including load, unload,
+  and downloads), user-level SSH reads such as `amdgpu_top`, and logs. Every consumer and
+  instrument runs from the architect's laptop, where nothing is served.
 - **Consumers and instruments:** `evaluation/mise.consumers.toml` pins them, run from the root as
   `MISE_ENV=consumers mise -C evaluation exec -- <tool>` (mise loads that file only in
   `evaluation/`); their untracked state is under the root's `.state/`.

@@ -1,0 +1,89 @@
+# The walking skeleton with a candidate as its chat model: one whose ID names the quant tag the
+# router lists (Q4_K_XL, not the UD-Q4_K_XL of its file names) and which carries a consumers
+# block, as no model in the Strix Halo profile does.
+host_class = "strix-halo"
+bind = "tailnet"
+kv = "unified"
+
+[engine]
+name = "llama.cpp"
+backend = "vulkan"
+min_build = "b11452"
+
+[defaults]
+c = 32768
+gpu_layers = 999
+checkpoint_min_step = 4096
+
+[[sets]]
+name = "a"
+startup = true
+models = ["example/candidate-GGUF:Q4_K_XL", "ggml-org/embeddinggemma-2-GGUF:Q8_0"]
+
+[sets.roles]
+chat = "example/candidate-GGUF:Q4_K_XL"
+embedding = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+
+[sets.memory_budget]
+pool_mib = 98304
+measured_mib = 94926
+build = "b11529"
+source = "docs/findings/memory-budget.md"
+
+[[models]]
+id = "example/candidate-GGUF:Q4_K_XL"
+publisher = "Example"
+origin = "France"
+licence = "Apache-2.0"
+roles = ["chat"]
+card_url = "https://huggingface.co/example/candidate"
+card_context = 262144
+kind = "generative"
+c = 131072
+c_reason = "The candidate's main model, at gpt-oss-120b's c."
+slots = 4
+slots_reason = "4 slots, the evaluation baseline's value."
+
+[models.sampling]
+source = "https://huggingface.co/example/candidate"
+temperature = 0.7
+top_p = 1.0
+top_k = 0
+min_p = 0.0
+reasoning = "high"
+reason = "Sampling from the card: reasoning_effort high at temperature 0.7."
+
+[models.consumers]
+pi = "high"
+opencode = { reasoningEffort = "high" }
+reason = """
+The candidate's template accepts reasoning_effort "none" or "high" alone; each consumer asks for
+high.
+"""
+
+[[models]]
+id = "ggml-org/embeddinggemma-2-GGUF:Q8_0"
+publisher = "Google"
+origin = "United States"
+licence = "Apache-2.0"
+roles = ["embedding"]
+card_url = "https://huggingface.co/google/embeddinggemma-2"
+card_context = 8192
+kind = "embedding"
+# dims: the 768-dimension output its card states.
+dims = 768
+c = 8192
+c_reason = """
+Text embeddings only, 768-dimension output. c = 8192 is the context window its card states.
+"""
+slots = 2
+slots_reason = "2 slots, so the render shows each model's own."
+args_reason = """
+embeddings serves it as an embedding model, mean pooling per its card; b and ub match c.
+"""
+
+[models.args]
+embeddings = true
+pooling = "mean"
+b = 8192
+ub = 8192
