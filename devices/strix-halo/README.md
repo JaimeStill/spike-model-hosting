@@ -346,10 +346,10 @@ preset and the router lists none. The deletions so far, each by the architect's 
   read it.
 - **Nemotron 3.5 Super's cached files**
   (`ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF`, its NVFP4 weights and Q8_0 mmproj,
-  77.9 GB), deleted at `answer` on 2026-10-23 by the architect's redirect (decisions `answer`
-  (r2, r3)): it measured 12.1 tok/s on b11669, under the floor
-  ([`docs/findings/memory-budget.md`](../../docs/findings/memory-budget.md)), and candidates
-  belong to experiment.ai's spike-model-benchmarks.
+  77.89GB), deleted at `answer` on 2026-10-23 by the architect's redirect (decisions `answer`
+  (r2, r3)): it generated at 12.1 tok/s on b11669, under the floor
+  ([`llama-cpp-builds.md`](llama-cpp-builds.md), "The candidates loaded on b11669"), and
+  candidates belong to experiment.ai's spike-model-benchmarks.
 
 All belong to the service user. No deletion reverts on the host; the Hugging Face files can be
 downloaded again.
@@ -381,7 +381,7 @@ du -sh "$hf/hub/models--ggml-org--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF"
 ls "$hf/hub"
 ```
 
-Expect one `OK`; `du` near 73G (77.9 GB); and the cache's `hub` holding set A's four models'
+Expect one `OK`; `du` near 73G (77.89GB); and the cache's `hub` holding set A's four models'
 directories and no Nemotron one. The cache belongs to the service user, so its deletion needs no
 `sudo`; the `[ -d ]` test stops it if the cache wasn't found. Nemotron 3.5 Super is unloaded, so
 no process holds its files.
@@ -412,10 +412,14 @@ ssh <host> sha256sum /etc/llama-router/models.ini
 mise run integration
 ```
 
-Expect the two sums equal
-(`96732ef954c60ad9c1385b278955ff50b5b5f9a8b85c2699fc509353ad7a6761`) and every probe to pass. It
-reverts by installing the kept file, `sudo install -m 0644 -o root -g root /etc/llama-router/models.ini.a65fd306
-/etc/llama-router/models.ini`, and a reload; Nemotron's files don't come back with it.
+Expect the two sums equal (`96732ef954c60ad9c1385b278955ff50b5b5f9a8b85c2699fc509353ad7a6761`)
+and every probe to pass. It reverts by installing the kept file and reloading; Nemotron's files
+don't come back with it:
+
+```bash
+# Framework
+sudo install -m 0644 -o root -g root /etc/llama-router/models.ini.a65fd306 /etc/llama-router/models.ini
+```
 
 ## The router's state, without root
 
