@@ -101,9 +101,9 @@ Mistral 1063MiB under its 88826, Nemotron 559MiB over its 88039. Both estimates 
 model's compute buffers out.
 
 The budget's `measured_mib` is the pool used with Slots requests in flight on every model
-(`profile.MemoryBudget`), so these idle figures don't go into the profile: each candidate keeps
-its estimate until the 4-in-flight run measures it. The mistral set's run won't happen on
-b11669, since Mistral Small 4 is disqualified at fitness
+(`profile.MemoryBudget`), so these idle figures never went into the profile, where each
+candidate's budget stayed an estimate. The mistral set's 4-in-flight run never took place, since
+Mistral Small 4 was disqualified at fitness on b11669
 ([`tool-reliability.md`](tool-reliability.md), "Mistral Small 4: disqualified at fitness"), so
 its idle row is the set's only measurement.
 
@@ -138,7 +138,7 @@ The router's API couldn't delete them, since a preset's model isn't removable; t
 command did. Nemotron 3.5 Super's files (77.89GB, the table above) were deleted on 2026-10-23,
 at `answer`, by the architect's redirect: it generated at 12.1 tok/s on b11669, under the floor
 ([the build log](../../devices/strix-halo/llama-cpp-builds.md), "The candidates loaded on
-b11669"), and the profile no longer holds either candidate's set.
+b11669"), and the profile holds set A alone.
 
 ## Gemma 4 26B-A4B's growth under vision use, b11669
 

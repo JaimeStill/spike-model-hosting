@@ -72,15 +72,17 @@ profile to Pi, Claude Code, and go-ai's model client at once, with no answer cro
 pool's floor held; with gpt-oss-120b only Pi meets the tool-call bar, and the measurement method
 stands on set A's two baseline runs, its screen proven by tests only.
 
-1. **A host-class profile.** One TOML profile, `devices/strix-halo/profile.toml`, validates and
-   renders the router's presets and systemd unit for set A, each model at its card's sampling
-   and reasoning settings, naming no host: the unit resolves the tailnet address when it starts,
-   and the service user, `HF_HOME`, and the models directory are given at render time. Proven by
-   the `profile` package's tests (`hosting/profile`, among them `TestStrixHaloMatchesPinnedPreset`
-   and `TestRenderUnitRequiresHost`), and by a running demo: the committed render's SHA-256,
-   `a65fd306…`, equals the installed presets', `/props` reports every model's slots and `n_ctx`,
-   and the probe passes, on b11734 (`b11734-f3fb2fcdb`), 2026-10-21
-   ([slots](docs/findings/slots.md#the-startup-set-restored-2026-10-21)).
+1. **A host-class profile.** One TOML profile, `devices/strix-halo/profile.toml`, holds set A
+   alone and validates and renders the router's presets and systemd unit for it, each model at
+   its card's sampling and reasoning settings, naming no host: the unit resolves the tailnet
+   address when it starts, and the service user, `HF_HOME`, and the models directory are given
+   at render time. Proven by the `profile` package's tests (`hosting/profile`, among them
+   `TestStrixHaloMatchesPinnedPreset` and `TestRenderUnitRequiresHost`), and by a running demo:
+   the committed render's SHA-256, `96732ef9…`, equals the installed presets', the router lists
+   set A's four models, each loaded, and the probe passes, on b11734 (`b11734-f3fb2fcdb`),
+   2026-10-23 ([build log](devices/strix-halo/llama-cpp-builds.md#set-a-only-2026-10-23)).
+   `/props` reported every model's slots and `n_ctx` on the same presets' keys, on b11734,
+   2026-10-21 ([slots](docs/findings/slots.md#the-startup-set-restored-2026-10-21)).
 2. **Three consumers at once.** Pi, Claude Code, and the model client streamed at once on
    gpt-oss-120b's 4 slots, beside the model client's embedding stream on EmbeddingGemma 2: 40
    chat requests and 1032 embeddings in 51.7 s, every answer carrying its own nonce and no

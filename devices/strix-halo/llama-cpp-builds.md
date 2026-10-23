@@ -665,3 +665,25 @@ command and no restart.
   `/props` reports `total_slots` 4 for each, `n_ctx` 131072, 32768, 32768 and 8192.
 - **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
   set a.
+
+### Set A only, 2026-10-23
+
+By the goal record's redirect of 2026-10-23 (decisions `answer` (redirect r1 to r3)), the
+profile holds set A alone, and the Framework keeps only set A's models. The architect ran the
+runbook's "The answer sitting: set A only" ([`README.md`](README.md)); the build is unchanged,
+b11734.
+
+- **The install.** The committed render is sha256
+  `96732ef954c60ad9c1385b278955ff50b5b5f9a8b85c2699fc509353ad7a6761`, installed `root:root`
+  `0644`; `sha256sum /etc/llama-router/models.ini` on the Framework reads the same. It replaced
+  `a65fd306`, kept as `/etc/llama-router/models.ini.a65fd306`. The kept file is the service
+  user's (`<user>:<group>`), not root's: `cp -p` keeps the owner, and the file it copied was the
+  one `evaluate sweep -restore` wrote on 2026-10-21.
+- **The deletion.** Nemotron 3.5 Super's directory
+  (`models--ggml-org--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF`) is deleted from the cache's
+  `hub`, which now holds set A's four models' directories.
+- **The reload.** `GET /models?reload=1` dropped both removed presets (Mistral Small 4 and
+  Nemotron 3.5 Super) with no restart. `GET /models` lists set A's four, each loaded, and no
+  other; `/props` reports `b11734-f3fb2fcdb`.
+- **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
+  set a.

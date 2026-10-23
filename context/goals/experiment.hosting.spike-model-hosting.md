@@ -589,6 +589,9 @@ slices 3/4 committed · standards ✓ (1-3) · spec ✓ (1-3) · editor ✓ (1-3
 - answer (redirect r1, architect, 2026-10-23): the profile holds set A only; the mistral and nemotron sets and their model entries are removed, the findings and git history keeping the candidates' evidence.
 - answer (redirect r2, architect): the Framework drops them too: the architect installs the new render, dropping Mistral Small 4's dead preset (a load would re-download a disqualified model), and deletes Nemotron 3.5 Super's cached files (77.9 GB), in one sitting of exact commands.
 - answer (redirect r3, architect): Nemotron's files are not kept for spike-model-engines: engines brings the host up to date itself, Nemotron measured 12.1 tok/s (b11669), under the floor, and candidates belong to experiment.ai's spike-model-benchmarks.
+- answer (redirect, session, 2026-10-23): the reload alone dropped both removed presets on b11734, so the sitting needed no restart; the runbook keeps the restart as the fallback. The backup `models.ini.a65fd306` is the service user's, not root's, because `cp -p` keeps the owner and the file it copied was the one `evaluate sweep -restore` wrote on 2026-10-21. Supersedes the decision that the profile's comments mentioning candidates stay: the prune removed them, and the render (`96732ef9…`) carries none.
+- answer (redirect, standards review): the candidate test cases (the router-ID quant check and the consumers validation) run on `hosting/profile/testdata/candidate.toml`, a minimal profile built on the skeleton. `TestStrixHaloMatchesPinnedPreset` compares every rendered section, so a future set on the Strix Halo profile that doesn't load at startup must re-pin the copy; `TestRenderPresetsStartupSetOnly` keeps the load-on-startup rule.
+- answer (redirect, standards review): Nemotron's 12.1 tok/s is cited from the build log ("The candidates loaded on b11669"), where it is recorded.
 
 ## Pending edits
 
@@ -607,11 +610,12 @@ slices 3/4 committed · standards ✓ (1-3) · spec ✓ (1-3) · editor ✓ (1-3
   and the pool's floor held; with gpt-oss-120b only Pi meets the tool-call bar, and the
   measurement method stands on set A's two baseline runs, its screen proven by tests only.
 
-  1. A host-class profile: one TOML profile validates and renders the router's presets and
-     systemd unit for set A (gpt-oss-120b, Gemma 4 26B-A4B, gemma-4-E4B, EmbeddingGemma 2), each
-     model at its card's sampling and reasoning settings, naming no host. Proven by the
-     `profile` package's tests and by a running demo: the committed render's SHA-256
-     (`a65fd306…`) equals the installed presets', and the probe passes, on b11734, 2026-10-21.
+  1. A host-class profile: one TOML profile holds set A alone (gpt-oss-120b, Gemma 4 26B-A4B,
+     gemma-4-E4B, EmbeddingGemma 2) and validates and renders the router's presets and systemd
+     unit for it, each model at its card's sampling and reasoning settings, naming no host.
+     Proven by the `profile` package's tests and by a running demo: the committed render's
+     SHA-256 (`96732ef9…`) equals the installed presets', and the probe passes, on b11734,
+     2026-10-23.
   2. Three consumers at once: Pi, Claude Code, and the model client on gpt-oss-120b's 4 slots,
      beside an embedding stream, sent 40 chat requests and 1032 embeddings in 51.7 s with no
      answer crossed; all three harnesses (Pi, Claude Code, OpenCode) send the reasoning back on

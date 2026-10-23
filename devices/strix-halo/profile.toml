@@ -2,8 +2,8 @@
 # together against the 96GiB GTT pool of a ~90-96GB unified-memory host. Their settings are
 # personal-agents' 96GiB preset (profiles/unified-96gb.ini) and the recipes it copies
 # (reference/model-tiers.md, "~90-96GB (unified memory)"). Each model's reasons say why it takes
-# its values. The main-model candidates it once held are recorded in docs/pool.md and
-# docs/findings (memory-budget.md, tool-reliability.md).
+# its values. docs/pool.md and docs/findings (memory-budget.md, tool-reliability.md) record the
+# main-model candidates.
 #
 # Each model runs its official embedded chat template at its card's sampling and sets no
 # reasoning effort (the template's default). A shape a client must get, such as a mandatory tool

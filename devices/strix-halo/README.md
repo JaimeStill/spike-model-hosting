@@ -327,9 +327,8 @@ sudo chown root:root /etc/llama-router /etc/llama-router/models.ini && sudo chmo
 ## The models the host keeps
 
 The Framework keeps only models that passed on it (the goal record's decision `screen` (r1)),
-and only the models its profile holds: set A's four. The profile holds set A alone since the
-answer redirect (the goal record's decision `answer` (r1), 2026-10-23), so no other model has a
-preset and the router lists none. The deletions so far, each by the architect's command:
+and only the models its profile holds: set A's four. The profile holds set A alone (decision
+`answer` (redirect r1)), so no other model has a preset and the router lists none. The deletions so far, each by the architect's command:
 
 - **Mistral Small 4's cached files** (`unsloth/Mistral-Small-4-119B-2603-GGUF`, its three
   UD-Q4_K_XL splits and `mmproj-BF16.gguf`, about 70G), deleted at `screen` on 2026-10-19 (step
@@ -347,7 +346,7 @@ preset and the router lists none. The deletions so far, each by the architect's 
 - **Nemotron 3.5 Super's cached files**
   (`ggml-org/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF`, its NVFP4 weights and Q8_0 mmproj,
   77.89GB), deleted at `answer` on 2026-10-23 by the architect's redirect (decisions `answer`
-  (r2, r3)): it generated at 12.1 tok/s on b11669, under the floor
+  (redirect r2, r3)): it generated at 12.1 tok/s on b11669, under the floor
   ([`llama-cpp-builds.md`](llama-cpp-builds.md), "The candidates loaded on b11669"), and
   candidates belong to experiment.ai's spike-model-benchmarks.
 
@@ -395,8 +394,9 @@ curl -s "$SPIKE_ROUTER_URL/models?reload=1" > /dev/null
 curl -s "$SPIKE_ROUTER_URL/models" | jq -r '.data[] | "\(.id) \(.status.value)"'
 ```
 
-Expect set A's four models, each `loaded`, and no other. If the reload leaves the removed
-presets listed, restart the router, which reads the file afresh:
+Expect set A's four models, each `loaded`, and no other. On 2026-10-23, on b11734, the reload
+alone dropped both removed presets. If a reload leaves them listed, restart the router, which
+reads the file afresh:
 
 ```bash
 # Framework
@@ -414,7 +414,9 @@ mise run integration
 
 Expect the two sums equal (`96732ef954c60ad9c1385b278955ff50b5b5f9a8b85c2699fc509353ad7a6761`)
 and every probe to pass. It reverts by installing the kept file and reloading; Nemotron's files
-don't come back with it:
+don't come back with it. The kept file is the service user's, not root's: `cp -p` keeps the
+owner, and the file it copied was the one `evaluate sweep -restore` wrote. The `install` below
+makes the reinstalled file root's again:
 
 ```bash
 # Framework
