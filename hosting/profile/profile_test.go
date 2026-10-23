@@ -20,7 +20,7 @@ var update = flag.Bool("update", false, "rewrite golden files")
 
 const (
 	skeleton = "testdata/skeleton.toml"
-	// candidate is the skeleton beside a candidate set, whose main model carries a consumers
+	// candidate is the skeleton with a candidate as its chat model, which carries a consumers
 	// block and a quant tag the router lists as written.
 	candidate = "testdata/candidate.toml"
 	strixHalo = "../../devices/strix-halo/profile.toml"
@@ -179,8 +179,9 @@ func TestRenderPresets(t *testing.T) {
 // evaluation's slice 8), which the profile renders and the pinned copy lacks. Parallel and c are
 // compared too, sweep or no sweep: set A runs at the preset's values again, so a future sweep
 // that commits other values fails here on purpose, and the pinned copy (or this test) is updated
-// deliberately with it. Another set's model, should the profile hold one, must render without
-// load-on-startup and is left out of the comparison: the pinned copy holds set A alone.
+// deliberately with it. The profile holds set A alone, as the pinned copy does, so every rendered
+// section is compared; TestRenderPresetsStartupSetOnly shows another set's model renders without
+// load-on-startup.
 func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 	p, err := profile.Load(strixHalo)
 	if err != nil {
@@ -189,7 +190,6 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 	if s := p.StartupSet(); s == nil || s.Name != "a" {
 		t.Fatalf("StartupSet() = %+v; want set a", s)
 	}
-	startup := p.StartupSet().Models
 	got := parseINI(t, render(t, strixHalo))
 	text, err := os.ReadFile(pinned)
 	if err != nil {
@@ -199,14 +199,7 @@ func TestStrixHaloMatchesPinnedPreset(t *testing.T) {
 
 	models := 0
 	for name, keys := range got {
-		switch {
-		case name == "*":
-			continue
-		case !slices.Contains(startup, name):
-			if v, ok := keys["load-on-startup"]; ok {
-				t.Errorf("[%s] load-on-startup = %q; want the key absent outside set A", name, v)
-			}
-			delete(got, name)
+		if name == "*" {
 			continue
 		}
 		models++
@@ -1052,7 +1045,7 @@ func dropTable(t *testing.T, text, header string) string {
 	return text[:start] + text[start+end+2:]
 }
 
-// candidateID is the candidate profile's main model, its tag the router's Q4_K_XL.
+// candidateID is the candidate profile's chat model, its tag the router's Q4_K_XL.
 const candidateID = "example/candidate-GGUF:Q4_K_XL"
 
 // TestRouterTag shows the tag the router lists a section by: the quant type at the end of the
@@ -1161,9 +1154,9 @@ func TestLoadNamesInvalidConsumers(t *testing.T) {
 	text := string(base)
 	const candidatePi = "[models.consumers]\npi = \"high\""
 	for _, tt := range []struct{ name, text, want string }{
-		{"a level Pi doesn't take", replace(t, text, candidatePi, "[models.consumers]\npi = \"maximum\""), `models[2].consumers.pi: "maximum" is not one of Pi's thinking levels`},
-		{"no reason", replace(t, text, "reason = \"\"\"\nThe candidate's template", "unused = \"\"\"\nThe candidate's template"), "models[2].consumers.reason: required"},
-		{"a reason alone", replace(t, replace(t, text, candidatePi+"\n", "[models.consumers]\n"), "opencode = { reasoningEffort = \"high\" }\n", ""), "models[2].consumers: sets neither pi nor opencode"},
+		{"a level Pi doesn't take", replace(t, text, candidatePi, "[models.consumers]\npi = \"maximum\""), `models[0].consumers.pi: "maximum" is not one of Pi's thinking levels`},
+		{"no reason", replace(t, text, "reason = \"\"\"\nThe candidate's template", "unused = \"\"\"\nThe candidate's template"), "models[0].consumers.reason: required"},
+		{"a reason alone", replace(t, replace(t, text, candidatePi+"\n", "[models.consumers]\n"), "opencode = { reasoningEffort = \"high\" }\n", ""), "models[0].consumers: sets neither pi nor opencode"},
 		{"on the embedding model", replace(t, text, "[models.args]\nembeddings = true", "[models.consumers]\npi = \"high\"\nreason = \"x\"\n\n[models.args]\nembeddings = true"), "models[1].consumers: only a generative chat model runs under a consumer"},
 		{"an undefined key", replace(t, text, candidatePi, candidatePi+"\nclaude = \"high\""), "models.consumers.claude: not a key the schema defines"},
 	} {
@@ -1177,8 +1170,8 @@ func TestLoadNamesInvalidConsumers(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.Model(candidateID).Consumers.Reason = ""
-	if err := p.Validate(); err == nil || !strings.Contains(err.Error(), "models[2].consumers.reason: required") {
-		t.Errorf("Validate(consumers without a reason) = %v; want models[2].consumers.reason: required", err)
+	if err := p.Validate(); err == nil || !strings.Contains(err.Error(), "models[0].consumers.reason: required") {
+		t.Errorf("Validate(consumers without a reason) = %v; want models[0].consumers.reason: required", err)
 	}
 }
 
