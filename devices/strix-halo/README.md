@@ -367,14 +367,14 @@ directory; nothing there needs root.
 # laptop
 mise run //devices/strix-halo:render:presets > /tmp/models.ini
 sha256sum /tmp/models.ini
-scp /tmp/models.ini <host>:models.ini.<sha8>
+scp /tmp/models.ini <host>:models.ini.96732ef9
 ```
 
 ```bash
 # Framework
 sudo cp -p /etc/llama-router/models.ini /etc/llama-router/models.ini.a65fd306
-echo "<sha256>  $HOME/models.ini.<sha8>" | sha256sum -c
-sudo install -m 0644 -o root -g root "$HOME/models.ini.<sha8>" /etc/llama-router/models.ini
+echo "96732ef954c60ad9c1385b278955ff50b5b5f9a8b85c2699fc509353ad7a6761  $HOME/models.ini.96732ef9" | sha256sum -c
+sudo install -m 0644 -o root -g root "$HOME/models.ini.96732ef9" /etc/llama-router/models.ini
 hf=$(systemctl show llama-router -p Environment --value | tr ' ' '\n' | sed -n 's/^HF_HOME=//p')
 du -sh "$hf/hub/models--ggml-org--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF"
 [ -d "$hf/hub" ] && rm -rf -- "$hf/hub/models--ggml-org--NVIDIA-Nemotron-3.5-Super-VL-120B-A12B-GGUF"
@@ -412,8 +412,9 @@ ssh <host> sha256sum /etc/llama-router/models.ini
 mise run integration
 ```
 
-Expect the two sums equal (`<sha256>`) and every probe to pass. It reverts by installing the
-kept file, `sudo install -m 0644 -o root -g root /etc/llama-router/models.ini.a65fd306
+Expect the two sums equal
+(`96732ef954c60ad9c1385b278955ff50b5b5f9a8b85c2699fc509353ad7a6761`) and every probe to pass. It
+reverts by installing the kept file, `sudo install -m 0644 -o root -g root /etc/llama-router/models.ini.a65fd306
 /etc/llama-router/models.ini`, and a reload; Nemotron's files don't come back with it.
 
 ## The router's state, without root
