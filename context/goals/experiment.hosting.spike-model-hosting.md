@@ -1,6 +1,6 @@
 # goal · experiment.hosting.spike-model-hosting
 
-- **State:** brief ready
+- **State:** building
 - **Task:** answer
 - **Branch:** answer
 
@@ -66,8 +66,34 @@ Behaviors     1. The repository's currency reports only held items: uv
                  supersession of setup's `validate` revert, and the
                  answer. .state run outputs (evaluate run directories
                  and index.json) are removed; logins and caches kept.
-              7. On the Framework, unchanged, the probe passes and the
-                 installed presets' SHA-256 equals the committed render.
+              7. On the Framework, the installed presets' SHA-256 equals
+                 the committed render (the new set-A-only render), the
+                 router lists set A's four models only, and the probe
+                 passes.
+              8. devices/strix-halo/profile.toml holds set A only: the
+                 mistral and nemotron sets and the Mistral Small 4 and
+                 Nemotron 3.5 Super VL model entries are gone, and its
+                 header and [engine] comments describe the profile as it
+                 stands. The pinned render (hosting/profile/testdata/
+                 strix-halo.ini) and the tests that named the sets follow
+                 (evaluate's concurrent_test.go, swap's main_test.go).
+                 The profile package's cases that used Mistral's entry
+                 (the router-ID quant check, the consumers block and its
+                 validation) keep their coverage on a testdata profile;
+                 no validation rule is lost.
+              9. The Framework keeps only set A: Nemotron 3.5 Super's
+                 cache directory is deleted by the architect's command,
+                 the new render is installed root-owned with the old
+                 one kept beside it, and the router reads it (reload or
+                 restart, whichever drops the removed presets from
+                 GET /models). The runbook ("The models the host
+                 keeps", and a step for this sitting), memory-budget.md
+                 ("Nemotron 3.5 Super's files stay"), the build log, and
+                 model-cards.md's "the profile's mistral budget" are
+                 current; answer item 1 cites the new SHA-256 and date.
+                 Measured figures in the findings and pool.md stay.
+              (Behaviors 8-9 and the new 7: redirect, architect,
+              2026-10-23.)
 Test seams    mise run check (unchanged); the profile render's SHA-256
               against the installed presets; mise run integration
               against SPIKE_ROUTER_URL; git grep for the stale pointers
@@ -80,21 +106,28 @@ Slices        1. Upgrade (1): uv 0.13.5 and the holds; currency shows
               3. Repoint (4, 5, 6): README, context/README.md,
                  CLAUDE.md, the docs' forward pointers, Decisions, the
                  .state cleanup.
-              4. Walkthrough (7): the architect runs check, the render
-                 SHA-256 against the installed file, and the probe,
-                 then reads the answer and the answer section.
+              4. Prune and walkthrough (7, 8, 9): an implementer prunes
+                 the profile, tests and docs, check passing; the session
+                 renders and stages the files on the Framework's home
+                 directory (scp, no root); the architect runs one
+                 sitting of exact commands (back up and install
+                 models.ini, delete Nemotron's directory, reload or
+                 restart); then the walkthrough: check, render SHA-256
+                 against the installed file, GET /models, the probe.
 Out of scope  Any measurement, benchmark, consumer run or build move;
-              bumping held pins; code changes; Tailscale or other host
-              changes; personal-agents and spike-harness-driver; edits
+              bumping held pins; code changes beyond behavior 8's
+              tests; Tailscale or other host changes beyond behavior 9; personal-agents and spike-harness-driver; edits
               to the coordinator before sync; archiving (intake).
 Door          two-way: the repository reverts by PR, and the sync's
-              coordinator edits by PR. The removed .state run outputs
+              coordinator edits by PR. Nemotron's deleted files are
+              one-way on the host (re-download ~46 min); the old
+              models.ini is kept as models.ini.a65fd306. The removed .state run outputs
               are one-way locally; their findings are committed.
 ```
 
 ## Progress
 
-slices 3/4 committed · standards ✓ · spec ✓ · editor ✓
+slices 3/4 committed · standards ✓ (1-3) · spec ✓ (1-3) · editor ✓ (1-3) · redirect: slice 4 open
 
 ## Decisions
 
@@ -552,6 +585,10 @@ slices 3/4 committed · standards ✓ · spec ✓ · editor ✓
 - answer: `devices/strix-halo/profile.toml`'s comments that mention candidates stay, because they render into the installed presets, and editing them would break the SHA-256 match (`a65fd306…`) the walkthrough checks.
 - answer: the `.state/evaluate` run outputs (three 2026-10-19 run directories and `index.json`, 15 MB) are removed; logins and caches are kept.
 - answer: the catalog lists spike-model-hosting under `references.md`'s archived-spikes heading while it awaits intake, as it lists spike-harness-driver.
+
+- answer (redirect r1, architect, 2026-10-23): the profile holds set A only; the mistral and nemotron sets and their model entries are removed, the findings and git history keeping the candidates' evidence.
+- answer (redirect r2, architect): the Framework drops them too: the architect installs the new render, dropping Mistral Small 4's dead preset (a load would re-download a disqualified model), and deletes Nemotron 3.5 Super's cached files (77.9 GB), in one sitting of exact commands.
+- answer (redirect r3, architect): Nemotron's files are not kept for spike-model-engines: engines brings the host up to date itself, Nemotron measured 12.1 tok/s (b11669), under the floor, and candidates belong to experiment.ai's spike-model-benchmarks.
 
 ## Pending edits
 
