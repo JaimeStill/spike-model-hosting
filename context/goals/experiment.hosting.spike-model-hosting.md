@@ -1,8 +1,8 @@
 # goal · experiment.hosting.spike-model-hosting
 
-- **State:** brief ready
-- **Task:** answer
-- **Branch:** answer
+- **State:** idle
+- **Task:** none
+- **Branch:** none
 
 ## Tasks
 
@@ -12,7 +12,7 @@
 4. [x] main-model
 5. [x] evaluation
 6. [x] screen
-7. [ ] answer
+7. [x] answer
 
 ## Task brief · answer
 
@@ -125,9 +125,6 @@ Door          two-way: the repository reverts by PR, and the sync's
               are one-way locally; their findings are committed.
 ```
 
-## Progress
-
-slices 4/4 committed · standards ✓ · spec ✓ · editor ✓
 
 ## Decisions
 
