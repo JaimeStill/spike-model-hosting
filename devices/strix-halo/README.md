@@ -28,10 +28,15 @@ needs root. `<host>` is the Framework's name on the tailnet, which nothing commi
   [`llama-cpp-builds.md`](llama-cpp-builds.md), "The OS update, 2026-10-19". An OS update
   changes the Vulkan driver the router runs on, so each one gets the same re-check as a build
   move: the probe, then fitness for every role.
+  Since 2026-10-27 it runs Omarchy 4.0.6 (kernel, Mesa and firmware unchanged), and
+  spike-model-engines' Strix sessions own the host: the router is stopped and disabled
+  (`sudo systemctl enable --now llama-router` brings it back), so set A doesn't serve until it is
+  started again.
 - **The memory pool:** the BIOS's GPU reservation is 512 MB, and the kernel's GTT pool is set
   to 96 GiB (98304 MiB) by `ttm pages_limit` and `amdgpu gttsize`, built into the boot image.
-  The steps are personal-agents' `preparation/framework-desktop.md`. Every set is sized against
-  that pool, and the evaluation's floor keeps 2816 MiB of it free
+  The steps are personal-agents' `preparation/framework-desktop.md`. Since 2026-10-27 the pool
+  is 112 GiB (114688 MiB), raised by spike-model-engines; every set here was sized against the
+  96 GiB pool, and the evaluation's floor keeps 2816 MiB of it free
   ([`docs/evaluation.md`](../../docs/evaluation.md)). The desktop session's own share of the pool
   is part of every reading.
 
