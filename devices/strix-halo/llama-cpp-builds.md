@@ -1,8 +1,8 @@
 # llama.cpp builds on the Framework
 
-The profile holds llama.cpp to a minimum build, and the Framework's router runs the upstream
+The profile holds llama.cpp to a minimum build, and the Framework's router ran the upstream
 Vulkan x64 release of one b-number at a time, from its own versioned directory through a
-`current` link the unit runs. Each move here names the builds, the date, what the release
+`current` link the unit ran, until its retirement on 2026-10-29. Each move here names the builds, the date, what the release
 notes between them changed for set A, and what was re-verified on the new build. Every build
 is read from the router's `/props` `build_info`.
 
@@ -687,3 +687,18 @@ b11734.
   other; `/props` reports `b11734-f3fb2fcdb`.
 - **The probe.** `SPIKE_ROUTER_URL=http://<host>:8080 mise run integration` passed on b11734,
   set a.
+
+## The router retired, 2026-10-29
+
+spike-model-engines retired the router on 2026-10-29; the build was b11734 to the end. The
+Framework serves set A from spike-model-engines' `llama` container (ggml's Vulkan image, b11960).
+
+- **Removed:** the `llama-router` unit; `/etc/llama-router` and its 8 files; `/opt/llama.cpp`
+  (b11715, b11734, and `current`); the Hugging Face cache on the models drive (set A's four
+  repositories, 82G); the `~/models` link and `/mnt/models/gguf`; the render copies in the home
+  directory; and outpost's links in `~/.local/bin`.
+- **Kept:** the models drive, mounted and holding no model; the ufw route rules; the `docker`
+  group; and `/srv/models`.
+- **The rebuild:** the profile would rebuild the router. Its tasks re-render the unit and
+  presets from `profile.toml`, the architect installs them by the runbook
+  ([`README.md`](README.md)), and the builds and the 82G of models download again.

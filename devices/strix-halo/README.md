@@ -29,9 +29,15 @@ needs root. `<host>` is the Framework's name on the tailnet, which nothing commi
   changes the Vulkan driver the router runs on, so each one gets the same re-check as a build
   move: the probe, then fitness for every role.
   Since 2026-10-27 it runs Omarchy 4.0.6 (kernel, Mesa and firmware unchanged), and
-  spike-model-engines' Strix sessions own the host: the router is stopped and disabled
-  (`sudo systemctl enable --now llama-router` brings it back), so set A doesn't serve until it is
-  started again.
+  spike-model-engines retired the router on 2026-10-29. Removed: the `llama-router` unit;
+  `/etc/llama-router` and its 8 files; `/opt/llama.cpp` (b11715, b11734, and `current`); the
+  Hugging Face cache on the models drive (set A's four repositories, 82G); the `~/models` link
+  and `/mnt/models/gguf`; the render copies in the home directory; and outpost's links in
+  `~/.local/bin`. Kept: the models drive, mounted and holding no model; the ufw route rules; the
+  `docker` group; and `/srv/models`. The Framework serves set A from spike-model-engines'
+  `llama` container (ggml's Vulkan image, b11960). The profile would rebuild the router: its
+  tasks re-render the unit and presets from `profile.toml`, the architect installs them by this
+  runbook, and the builds and the 82G of models download again.
 - **The memory pool:** the BIOS's GPU reservation is 512 MB, and the kernel's GTT pool is set
   to 96 GiB (98304 MiB) by `ttm pages_limit` and `amdgpu gttsize`, built into the boot image.
   The steps are personal-agents' `preparation/framework-desktop.md`. Since 2026-10-27 the pool
@@ -77,8 +83,8 @@ packages trail upstream's model support. The profile holds llama.cpp to a minimu
   the build; a rollback points it back.
 - The previous build stays in its directory for diagnosis until the next move removes it.
 
-The Framework runs b11734 (`b11734-f3fb2fcdb`), since 2026-10-19; b11715 stays in
-`/opt/llama.cpp/b11715`. `screen`'s move removed b11669 and the builds before it (b11529,
+The Framework ran b11734 (`b11734-f3fb2fcdb`) from 2026-10-19 until the router's retirement on
+2026-10-29, which removed `/opt/llama.cpp` (["The host"](#the-host)). `screen`'s move removed b11669 and the builds before it (b11529,
 b11565 and b11572).
 
 ## The rendered unit and presets
